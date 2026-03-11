@@ -59,16 +59,40 @@ def generate_progression(sheet: dict, api_key: str | None = None) -> dict:
     Ask Claude to generate a chord progression + arpeggio pattern.
     Returns dict with 'chords' and 'arpeggio' keys.
     """
-    harmony      = sheet["agents"]["harmony"]
-    bpm          = sheet.get("bpm", 120)
-    bars         = sheet.get("bars", 8)
-    key          = sheet.get("key", "C minor")
-    time_sig     = sheet.get("timeSignature", "4/4")
-    mood         = sheet.get("mood", "")
-    structure    = sheet.get("structure", "")
-    global_notes = sheet.get("globalNotes", "")
-    texture      = harmony.get("texture", "")
-    instruction  = harmony.get("instruction", "")
+    harmony          = sheet["agents"]["harmony"]
+    bpm              = sheet.get("bpm", 120)
+    bars             = sheet.get("bars", 8)
+    key              = sheet.get("key", "C minor")
+    time_sig         = sheet.get("timeSignature", "4/4")
+    mood             = sheet.get("mood", "")
+    structure        = sheet.get("structure", "")
+    global_notes     = sheet.get("globalNotes", "")
+    tension          = float(sheet.get("tension", 0.4))
+    harmonic_rhythm  = sheet.get("harmonic_rhythm", "medium")
+    texture          = harmony.get("texture", "")
+    instruction      = harmony.get("instruction", "")
+
+    # Translate harmonic_rhythm + tension into concrete bar-duration guidance
+    if harmonic_rhythm == "fast" or tension >= 0.7:
+        chord_dur_hint = (
+            "Fast harmonic rhythm: change chords every 1 bar. "
+            "More chords = more harmonic movement = more tension."
+        )
+    elif harmonic_rhythm == "slow" or tension <= 0.25:
+        chord_dur_hint = (
+            "Slow harmonic rhythm: each chord lasts 4 bars. "
+            "Fewer changes = more space and stillness."
+        )
+    elif harmonic_rhythm == "mixed":
+        chord_dur_hint = (
+            "Mixed harmonic rhythm: vary chord durations (1, 2, and 4 bars). "
+            "Irregular changes create unpredictability and interest."
+        )
+    else:
+        chord_dur_hint = (
+            "Medium harmonic rhythm: change chords every 2 bars. "
+            "Balanced — enough movement without restlessness."
+        )
 
     prompt = f"""You are a harmony synthesizer for an AI electronic music band.
 Generate a chord progression and arpeggio pattern.
@@ -79,9 +103,13 @@ Bars: {bars}
 Time signature: {time_sig}
 Section: {structure}
 Mood: {mood}
+Tension: {tension:.2f} (0=minimal, 1=peak)
+Harmonic rhythm: {harmonic_rhythm}
 Global notes: {global_notes}
 Texture: {texture}
 Instruction: {instruction}
+
+{chord_dur_hint}
 
 Return a JSON object with:
 - "chords": array of chord objects, each with:
@@ -93,6 +121,12 @@ Return a JSON object with:
     - "pattern": array of indices into chord's midi_notes (e.g. [0,1,2,3,2,1])
     - "speed": "quarter", "8th", or "16th"
 - "pad_cutoff": LP filter cutoff in Hz (200-2000) — lower = darker/warmer
+
+VOICE LEADING RULES for MIDI notes:
+- Each chord's lowest MIDI note (root/bass) should move by step (≤2 semitones) or common tone
+  from the previous chord's lowest note where musically possible — avoid arbitrary large jumps
+- Shared notes between chords: keep them on the same MIDI pitch (common-tone retention)
+- The bass register (notes 55-67) should resolve down by step or hold when tension resolves
 
 Rules:
 - Chord bars must sum exactly to {bars}

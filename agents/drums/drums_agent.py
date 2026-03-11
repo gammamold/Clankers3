@@ -77,6 +77,28 @@ def generate_sequence(sheet: dict, api_key: str | None = None) -> dict:
     mood         = sheet.get("mood", "")
     structure    = sheet.get("structure", "")
     global_notes = sheet.get("globalNotes", "")
+    tension      = float(sheet.get("tension", 0.4))
+
+    # Extract chord change bars from harmonic_map for accent guidance
+    hmap = sheet.get("harmonic_map", [])
+    chord_change_bars = []
+    prev_chord = None
+    for entry in hmap:
+        chord = entry.get("chord_name", "")
+        if chord != prev_chord:
+            chord_change_bars.append(entry.get("bar", 1))
+            prev_chord = chord
+    chord_hint = ""
+    if chord_change_bars:
+        chord_hint = f"Chord changes happen at bars: {chord_change_bars}. " \
+                     f"Accent the kick/snare on beat 1 of these bars to mark the change."
+
+    if tension >= 0.7:
+        density_hint = "High tension: dense pattern, strong accents, open hats, fills at phrase ends."
+    elif tension >= 0.4:
+        density_hint = "Medium tension: solid groove, velocity variation, ghost notes on snare."
+    else:
+        density_hint = "Low tension: sparse pattern, lots of silence, minimal fills."
 
     prompt = f"""You are an electronic drum machine sequencer. Generate a 16-step drum pattern.
 
@@ -85,9 +107,13 @@ Bars: {bars}
 Time signature: {time_sig}
 Section: {structure}
 Mood: {mood}
+Tension: {tension:.2f} (0=minimal, 1=peak density)
 Global notes: {global_notes}
 Pattern description: {pattern}
 Instruction: {instruction}
+
+{density_hint}
+{chord_hint}
 
 Return a JSON object with a "pattern" key containing one array per drum voice.
 Each array has exactly 16 values: 0 = silent, or a float 0.1–1.0 = velocity (louder = higher).
@@ -276,12 +302,19 @@ def render_pattern(
     bars: int,
     swing: float = 0.0,
     synth_params: dict | None = None,
+    tension: float = 0.4,
+    humanize: bool = True,
 ) -> AudioSegment:
     """
     Render the step sequence to audio.
     Pattern loops for `bars` bars. Each 16-step pattern = 1 bar (16 sixteenth notes).
     synth_params: the sheet's agents.drums.synth dict for per-voice sound shaping.
+    tension  : 0.0-1.0 — scales fill probability at bar boundaries.
+    humanize : True    — per-hit velocity jitter ±10% and timing jitter ±6ms.
     """
+    import random
+    import time
+
     sp         = synth_params or {}
     kick_p     = sp.get("kick",  {})
     snare_p    = sp.get("snare", {})
@@ -292,7 +325,9 @@ def render_pattern(
     total_ms   = int(bar_ms * bars)
     output     = AudioSegment.silent(duration=total_ms)
 
-    import time
+    # Fill probability scales with tension: 0 at low, up to 40% at peak
+    fill_prob = max(0.0, (tension - 0.5) * 0.8)
+
     for voice, steps in pattern.items():
         synth_fn = SYNTH_FNS.get(voice)
         if synth_fn is None:
@@ -303,17 +338,38 @@ def render_pattern(
         for bar in range(bars):
             if bar > 0 and bar % 2 == 0:
                 time.sleep(0)  # yield GIL so GUI stays responsive
+
+            # Tension fills: on bar 4 / bar 8 / bar 16 boundaries, probabilistically
+            # add extra snare/hihat hits at bar end (step 14-15) when tension is high
+            is_fill_bar = (bar > 0) and ((bar + 1) % 4 == 0) and (random.random() < fill_prob)
+
             for step_idx, velocity in enumerate(steps):
+                # Fill injection: on fill bars, boost hihat activity in last 2 steps
+                if is_fill_bar and step_idx >= 14:
+                    if voice == "hihat_closed" and velocity == 0:
+                        velocity = random.uniform(0.5, 0.8)
+                    elif voice == "snare" and step_idx == 15 and velocity == 0:
+                        velocity = random.uniform(0.6, 0.9)
+
                 if not velocity:
                     continue
                 velocity = float(velocity)
 
+                # Velocity humanize: ±10% randomness per hit
+                if humanize:
+                    velocity *= random.uniform(0.90, 1.10)
+                    velocity  = max(0.05, min(1.0, velocity))
+
                 # Base position
                 position_ms = bar * bar_ms + step_idx * step_ms
 
-                # Swing: push odd 16th steps forward
+                # Swing: push odd 16th steps forward (triplet feel)
                 if swing > 0 and step_idx % 2 == 1:
                     position_ms += step_ms * swing * 0.5
+
+                # Humanize timing: per-hit jitter ±6ms (independent of swing)
+                if humanize:
+                    position_ms += random.uniform(-6.0, 6.0)
 
                 position_ms = max(0, min(position_ms, total_ms - 1))
 
@@ -455,6 +511,7 @@ def run(sheet: dict, output_path: str = "drums_output.wav",
     mood        = sheet.get("mood", "")
     synth       = drums.get("synth", {})
     total_ms    = int(bars * 4 * (60000 / bpm))
+    tension     = float(sheet.get("tension", 0.4))
     swing       = pick_swing(instruction, mood)
 
     kick_p  = synth.get("kick",  {})
@@ -464,7 +521,8 @@ def run(sheet: dict, output_path: str = "drums_output.wav",
     print(f"\n── DRUMS AGENT ──────────────────────")
     print(f"BPM        : {bpm}")
     print(f"Duration   : {total_ms}ms  ({bars} bars)")
-    print(f"Swing      : {swing:.2f}  ({'scipy' if HAS_SCIPY else 'no filters'})")
+    print(f"Tension    : {tension:.2f}  fill_prob={max(0.0, (tension-0.5)*0.8):.2f}")
+    print(f"Swing      : {swing:.2f}  humanize=True  ({'scipy' if HAS_SCIPY else 'no filters'})")
     print(f"Kick       : pitch={kick_p.get('pitch_hz', 40):.0f}Hz  punch={kick_p.get('punch', 0.5):.2f}  decay={kick_p.get('decay_s', 0.3):.2f}s")
     print(f"Snare      : tuning={snare_p.get('tuning_hz', 200):.0f}Hz  snappy={snare_p.get('snappy', 0.7):.2f}")
     print(f"Hihat      : decay={hihat_p.get('decay_ms', 12):.0f}ms  hp={hihat_p.get('highpass_hz', 6000):.0f}Hz")
@@ -483,7 +541,8 @@ def run(sheet: dict, output_path: str = "drums_output.wav",
     else:
         if vst_path and not HAS_DAWDREAMER:
             print("  [warn] dawdreamer not installed — falling back to numpy synthesis")
-        audio = render_pattern(pattern, bpm, bars, swing=swing, synth_params=synth)
+        audio = render_pattern(pattern, bpm, bars, swing=swing, synth_params=synth,
+                               tension=tension, humanize=True)
 
         # Apply numeric bus FX from synth params
         dist = synth.get("distortion", 0.0)

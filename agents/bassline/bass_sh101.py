@@ -93,6 +93,23 @@ def degree_to_freq(degree: int, octave: int, root: int, intervals: list[int]) ->
 
 # ─── SEQUENCE GENERATION (LLM) ────────────────────────────────────────────────
 
+def _build_harmonic_map_brief(sheet: dict) -> str:
+    """
+    Render the harmonic_map from the sheet into a compact per-bar root-degree table
+    the bass LLM can use to anchor notes to chord changes.
+    """
+    hmap = sheet.get("harmonic_map", [])
+    if not hmap:
+        return ""
+    lines = ["Bar-by-bar chord roots (anchor bass to these):"]
+    for entry in hmap:
+        bar  = entry.get("bar", "?")
+        deg  = entry.get("root_degree", 1)
+        name = entry.get("chord_name", "")
+        lines.append(f"  bar {bar}: degree {deg}  ({name})")
+    return "\n".join(lines)
+
+
 def generate_sequence(sheet: dict, api_key: str | None = None) -> list[dict]:
     """
     Ask Claude to generate a melodic note sequence suited for the Pro-One character.
@@ -105,11 +122,22 @@ def generate_sequence(sheet: dict, api_key: str | None = None) -> list[dict]:
     mood          = sheet.get("mood", "")
     structure     = sheet.get("structure", "")
     global_notes  = sheet.get("globalNotes", "")
+    tension       = float(sheet.get("tension", 0.4))
     agent         = sheet["agents"]["bass_sh101"]
     pattern       = agent.get("pattern", "")
     instruction   = agent.get("instruction", "")
     beats_per_bar = int(time_sig.split("/")[0]) if "/" in time_sig else 4
     total_beats   = bars * beats_per_bar
+
+    harmonic_brief = _build_harmonic_map_brief(sheet)
+
+    # Scale rhythmic complexity hint from tension
+    if tension >= 0.7:
+        density_hint = "High tension section: use shorter durations (0.25-0.5 beats), more notes, push rhythmic energy."
+    elif tension >= 0.4:
+        density_hint = "Medium tension: mix short and medium durations (0.5-2 beats), keep forward motion."
+    else:
+        density_hint = "Low tension section: longer, more sustained notes (1-4 beats), space and breath."
 
     prompt = f"""You are a Pro-One bass synthesizer programmer. Generate a melodic bass line.
 
@@ -120,9 +148,14 @@ Time signature: {time_sig}
 Total beats: {total_beats}
 Section: {structure}
 Mood: {mood}
+Tension: {tension:.2f} (0=minimal, 1=peak density)
 Global notes: {global_notes}
 Pattern: {pattern}
 Instruction: {instruction}
+
+{harmonic_brief}
+
+{density_hint}
 
 The Pro-One (Sequential Circuits) is a two-oscillator monosynth — punchy and cutting,
 thicker than the 303 but still very musical. Let the mood, section, and pattern
@@ -137,12 +170,13 @@ Return a JSON object with a "sequence" array. Each element has:
 - "rest": boolean — silence
 - "vibrato": boolean — apply LFO pitch wobble on this note
 
-Rules:
+VOICE LEADING RULES (critical for musical bass lines):
+- Anchor the FIRST note of each bar to the chord root degree shown in the harmonic map above
+- Prefer stepwise motion (scale degrees ±1-2) or small leaps (±3-4 semitones) between adjacent notes
+- Avoid leaping more than a 5th (7 semitones) except for intentional dramatic effect
+- Use slide=true on notes that are close in pitch — it makes leaps sound smooth and intentional
+- Resolve tension by returning to the root degree at phrase endings (every 2-4 bars)
 - Total beats must sum to exactly {total_beats}
-- Rhythm and note length must serve the mood and section — don't default to slow
-- Vary octave across the sequence; don't stay on octave 2 the whole time
-- Use accents, rests, and slides musically, not formulaically
-- Melodic contour should have shape — rises, falls, tension, resolution
 
 Return ONLY valid JSON. No explanation, no markdown."""
 
@@ -172,6 +206,39 @@ Return ONLY valid JSON. No explanation, no markdown."""
     except Exception as e:
         print(f"  [llm error] {e}")
         return _fallback_sequence(total_beats)
+
+
+def _smooth_voice_leading(notes: list[dict], root: int, intervals: list[int]) -> list[dict]:
+    """
+    Post-process LLM sequence to constrain large leaps.
+    Jumps > 7 semitones (a 5th) are pulled back by inverting the octave of the destination
+    note when possible (octave 1-3 bounds respected).
+    Only adjusts pitch, never changes degree/rhythm/slide/accent.
+    """
+    prev_midi: int | None = None
+    for note in notes:
+        if note.get("rest", False):
+            prev_midi = None
+            continue
+        degree = int(note.get("degree", 1))
+        octave = int(note.get("octave", 2))
+        midi   = degree_to_midi(degree, octave, root, intervals)
+
+        if prev_midi is not None:
+            jump = midi - prev_midi
+            if jump > 7 and octave > 1:          # leaping too high — step down an octave
+                candidate = degree_to_midi(degree, octave - 1, root, intervals)
+                if abs(candidate - prev_midi) < abs(jump):
+                    note["octave"] = octave - 1
+                    midi = candidate
+            elif jump < -7 and octave < 3:        # leaping too low — step up an octave
+                candidate = degree_to_midi(degree, octave + 1, root, intervals)
+                if abs(candidate - prev_midi) < abs(jump):
+                    note["octave"] = octave + 1
+                    midi = candidate
+
+        prev_midi = midi
+    return notes
 
 
 def _fallback_sequence(total_beats: int) -> list[dict]:
@@ -294,22 +361,57 @@ def render_sequence(
     pulse_width: float,
     decay_param: float | None = None,
     release_param: float | None = None,
+    swing: float = 0.0,
+    humanize: bool = False,
 ) -> AudioSegment:
-    """Synthesize all notes and concatenate into one AudioSegment."""
-    import time
-    beat_s = 60.0 / bpm
-    chunks = []
-    prev_freq = None
+    """
+    Synthesize all notes onto a timeline.
+    swing    : 0.0-0.5  — push every other beat-subdivision forward (triplet feel)
+    humanize : bool     — add per-note ±10ms onset jitter and ±3% velocity variation
+    """
+    import time as _time
+    import random
+
+    beat_s   = 60.0 / bpm
+    beat_smp = beat_s * SAMPLE_RATE
+
+    # Compute total duration from note beats (exact)
+    total_beats = sum(float(n.get("beats", 1)) for n in notes)
+    total_n     = max(1, int(total_beats * beat_smp))
+    timeline    = np.zeros(total_n, dtype=np.float32)
+
+    cursor_smp  = 0.0      # exact float cursor in samples
+    beat_counter = 0.0     # running beat count for swing alignment
+    prev_freq    = None
 
     for idx, note in enumerate(notes):
         if idx > 0 and idx % 12 == 0:
-            time.sleep(0)  # yield GIL so GUI stays responsive
-        duration_s = float(note.get("beats", 1)) * beat_s
-        n = max(1, int(SAMPLE_RATE * duration_s))
+            _time.sleep(0)   # yield GIL
+
+        dur_beats  = float(note.get("beats", 1))
+        dur_smp    = dur_beats * beat_smp
+        n          = max(1, int(dur_smp))
+
+        # ── Timing: swing + humanize ──────────────────────────────────────
+        onset = cursor_smp
+
+        # Swing: if this note starts on an off-beat 8th (beat_counter is a half-beat away),
+        # push it forward. We check if the nearest 0.5-beat grid position is "odd".
+        if swing > 0.0:
+            half_beat_idx = round(beat_counter * 2)  # which half-beat we're on
+            if half_beat_idx % 2 == 1:               # off-beat
+                onset += beat_smp * 0.5 * swing
+
+        if humanize:
+            jitter_smp = random.uniform(-0.010, 0.010) * SAMPLE_RATE  # ±10 ms
+            onset     += jitter_smp
+
+        onset_i = max(0, min(int(onset), total_n - 1))
 
         if note.get("rest", False):
-            chunks.append(np.zeros(n, dtype=np.float32))
-            prev_freq = None
+            prev_freq     = None
+            cursor_smp   += dur_smp
+            beat_counter += dur_beats
             continue
 
         degree  = int(note.get("degree", 1))
@@ -319,21 +421,26 @@ def render_sequence(
         vibrato = bool(note.get("vibrato", False))
         freq    = degree_to_freq(degree, octave, root, intervals)
 
+        # Velocity humanize: ±5% amplitude
+        vel_mult = (1.0 + random.uniform(-0.05, 0.05)) if humanize else 1.0
+
         freq_start = prev_freq if (slide and prev_freq is not None) else freq
-        chunk = synth_note(freq_start, freq, duration_s, accent, vibrato,
+        chunk = synth_note(freq_start, freq, n / SAMPLE_RATE, accent, vibrato,
                            cutoff_hz, pulse_width=pulse_width,
                            decay_param=decay_param, release_param=release_param)
-        chunks.append(chunk)
-        prev_freq = freq
+        chunk *= vel_mult
 
-    if not chunks:
-        return AudioSegment.silent(duration=1000)
+        end_i = min(onset_i + len(chunk), total_n)
+        timeline[onset_i:end_i] += chunk[:end_i - onset_i]
 
-    combined = np.concatenate(chunks)
-    peak = np.max(np.abs(combined))
+        prev_freq     = freq
+        cursor_smp   += dur_smp
+        beat_counter += dur_beats
+
+    peak = np.max(np.abs(timeline))
     if peak > 0:
-        combined = combined / peak * 0.85
-    pcm = (combined * 32767).astype(np.int16).tobytes()
+        timeline = timeline / peak * 0.85
+    pcm = (timeline * 32767).astype(np.int16).tobytes()
     return AudioSegment(pcm, frame_rate=SAMPLE_RATE, sample_width=2, channels=1)
 
 
@@ -488,8 +595,26 @@ def run(sheet: dict, output_path: str = "bass_sh101_output.wav",
     print(f"Generating : sequence via LLM...")
 
     notes = generate_sequence(sheet, api_key=api_key)
+
+    # Voice leading post-processor: smooth large leaps in the LLM sequence
+    notes = _smooth_voice_leading(notes, root, intervals)
+
     total_beats = sum(float(n.get("beats", 1)) for n in notes)
     print(f"Sequence   : {len(notes)} notes / {total_beats} beats")
+
+    # Microtiming: swing + humanize
+    swing_amt = float(agent.get("swing", 0.0))
+    humanize  = bool(agent.get("humanize", False))
+    if swing_amt == 0.0:
+        # Fall back to mood/instruction heuristic (same as drums pick_swing)
+        combined = (instruction + " " + mood).lower()
+        if any(w in combined for w in ["jazz", "bebop", "swing hard", "big band"]):
+            swing_amt = 0.35
+        elif any(w in combined for w in ["swing", "shuffle", "groove", "funk", "latin"]):
+            swing_amt = 0.22
+        elif any(w in combined for w in ["loose", "human", "warm", "laid back"]):
+            swing_amt = 0.08
+    print(f"Microtiming: swing={swing_amt:.2f}  humanize={humanize}")
 
     if vst_path and HAS_DAWDREAMER:
         print(f"Renderer   : VST  ({os.path.basename(vst_path)})")
@@ -498,7 +623,8 @@ def run(sheet: dict, output_path: str = "bass_sh101_output.wav",
         if vst_path and not HAS_DAWDREAMER:
             print("  [warn] dawdreamer not installed — falling back to numpy synthesis")
         audio = render_sequence(notes, bpm, root, intervals, cutoff_hz, pulse_width,
-                                decay_param=decay_param, release_param=release_param)
+                                decay_param=decay_param, release_param=release_param,
+                                swing=swing_amt, humanize=humanize)
 
     # Numeric chorus params override keyword detection
     if synth.get("chorus", False):
