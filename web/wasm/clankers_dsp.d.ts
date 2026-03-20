@@ -2,8 +2,37 @@
 /* eslint-disable */
 
 /**
- * Drums engine — main-thread rendering via AudioBufferSourceNode.
+ * Pro-One style polyphonic bass (8 voices, TPT ladder filter).
  *
+ * ClankerBoy CC map (all normalised 0-127):
+ *   CC74 cutoff  CC71 resonance  CC73 amp_attack  CC75 amp_decay
+ *   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
+ *   CC5  glide_time
+ *
+ * trigger(midi_note, velocity_0_1, cc_json_string)
+ *   cc_json_string: JSON object of CC values, e.g. '{"74":80,"71":60}'
+ *
+ * render(n_samples) → Float32Array  (call after trigger, before next trigger)
+ */
+export class ClankersBass {
+    free(): void;
+    [Symbol.dispose](): void;
+    constructor(seed: number);
+    /**
+     * Render n_samples of audio (adds all active voices). Returns Float32Array.
+     */
+    render(n_samples: number): Float32Array;
+    /**
+     * Trigger a note. cc_json: '{"74":80,"71":60}' or '{}'.
+     */
+    trigger(midi_note: number, velocity: number, cc_json: string): void;
+    /**
+     * Trigger + render full tail in one call (like ClankersDrums.trigger_render).
+     */
+    trigger_render(midi_note: number, velocity: number, cc_json: string): Float32Array;
+}
+
+/**
  * Voice IDs:  0=Kick  1=Snare  2=HiHat Closed  3=HiHat Open
  *             4=Tom L  5=Tom M  6=Tom H
  *
@@ -19,8 +48,6 @@ export class ClankersDrums {
     constructor(seed: number);
     /**
      * Trigger a hit and immediately render its full tail.
-     * Returns a Float32Array ready to load into an AudioBuffer.
-     * Trailing silence is trimmed so the buffer is as short as needed.
      */
     trigger_render(voice_id: number, velocity: number, p0: number, p1: number, p2: number): Float32Array;
 }
@@ -29,10 +56,17 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_clankersbass_free: (a: number, b: number) => void;
     readonly __wbg_clankersdrums_free: (a: number, b: number) => void;
+    readonly clankersbass_new: (a: number) => number;
+    readonly clankersbass_render: (a: number, b: number) => any;
+    readonly clankersbass_trigger: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly clankersbass_trigger_render: (a: number, b: number, c: number, d: number, e: number) => any;
     readonly clankersdrums_new: (a: number) => number;
     readonly clankersdrums_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
     readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_start: () => void;
 }
 

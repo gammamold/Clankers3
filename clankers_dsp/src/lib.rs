@@ -1,14 +1,18 @@
+mod bass;
 mod drums;
 mod envelope;
 mod ms20_filter;
+mod oscillator;
 mod rng;
+mod tpt_ladder;
 
+use bass::{BassEngine, BassParams};
 use drums::DrumsEngine;
 use js_sys::Float32Array;
 use wasm_bindgen::prelude::*;
 
-/// Drums engine — main-thread rendering via AudioBufferSourceNode.
-///
+// ── Drums ─────────────────────────────────────────────────────────────────────
+
 /// Voice IDs:  0=Kick  1=Snare  2=HiHat Closed  3=HiHat Open
 ///             4=Tom L  5=Tom M  6=Tom H
 ///
@@ -26,23 +30,17 @@ pub struct ClankersDrums {
 impl ClankersDrums {
     #[wasm_bindgen(constructor)]
     pub fn new(seed: u32) -> ClankersDrums {
-        ClankersDrums {
-            engine: DrumsEngine::new(seed),
-        }
+        ClankersDrums { engine: DrumsEngine::new(seed) }
     }
 
     /// Trigger a hit and immediately render its full tail.
-    /// Returns a Float32Array ready to load into an AudioBuffer.
-    /// Trailing silence is trimmed so the buffer is as short as needed.
     pub fn trigger_render(&mut self, voice_id: u8, velocity: f32, p0: f32, p1: f32, p2: f32) -> Float32Array {
         self.engine.trigger(voice_id, velocity, p0, p1, p2);
 
-        // Up to 3 s at 44100 Hz — plenty for any hit tail
         let max = 44100 * 3;
         let mut buf = vec![0.0f32; max];
         self.engine.process(&mut buf);
 
-        // Trim trailing near-silence
         let end = buf.iter()
             .rposition(|&s| s.abs() > 1e-5)
             .map(|i| i + 1)
@@ -50,4 +48,103 @@ impl ClankersDrums {
 
         Float32Array::from(&buf[..end])
     }
+}
+
+// ── Bass ──────────────────────────────────────────────────────────────────────
+
+/// Pro-One style polyphonic bass (8 voices, TPT ladder filter).
+///
+/// ClankerBoy CC map (all normalised 0-127):
+///   CC74 cutoff  CC71 resonance  CC73 amp_attack  CC75 amp_decay
+///   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
+///   CC5  glide_time
+///
+/// trigger(midi_note, velocity_0_1, cc_json_string)
+///   cc_json_string: JSON object of CC values, e.g. '{"74":80,"71":60}'
+///
+/// render(n_samples) → Float32Array  (call after trigger, before next trigger)
+#[wasm_bindgen]
+pub struct ClankersBass {
+    engine: BassEngine,
+}
+
+#[wasm_bindgen]
+impl ClankersBass {
+    #[wasm_bindgen(constructor)]
+    pub fn new(seed: u32) -> ClankersBass {
+        ClankersBass { engine: BassEngine::new(seed) }
+    }
+
+    /// Trigger a note. cc_json: '{"74":80,"71":60}' or '{}'.
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32, cc_json: &str) {
+        let p = parse_bass_params(cc_json);
+        self.engine.trigger(midi_note, velocity, &p);
+    }
+
+    /// Render n_samples of audio (adds all active voices). Returns Float32Array.
+    pub fn render(&mut self, n_samples: u32) -> Float32Array {
+        let n = n_samples as usize;
+        let mut buf = vec![0.0f32; n];
+        // Use default params for render (params were captured at trigger time)
+        let p = BassParams::default();
+        self.engine.process(&mut buf, &p);
+        Float32Array::from(buf.as_slice())
+    }
+
+    /// Trigger + render full tail in one call (like ClankersDrums.trigger_render).
+    pub fn trigger_render(&mut self, midi_note: u8, velocity: f32, cc_json: &str) -> Float32Array {
+        let p = parse_bass_params(cc_json);
+        self.engine.trigger(midi_note, velocity, &p);
+
+        // Render up to 4 s, trim trailing silence
+        let max = 44100 * 4;
+        let mut buf = vec![0.0f32; max];
+        self.engine.process(&mut buf, &p);
+
+        let end = buf.iter()
+            .rposition(|&s| s.abs() > 1e-5)
+            .map(|i| (i + 441).min(max)) // keep a short tail
+            .unwrap_or(1024);
+
+        Float32Array::from(&buf[..end])
+    }
+}
+
+// ── CC JSON → BassParams ──────────────────────────────────────────────────────
+
+fn parse_bass_params(cc_json: &str) -> BassParams {
+    let mut p = BassParams::default();
+
+    // Minimal JSON key:value parser (no external crate needed)
+    for (key, val) in parse_cc_map(cc_json) {
+        let n = val / 127.0;
+        match key {
+            74 => p.cutoff_norm    = n,
+            71 => p.resonance      = n,
+            73 => p.amp_attack     = 0.001 + n * 0.499,
+            75 => p.amp_decay      = 0.01  + n * 1.99,
+            79 => p.amp_sustain    = n,
+            72 => p.amp_release    = 0.01  + n * 1.99,
+            23 => p.flt_decay      = 0.01  + n * 0.99,
+            18 => p.detune_cents   = (n * 100.0) - 50.0,
+            5  => p.glide_time     = n * 0.5,
+            _  => {}
+        }
+    }
+    p
+}
+
+/// Parse a flat JSON CC object: {"74": 80, "71": 60} → [(74, 80.0), (71, 60.0)]
+fn parse_cc_map(s: &str) -> Vec<(u8, f32)> {
+    let mut out = Vec::new();
+    let s = s.trim().trim_start_matches('{').trim_end_matches('}');
+    for pair in s.split(',') {
+        let mut parts = pair.splitn(2, ':');
+        let k = parts.next().unwrap_or("").trim().trim_matches('"').trim();
+        let v = parts.next().unwrap_or("").trim().trim_matches('"').trim();
+        if let (Ok(kn), Ok(vf)) = (k.parse::<u8>(), v.parse::<f32>()) {
+            out.push((kn, vf));
+        }
+    }
+    out
 }

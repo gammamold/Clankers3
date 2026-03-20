@@ -1,8 +1,75 @@
 /* @ts-self-types="./clankers_dsp.d.ts" */
 
 /**
- * Drums engine — main-thread rendering via AudioBufferSourceNode.
+ * Pro-One style polyphonic bass (8 voices, TPT ladder filter).
  *
+ * ClankerBoy CC map (all normalised 0-127):
+ *   CC74 cutoff  CC71 resonance  CC73 amp_attack  CC75 amp_decay
+ *   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
+ *   CC5  glide_time
+ *
+ * trigger(midi_note, velocity_0_1, cc_json_string)
+ *   cc_json_string: JSON object of CC values, e.g. '{"74":80,"71":60}'
+ *
+ * render(n_samples) → Float32Array  (call after trigger, before next trigger)
+ */
+export class ClankersBass {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ClankersBassFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_clankersbass_free(ptr, 0);
+    }
+    /**
+     * @param {number} seed
+     */
+    constructor(seed) {
+        const ret = wasm.clankersbass_new(seed);
+        this.__wbg_ptr = ret >>> 0;
+        ClankersBassFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Render n_samples of audio (adds all active voices). Returns Float32Array.
+     * @param {number} n_samples
+     * @returns {Float32Array}
+     */
+    render(n_samples) {
+        const ret = wasm.clankersbass_render(this.__wbg_ptr, n_samples);
+        return ret;
+    }
+    /**
+     * Trigger a note. cc_json: '{"74":80,"71":60}' or '{}'.
+     * @param {number} midi_note
+     * @param {number} velocity
+     * @param {string} cc_json
+     */
+    trigger(midi_note, velocity, cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankersbass_trigger(this.__wbg_ptr, midi_note, velocity, ptr0, len0);
+    }
+    /**
+     * Trigger + render full tail in one call (like ClankersDrums.trigger_render).
+     * @param {number} midi_note
+     * @param {number} velocity
+     * @param {string} cc_json
+     * @returns {Float32Array}
+     */
+    trigger_render(midi_note, velocity, cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.clankersbass_trigger_render(this.__wbg_ptr, midi_note, velocity, ptr0, len0);
+        return ret;
+    }
+}
+if (Symbol.dispose) ClankersBass.prototype[Symbol.dispose] = ClankersBass.prototype.free;
+
+/**
  * Voice IDs:  0=Kick  1=Snare  2=HiHat Closed  3=HiHat Open
  *             4=Tom L  5=Tom M  6=Tom H
  *
@@ -34,8 +101,6 @@ export class ClankersDrums {
     }
     /**
      * Trigger a hit and immediately render its full tail.
-     * Returns a Float32Array ready to load into an AudioBuffer.
-     * Trailing silence is trimmed so the buffer is as short as needed.
      * @param {number} voice_id
      * @param {number} velocity
      * @param {number} p0
@@ -76,6 +141,9 @@ function __wbg_get_imports() {
     };
 }
 
+const ClankersBassFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_clankersbass_free(ptr >>> 0, 1));
 const ClankersDrumsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_clankersdrums_free(ptr >>> 0, 1));
@@ -106,6 +174,43 @@ function getUint8ArrayMemory0() {
     return cachedUint8ArrayMemory0;
 }
 
+function passStringToWasm0(arg, malloc, realloc) {
+    if (realloc === undefined) {
+        const buf = cachedTextEncoder.encode(arg);
+        const ptr = malloc(buf.length, 1) >>> 0;
+        getUint8ArrayMemory0().subarray(ptr, ptr + buf.length).set(buf);
+        WASM_VECTOR_LEN = buf.length;
+        return ptr;
+    }
+
+    let len = arg.length;
+    let ptr = malloc(len, 1) >>> 0;
+
+    const mem = getUint8ArrayMemory0();
+
+    let offset = 0;
+
+    for (; offset < len; offset++) {
+        const code = arg.charCodeAt(offset);
+        if (code > 0x7F) break;
+        mem[ptr + offset] = code;
+    }
+    if (offset !== len) {
+        if (offset !== 0) {
+            arg = arg.slice(offset);
+        }
+        ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
+        const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
+        const ret = cachedTextEncoder.encodeInto(arg, view);
+
+        offset += ret.written;
+        ptr = realloc(ptr, len, offset, 1) >>> 0;
+    }
+
+    WASM_VECTOR_LEN = offset;
+    return ptr;
+}
+
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
 cachedTextDecoder.decode();
 const MAX_SAFARI_DECODE_BYTES = 2146435072;
@@ -119,6 +224,21 @@ function decodeText(ptr, len) {
     }
     return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
 }
+
+const cachedTextEncoder = new TextEncoder();
+
+if (!('encodeInto' in cachedTextEncoder)) {
+    cachedTextEncoder.encodeInto = function (arg, view) {
+        const buf = cachedTextEncoder.encode(arg);
+        view.set(buf);
+        return {
+            read: arg.length,
+            written: buf.length
+        };
+    };
+}
+
+let WASM_VECTOR_LEN = 0;
 
 let wasmModule, wasm;
 function __wbg_finalize_init(instance, module) {
