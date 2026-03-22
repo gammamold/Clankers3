@@ -439,7 +439,7 @@
 import init, { ClankersDrums, ClankersBass, ClankersBuchla, ClankersPads, ClankersRhodes }
   from './wasm/clankers_dsp.js?v=14';
 import { Sequencer } from './sequencer.js?v=14';
-import { FxRack, makeCurve } from './fx.js';
+import { FxRack, makeCurve, divToSec } from './fx.js';
 
 // ─── Knob class ────────────────────────────────────────────────────────────
 class Knob {
@@ -503,6 +503,8 @@ class Knob {
     this.vEl.textContent = isInt ? Math.round(this._v) : this._v.toFixed(2);
   }
   get val() { return this.step >= 1 ? Math.round(this._v) : this._v; }
+  /** Programmatic set — updates display without firing onChange */
+  setVal(v) { this._v = Math.max(this.min, Math.min(this.max, v)); this._draw(); }
 }
 
 // ─── Knob group helper ─────────────────────────────────────────────────────
@@ -826,6 +828,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
         log('[seq] ■ song ended');
       };
       s.stop(); s.load(sheet); s.start();
+      if (sheet.fx) applyFxParams(sheet.fx);
       startArrIndicator();
       log(`[seq] ▶ SONG ${bpm} BPM — ${songArrangement.length} patterns — ${sheet.steps.length} steps`);
     } else {
@@ -834,6 +837,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
       s.loop  = true;
       s.onEnd = null;
       s.stop(); s.load(sheet); s.start();
+      if (sheet.fx) applyFxParams(sheet.fx);
       log(`[seq] ▶ ${sheet.bpm} BPM — ${(sheet.steps ?? []).length} steps`);
     }
     document.getElementById('btn-play').disabled = true;
@@ -990,6 +994,8 @@ document.getElementById('btn-pat-store').addEventListener('click', () => {
   let sheet;
   try { sheet = JSON.parse(document.getElementById('sheet-json').value); }
   catch (e) { log('Store failed — invalid JSON'); return; }
+  // Capture current FX state into the sheet
+  if (rack) sheet.fx = rack.getParams();
   const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
   patternBank[activeSlot] = { sheet, label };
   patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
@@ -1263,31 +1269,96 @@ document.querySelectorAll('.fx-send-sl').forEach(sl => {
 
 // BPM helper for delay time calculation
 function bpmDelaySeconds(division) {
+  return divToSec(division, +document.getElementById('seq-bpm').value);
+}
+
+// FX UI state — module-level so applyFxParams can reach them
+let _fxOn  = [false, false, false];
+let _fxK   = {};   // keyed by name, holds Knob refs
+
+/** Apply a FX params object (from JSON "fx" key) to both audio and UI */
+function applyFxParams(fx) {
+  if (!rack || !fx) return;
   const bpm = +document.getElementById('seq-bpm').value;
-  const beatSec = 60 / bpm;
-  const map = { '1/32': beatSec/8, '1/16': beatSec/4, '1/8': beatSec/2,
-                '1/8d': beatSec*0.75, '1/4': beatSec, '1/4d': beatSec*1.5,
-                '1/2': beatSec*2, '1': beatSec*4 };
-  return map[division] ?? beatSec;
+  rack.setParams(fx, bpm);   // audio
+
+  // ── UI sync ──────────────────────────────────────────────────────────────
+  function syncSends(slot, sends) {
+    if (!sends) return;
+    document.querySelectorAll(`.fx-send-sl[data-slot="${slot}"]`).forEach(sl => {
+      const v = sends[sl.dataset.instr];
+      if (v != null) {
+        sl.value = Math.round(v * 100);
+        sl.nextElementSibling.textContent = sl.value;
+        sl.closest('.fx-send-item').classList.toggle('active', +sl.value > 0);
+      }
+    });
+  }
+
+  const d = fx.delay;
+  if (d) {
+    if (d.on    != null) { _fxOn[0] = !!d.on; const btn = document.getElementById('fx0-on'); btn.classList.toggle('active', _fxOn[0]); }
+    if (d.ret   != null) document.getElementById('fx0-ret').value = Math.round(d.ret * 100);
+    if (d.time)          document.getElementById('fx0-time').value = d.time;
+    if (d.lfo)           document.getElementById('fx0-ltype').value = d.lfo;
+    if (d.fb_shape)      document.getElementById('fx0-fshape').value = d.fb_shape;
+    if (d.sc    != null) document.getElementById('fx0-sc').value = d.sc ?? '';
+    if (d.feedback  != null) _fxK.d_fdbk?.setVal(d.feedback);
+    if (d.wet       != null) _fxK.d_wet?.setVal(d.wet);
+    if (d.lfo_rate  != null) _fxK.d_lrate?.setVal(d.lfo_rate);
+    if (d.lfo_depth != null) _fxK.d_ldepth?.setVal(d.lfo_depth);
+    if (d.hp        != null) _fxK.d_hp?.setVal(d.hp);
+    if (d.lp        != null) _fxK.d_lp?.setVal(d.lp);
+    if (d.sc_depth  != null) _fxK.d_scdepth?.setVal(d.sc_depth);
+    syncSends(0, d.sends);
+  }
+
+  const w = fx.waveshaper;
+  if (w) {
+    if (w.on    != null) { _fxOn[1] = !!w.on; const btn = document.getElementById('fx1-on'); btn.classList.toggle('active', _fxOn[1]); }
+    if (w.ret   != null) document.getElementById('fx1-ret').value = Math.round(w.ret * 100);
+    if (w.type)          document.getElementById('fx1-type').value = w.type;
+    if (w.sc    != null) document.getElementById('fx1-sc').value = w.sc ?? '';
+    if (w.drive     != null) _fxK.w_drive?.setVal(w.drive);
+    if (w.tone      != null) _fxK.w_tone?.setVal(w.tone);
+    if (w.wet       != null) _fxK.w_wet?.setVal(w.wet);
+    if (w.sc_depth  != null) _fxK.w_scdepth?.setVal(w.sc_depth);
+    syncSends(1, w.sends);
+  }
+
+  const r = fx.beatrepeat;
+  if (r) {
+    if (r.ret != null) document.getElementById('fx2-ret')?.value = Math.round(r.ret * 100);
+    if (r.slice) {
+      const beatMap = { '1/32': '0.125', '1/16': '0.25', '1/8': '0.5', '1/4': '1' };
+      document.getElementById('fx2-slice').value = beatMap[r.slice] ?? '0.25';
+    }
+    if (r.sc != null) document.getElementById('fx2-sc').value = r.sc ?? '';
+    if (r.rate      != null) _fxK.r_rate?.setVal(r.rate);
+    if (r.decay     != null) _fxK.r_decay?.setVal(r.decay);
+    if (r.wet       != null) _fxK.r_wet?.setVal(r.wet);
+    if (r.sc_depth  != null) _fxK.r_scdepth?.setVal(r.sc_depth);
+    syncSends(2, r.sends);
+  }
 }
 
 function initFxUI() {
   // ── DELAY (slot 0) ──────────────────────────────────────────────────────
   const delay = rack.unit(0);
 
-  const fdbkKnob  = new Knob(document.getElementById('fx0-fdbk-wrap'),
+  const fdbkKnob  = _fxK.d_fdbk   = new Knob(document.getElementById('fx0-fdbk-wrap'),
     { label:'', min:0, max:0.97, value:0.45, step:0.01 });
-  const wetKnob0  = new Knob(document.getElementById('fx0-wet-wrap'),
+  const wetKnob0  = _fxK.d_wet    = new Knob(document.getElementById('fx0-wet-wrap'),
     { label:'', min:0, max:1,    value:0.5,  step:0.01 });
-  const lrateKnob = new Knob(document.getElementById('fx0-lrate-wrap'),
+  const lrateKnob = _fxK.d_lrate  = new Knob(document.getElementById('fx0-lrate-wrap'),
     { label:'', min:0.01, max:40, value:0.3,  step:0.01 });
-  const ldepthKnob= new Knob(document.getElementById('fx0-ldepth-wrap'),
+  const ldepthKnob= _fxK.d_ldepth = new Knob(document.getElementById('fx0-ldepth-wrap'),
     { label:'', min:0,    max:0.05, value:0.002, step:0.001 });
-  const hpKnob    = new Knob(document.getElementById('fx0-hp-wrap'),
+  const hpKnob    = _fxK.d_hp     = new Knob(document.getElementById('fx0-hp-wrap'),
     { label:'', min:20,   max:2000, value:80,   step:1 });
-  const lpKnob    = new Knob(document.getElementById('fx0-lp-wrap'),
+  const lpKnob    = _fxK.d_lp     = new Knob(document.getElementById('fx0-lp-wrap'),
     { label:'', min:200,  max:18000, value:6000, step:10 });
-  const scDepth0  = new Knob(document.getElementById('fx0-scdepth-wrap'),
+  const scDepth0  = _fxK.d_scdepth= new Knob(document.getElementById('fx0-scdepth-wrap'),
     { label:'', min:0, max:1, value:0.8, step:0.01 });
 
   fdbkKnob.onChange  = v => delay.setFeedback(v);
@@ -1311,28 +1382,26 @@ function initFxUI() {
     rack.setSidechain(0, this.value || null);
   });
   document.getElementById('fx0-ret').addEventListener('input', function() {
-    rack.setReturn(0, this.value / 100);
+    if (_fxOn[0]) rack.setReturn(0, this.value / 100);
+    else rack._retBase[0] = this.value / 100;
   });
 
-  let fx0On = false;
   document.getElementById('fx0-on').addEventListener('click', function() {
-    fx0On = !fx0On;
-    this.classList.toggle('active', fx0On);
-    rack.setReturn(0, fx0On ? document.getElementById('fx0-ret').value / 100 : 0);
+    _fxOn[0] = !_fxOn[0];
+    this.classList.toggle('active', _fxOn[0]);
+    rack.setOn(0, _fxOn[0]);
   });
-
-  buildSendGrid('fx0-sends', 0);
 
   // ── WAVESHAPER (slot 1) ─────────────────────────────────────────────────
   const shape = rack.unit(1);
 
-  const driveKnob = new Knob(document.getElementById('fx1-drive-wrap'),
+  const driveKnob = _fxK.w_drive   = new Knob(document.getElementById('fx1-drive-wrap'),
     { label:'', min:0, max:1, value:0.3, step:0.01 });
-  const toneKnob  = new Knob(document.getElementById('fx1-tone-wrap'),
+  const toneKnob  = _fxK.w_tone    = new Knob(document.getElementById('fx1-tone-wrap'),
     { label:'', min:200, max:18000, value:6000, step:10 });
-  const wetKnob1  = new Knob(document.getElementById('fx1-wet-wrap'),
+  const wetKnob1  = _fxK.w_wet     = new Knob(document.getElementById('fx1-wet-wrap'),
     { label:'', min:0, max:1, value:0.5, step:0.01 });
-  const scDepth1  = new Knob(document.getElementById('fx1-scdepth-wrap'),
+  const scDepth1  = _fxK.w_scdepth = new Knob(document.getElementById('fx1-scdepth-wrap'),
     { label:'', min:0, max:1, value:0.7, step:0.01 });
 
   driveKnob.onChange = v => { shape.setDrive(v); shape.setCurve(document.getElementById('fx1-type').value, v); };
@@ -1347,28 +1416,26 @@ function initFxUI() {
     rack.setSidechain(1, this.value || null);
   });
   document.getElementById('fx1-ret').addEventListener('input', function() {
-    rack.setReturn(1, this.value / 100);
+    if (_fxOn[1]) rack.setReturn(1, this.value / 100);
+    else rack._retBase[1] = this.value / 100;
   });
 
-  let fx1On = false;
   document.getElementById('fx1-on').addEventListener('click', function() {
-    fx1On = !fx1On;
-    this.classList.toggle('active', fx1On);
-    rack.setReturn(1, fx1On ? document.getElementById('fx1-ret').value / 100 : 0);
+    _fxOn[1] = !_fxOn[1];
+    this.classList.toggle('active', _fxOn[1]);
+    rack.setOn(1, _fxOn[1]);
   });
-
-  buildSendGrid('fx1-sends', 1);
 
   // ── BEAT REPEAT (slot 2) ────────────────────────────────────────────────
   const repeat = rack.unit(2);
 
-  const rateKnob2  = new Knob(document.getElementById('fx2-rate-wrap'),
+  const rateKnob2  = _fxK.r_rate   = new Knob(document.getElementById('fx2-rate-wrap'),
     { label:'', min:0.125, max:4, value:1, step:0.125 });
-  const decayKnob2 = new Knob(document.getElementById('fx2-decay-wrap'),
+  const decayKnob2 = _fxK.r_decay  = new Knob(document.getElementById('fx2-decay-wrap'),
     { label:'', min:0, max:0.999, value:0.75, step:0.01 });
-  const wetKnob2   = new Knob(document.getElementById('fx2-wet-wrap'),
+  const wetKnob2   = _fxK.r_wet    = new Knob(document.getElementById('fx2-wet-wrap'),
     { label:'', min:0, max:1, value:0.85, step:0.01 });
-  const scDepth2   = new Knob(document.getElementById('fx2-scdepth-wrap'),
+  const scDepth2   = _fxK.r_scdepth= new Knob(document.getElementById('fx2-scdepth-wrap'),
     { label:'', min:0, max:1, value:0.6, step:0.01 });
 
   rateKnob2.onChange  = v => repeat.setRate(v);
@@ -1396,8 +1463,6 @@ function initFxUI() {
     rack.setSidechain(2, this.value || null);
     repeat._scArmed = !!this.value;
   });
-
-  buildSendGrid('fx2-sends', 2);
 
   // Update delay time when BPM changes
   document.getElementById('seq-bpm').addEventListener('input', () => {

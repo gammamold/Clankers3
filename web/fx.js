@@ -20,6 +20,15 @@
  *   InstrGain[sc] ──► AnalyserNode ──► EnvelopeFollower ──► unit.setSidechainLevel()
  */
 
+// ── BPM-division to seconds helper ───────────────────────────────────────────
+
+export function divToSec(div, bpm) {
+  const beat = 60 / bpm;
+  const map = { '1/32': beat/8, '1/16': beat/4, '1/8': beat/2,
+                '1/8d': beat*0.75, '1/4': beat, '1/4d': beat*1.5, '1/2': beat*2 };
+  return map[div] ?? beat/2;
+}
+
 // ── Waveshaper curve generator ────────────────────────────────────────────────
 
 export function makeCurve(type, amount, n = 4096) {
@@ -149,6 +158,10 @@ export class DelayFx {
     this._scDepth = 0.8;
     this._wetBase = 0.5;
 
+    // Serialisable param cache
+    this._p = { time: '1/8', feedback: 0.45, wet: 0.5, lfo: 'sine',
+                lfo_rate: 0.3, lfo_depth: 0.002, fb_shape: 'none', hp: 80, lp: 6000 };
+
     // Wire up
     this.input.connect(this._dry);
     this.input.connect(this._delay);
@@ -167,18 +180,21 @@ export class DelayFx {
 
   // ── Params ────────────────────────────────────────────────────────────────
 
-  setDelayTime(s) {
+  setDelayTime(s, div) {
     const safe = Math.max(0.005, s);
     this._baseDelay = safe;
+    if (div) this._p.time = div;
     if (!this._chaosMode)
       this._delay.delayTime.setTargetAtTime(safe, this.ctx.currentTime, 0.02);
   }
 
   setFeedback(v) {
+    this._p.feedback = v;
     this._fbGain.gain.setTargetAtTime(Math.min(0.97, v), this.ctx.currentTime, 0.01);
   }
 
   setWet(v) {
+    this._p.wet = v;
     this._wetBase = v;
     this._wet.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01);
   }
@@ -188,21 +204,24 @@ export class DelayFx {
   }
 
   setLfoRate(hz) {
+    this._p.lfo_rate = hz;
     if (!this._chaosMode)
       this._lfo.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01);
     this._chaosRate = hz;
   }
 
   setLfoDepth(s) {
+    this._p.lfo_depth = s;
     this._chaosDepth = s;
     if (!this._chaosMode)
       this._lfoDepth.gain.setTargetAtTime(s, this.ctx.currentTime, 0.01);
   }
 
   setLfoType(type) {
+    this._p.lfo = type;
     if (type === 'chaos') {
       this._chaosMode = true;
-      this._lfoDepth.gain.value = 0;  // silence oscillator modulation
+      this._lfoDepth.gain.value = 0;
     } else {
       this._chaosMode = false;
       this._lfo.type  = type;
@@ -211,11 +230,26 @@ export class DelayFx {
   }
 
   setFbShape(type, amount) {
+    this._p.fb_shape = type;
     this._fbShape.curve = type === 'none' ? null : makeCurve(type, amount);
   }
 
-  setFbHp(hz) { this._fbHp.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
-  setFbLp(hz) { this._fbLp.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
+  setFbHp(hz) { this._p.hp = hz; this._fbHp.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
+  setFbLp(hz) { this._p.lp = hz; this._fbLp.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
+
+  getParams() { return { ...this._p }; }
+
+  _applyParams(p, bpm) {
+    if (p.time)              this.setDelayTime(divToSec(p.time, bpm ?? 120), p.time);
+    if (p.feedback != null)  this.setFeedback(p.feedback);
+    if (p.wet != null)       this.setWet(p.wet);
+    if (p.lfo)               this.setLfoType(p.lfo);
+    if (p.lfo_rate != null)  this.setLfoRate(p.lfo_rate);
+    if (p.lfo_depth != null) this.setLfoDepth(p.lfo_depth);
+    if (p.fb_shape)          this.setFbShape(p.fb_shape, 0.5);
+    if (p.hp != null)        this.setFbHp(p.hp);
+    if (p.lp != null)        this.setFbLp(p.lp);
+  }
 
   setSidechainDepth(d) { this._scDepth = d; }
 
@@ -272,6 +306,9 @@ export class WaveShapeFx {
     // Sidechain modulates drive
     this._scDepth = 0.7;
 
+    // Serialisable param cache
+    this._p = { type: 'soft', drive: 0.3, tone: 6000, wet: 0.5 };
+
     // Wire
     this.input.connect(this._dry);
     this.input.connect(this._driveGain);
@@ -283,19 +320,30 @@ export class WaveShapeFx {
   }
 
   setCurve(type, amount) {
+    this._p.type      = type;
+    this._p.drive     = amount;
     this._curveType   = type;
     this._curveAmount = amount;
     this._shaper.curve = makeCurve(type, amount);
   }
 
   setDrive(v) {
+    this._p.drive = v;
     this._baseDrive = Math.max(1, v * 16);
     this._driveGain.gain.setTargetAtTime(this._baseDrive, this.ctx.currentTime, 0.01);
   }
 
-  setTone(hz)  { this._tone.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
-  setWet(v)    { this._wet.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
+  setTone(hz)  { this._p.tone = hz; this._tone.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
+  setWet(v)    { this._p.wet  = v;  this._wet.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
   setDry(v)    { this._dry.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
+
+  getParams() { return { ...this._p }; }
+
+  _applyParams(p) {
+    if (p.type || p.drive != null) this.setCurve(p.type ?? this._p.type, p.drive ?? this._p.drive);
+    if (p.tone != null) this.setTone(p.tone);
+    if (p.wet  != null) this.setWet(p.wet);
+  }
 
   setSidechainDepth(d) { this._scDepth = d; }
 
@@ -408,12 +456,24 @@ export class BeatRepeat {
   setSidechainDepth(d) { this._scDepth = d; }
 
   setSidechainLevel(env) {
-    // Sidechain can auto-arm on strong transients
     if (!this._scArmed || this._scCooldown > 0) { this._scCooldown = Math.max(0, this._scCooldown - 1/60); return; }
     if (env > this._scThresh && !this._armed && !this._active) {
       this.arm(this._bpm, this._sliceBts);
-      this._scCooldown = 0.5; // 500ms cooldown between auto-arms
+      this._scCooldown = 0.5;
     }
+  }
+
+  getParams() {
+    const sliceMap = { 0.125: '1/32', 0.25: '1/16', 0.5: '1/8', 1: '1/4' };
+    return { slice: sliceMap[this._sliceBts] ?? '1/16', rate: this._rate, decay: this._decay, wet: this._wet };
+  }
+
+  _applyParams(p) {
+    const beatMap = { '1/32': 0.125, '1/16': 0.25, '1/8': 0.5, '1/4': 1 };
+    if (p.slice != null)  this._sliceBts = beatMap[p.slice] ?? 0.25;
+    if (p.rate  != null)  this.setRate(p.rate);
+    if (p.decay != null)  this.setDecay(p.decay);
+    if (p.wet   != null)  this.setWet(p.wet);
   }
 
   tick() {}
@@ -477,6 +537,12 @@ export class FxRack {
 
     // Master destination (set via attachMaster)
     this._master = null;
+
+    // Serialisation state
+    this._on       = [false, false, false];
+    this._retBase  = [0.7,   0.7,   0.7  ];  // last non-zero return level
+    this._scSource = [null,  null,  null ];
+    this._scDepths = [0.7,   0.7,   0.7  ];
   }
 
   // ── Routing ────────────────────────────────────────────────────────────────
@@ -505,13 +571,20 @@ export class FxRack {
 
     // Reattach sidechain analysers to new instrGains
     for (let s = 0; s < 3; s++) {
-      const sc = this._scSource?.[s];
+      const sc = this._scSource[s];
       if (sc && instrGains[sc]) {
         this._followers[s]?.disconnect();
         this._followers[s] = new EnvelopeFollower(this.ctx, instrGains[sc]);
-        this._units[s].setSidechainDepth?.(this._scDepths?.[s] ?? 0.7);
+        this._units[s].setSidechainDepth?.(this._scDepths[s]);
       }
     }
+  }
+
+  /** Toggle slot on/off (does not change stored return level) */
+  setOn(slot, on) {
+    this._on[slot] = !!on;
+    if (this._returns[slot])
+      this._returns[slot].gain.setTargetAtTime(on ? this._retBase[slot] : 0, this.ctx.currentTime, 0.02);
   }
 
   /** Set send level 0–1 for instrument → slot */
@@ -522,14 +595,14 @@ export class FxRack {
 
   /** Set return level 0–1 for slot → master */
   setReturn(slot, level) {
-    if (this._returns[slot])
+    if (this._returns[slot]) {
+      if (level > 0) this._retBase[slot] = level;
       this._returns[slot].gain.setTargetAtTime(level, this.ctx.currentTime, 0.02);
+    }
   }
 
   /** Set sidechain source for a slot ('drum'|'bass'|...|null) */
   setSidechain(slot, instrType) {
-    this._scSource  ??= [null, null, null];
-    this._scDepths  ??= [0.7,  0.7,  0.7 ];
     this._scSource[slot] = instrType;
 
     this._followers[slot]?.disconnect();
@@ -541,13 +614,46 @@ export class FxRack {
   }
 
   setSidechainDepth(slot, depth) {
-    this._scDepths ??= [0.7, 0.7, 0.7];
     this._scDepths[slot] = depth;
     this._units[slot].setSidechainDepth?.(depth);
   }
 
   /** Access a unit directly for param setting */
   unit(slot) { return this._units[slot]; }
+
+  /** Snapshot all params to a plain object (include in ClankerBoy JSON as "fx") */
+  getParams() {
+    const names = ['delay', 'waveshaper', 'beatrepeat'];
+    const out = {};
+    for (let s = 0; s < 3; s++) {
+      const sends = {};
+      for (const t of INSTR_TYPES) sends[t] = +(this._sends[s][t].gain.value.toFixed(3));
+      out[names[s]] = {
+        on:       this._on[s],
+        ret:      +this._retBase[s].toFixed(3),
+        sc:       this._scSource[s] ?? null,
+        sc_depth: +this._scDepths[s].toFixed(3),
+        sends,
+        ...this._units[s].getParams(),
+      };
+    }
+    return out;
+  }
+
+  /** Apply a params snapshot (from JSON "fx" key). bpm needed for delay time conversion. */
+  setParams(json, bpm = 120) {
+    const map = { delay: 0, waveshaper: 1, beatrepeat: 2 };
+    for (const [name, slot] of Object.entries(map)) {
+      const p = json?.[name];
+      if (!p) continue;
+      if (p.on       != null) this.setOn(slot, p.on);
+      if (p.ret      != null) { this._retBase[slot] = p.ret; this.setReturn(slot, p.on !== false ? p.ret : 0); }
+      if (p.sc       != null) this.setSidechain(slot, p.sc || null);
+      if (p.sc_depth != null) this.setSidechainDepth(slot, p.sc_depth);
+      if (p.sends)  for (const [instr, val] of Object.entries(p.sends)) this.setSend(slot, instr, val);
+      this._units[slot]._applyParams?.(p, bpm);
+    }
+  }
 
   // ── Tick (called from rAF loop) ───────────────────────────────────────────
 
