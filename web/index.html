@@ -51,6 +51,21 @@
     .knob-val { font-size:.62rem; color:#f90; text-align:center; line-height:1.2; }
     .knob-lab { font-size:.58rem; color:#555; text-align:center; }
 
+    /* ── Step Visualizer ── */
+    #step-viz { margin-bottom:.5rem; display:none; }
+    #viz-pos { font-size:.68rem; color:#555; margin-bottom:.3rem; letter-spacing:.06em; }
+    #viz-pos span { color:#f90; }
+    #viz-steps { display:flex; flex-wrap:wrap; gap:2px; }
+    .viz-step {
+      width:10px; height:10px; border-radius:1px;
+      background:#1a1a1a; border:1px solid #222;
+      transition: background 60ms, border-color 60ms;
+    }
+    .viz-step.bar-start { margin-left:6px; }
+    .viz-step.viz-active { background:#f90; border-color:#f90; }
+    .viz-step.viz-has-event { border-color:#604010; }
+    .viz-step.viz-active.viz-has-event { background:#f90; border-color:#f90; }
+
     /* ── Sequencer ── */
     .seq-section { margin-bottom:1rem; }
     .seq-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
@@ -148,6 +163,13 @@
   <div class="knob-row" id="pads-knobs"></div>
 </div>
 
+<!-- ── Rhodes ────────────────────────────────────────────────────────────── -->
+<div class="inst">
+  <div class="inst-hdr">RHODES EP <span>[t:3]</span> <button class="ms-btn" data-type="rhodes" data-ms="m">M</button><button class="ms-btn" data-type="rhodes" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="rhodes" min="0" max="100" value="100"></span></div>
+  <div class="pads chords" id="rhodes-pads"></div>
+  <div class="knob-row" id="rhodes-knobs"></div>
+</div>
+
 <!-- ── Sequencer ────────────────────────────────────────────────────────── -->
 <div class="seq-section">
   <h2>STEP SEQUENCER</h2>
@@ -159,6 +181,10 @@
       BPM <input type="range" id="seq-bpm" min="60" max="200" step="1" value="128" style="width:110px;">
       <span id="bpm-val">128</span>
     </label>
+  </div>
+  <div id="step-viz">
+    <div id="viz-pos">BAR <span id="viz-bar">—</span> · BEAT <span id="viz-beat">—</span></div>
+    <div id="viz-steps"></div>
   </div>
   <span class="label-sm">ClankerBoy JSON — edit &amp; press PLAY</span>
   <textarea id="sheet-json">{
@@ -239,9 +265,9 @@
 <div id="log">Click a pad or press PLAY to start.</div>
 
 <script type="module">
-import init, { ClankersDrums, ClankersBass, ClankersBuchla, ClankersPads }
-  from './wasm/clankers_dsp.js?v=12';
-import { Sequencer } from './sequencer.js?v=12';
+import init, { ClankersDrums, ClankersBass, ClankersBuchla, ClankersPads, ClankersRhodes }
+  from './wasm/clankers_dsp.js?v=14';
+import { Sequencer } from './sequencer.js?v=14';
 
 // ─── Knob class ────────────────────────────────────────────────────────────
 class Knob {
@@ -333,6 +359,7 @@ let engine = null;   // ClankersDrums
 let bass   = null;   // ClankersBass
 let buchla = null;   // ClankersBuchla
 let pads   = null;   // ClankersPads
+let rhodes = null;   // ClankersRhodes
 
 async function ensureReady() {
   if (engine) {
@@ -347,10 +374,10 @@ async function ensureReady() {
   bass   = new ClankersBass(seed ^ 0xdeadbeef);
   buchla = new ClankersBuchla();
   pads   = new ClankersPads();
+  rhodes = new ClankersRhodes();
   log('WASM engines ready — click any pad!');
-  // Debug exports
-  window._engine = engine; window._bass = bass; window._buchla = buchla; window._pads = pads;
-  window._ctx = ctx;
+  window._engine = engine; window._bass = bass; window._buchla = buchla;
+  window._pads = pads; window._rhodes = rhodes; window._ctx = ctx;
 }
 
 function playMono(samples) {
@@ -449,11 +476,13 @@ const bassOctKnob = makeKnobGroup(bassKnobContainer, 'OCT', [
 
 function triggerBass(midi) {
   ensureReady().then(() => {
+    const bpm = +document.getElementById('seq-bpm').value;
+    const holdSamples = Math.round(1.5 * (60 / bpm) * 44100);
     const cc = JSON.stringify({
       71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
       73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
     });
-    playMono(bass.trigger_render(midi, 0.85, cc));
+    playMono(bass.trigger_render(midi + bassOctKnob.val * 12, 0.85, holdSamples, cc));
     log(`bass midi=${midi} cc74=${bk['b-cutoff'].val}`);
   });
 }
@@ -536,11 +565,71 @@ function triggerChord(notes) {
   });
 }
 
+// ─── RHODES ────────────────────────────────────────────────────────────────
+const RHODES_PADS = [
+  { label:'C3',  midi:48 }, { label:'D3',  midi:50 }, { label:'E3',  midi:52 },
+  { label:'F3',  midi:53 }, { label:'G3',  midi:55 }, { label:'A3',  midi:57 },
+  { label:'Bb3', midi:58 }, { label:'C4',  midi:60 }, { label:'D4',  midi:62 },
+  { label:'E4',  midi:64 }, { label:'G4',  midi:67 }, { label:'Bb4', midi:70 },
+];
+
+const rhodesGrid = document.getElementById('rhodes-pads');
+RHODES_PADS.forEach(({ label, midi }) => {
+  const btn = document.createElement('button');
+  btn.className = 'pad'; btn.textContent = label;
+  btn.addEventListener('click', () => triggerRhodes(midi));
+  rhodesGrid.appendChild(btn);
+});
+
+const rhodesKnobContainer = document.getElementById('rhodes-knobs');
+const rk = {
+  ...makeKnobGroup(rhodesKnobContainer, 'TONE', [
+    { id: 'r-bright', label: 'BRIGHT', min: 0,   max: 127, value: 74,  step: 1 },
+    { id: 'r-decay',  label: 'DECAY',  min: 0,   max: 127, value: 80,  step: 1 },
+    { id: 'r-bark',   label: 'BARK',   min: 0,   max: 127, value: 60,  step: 1 },
+    { id: 'r-ratio',  label: 'RATIO',  min: 0,   max: 127, value: 8,   step: 1 },
+  ]),
+  ...makeKnobGroup(rhodesKnobContainer, 'VIBE', [
+    { id: 'r-trate',  label: 'T.RATE', min: 0,   max: 127, value: 62,  step: 1 },
+    { id: 'r-tdepth', label: 'T.DEPT', min: 0,   max: 127, value: 23,  step: 1 },
+    { id: 'r-chorus', label: 'CHORUS', min: 0,   max: 127, value: 48,  step: 1 },
+  ]),
+};
+
+function triggerRhodes(midi) {
+  ensureReady().then(() => {
+    const bpm = +document.getElementById('seq-bpm').value;
+    const holdSamples = Math.round(2 * (60 / bpm) * 44100);
+    const cc = JSON.stringify({
+      74: rk['r-bright'].val, 72: rk['r-decay'].val,
+      73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+      26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
+      30: rk['r-chorus'].val,
+    });
+    playStereoInterleaved(rhodes.trigger_render(midi, 0.78, holdSamples, cc));
+    log(`rhodes midi=${midi} bright=${rk['r-bright'].val} decay=${rk['r-decay'].val}`);
+  });
+}
+
+const rerenderRhodes = debounce(() => {
+  if (!seq || !seq.isPlaying) return;
+  seq.rerender('rhodes', {
+    ccJson: JSON.stringify({
+      74: rk['r-bright'].val, 72: rk['r-decay'].val,
+      73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+      26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
+      30: rk['r-chorus'].val,
+    }),
+  });
+}, 100);
+
+for (const k of Object.values(rk)) k.onChange = rerenderRhodes;
+
 // ─── Sequencer ─────────────────────────────────────────────────────────────
 let seq = null;
 
 function getSeq() {
-  if (!seq) seq = new Sequencer(ctx, { drums: engine, bass, buchla, pads });
+  if (!seq) seq = new Sequencer(ctx, { drums: engine, bass, buchla, pads, rhodes });
   return seq;
 }
 
@@ -558,6 +647,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
         document.getElementById('btn-play').disabled = false;
         document.getElementById('btn-stop').disabled = true;
         stopArrIndicator();
+        stopViz();
         log('[seq] ■ song ended');
       };
       s.stop(); s.load(sheet); s.start();
@@ -573,6 +663,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     }
     document.getElementById('btn-play').disabled = true;
     document.getElementById('btn-stop').disabled = false;
+    startViz();
   } catch (e) {
     log('Seq error: ' + e);
   }
@@ -581,6 +672,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
 document.getElementById('btn-stop').addEventListener('click', () => {
   if (seq) seq.stop();
   stopArrIndicator();
+  stopViz();
   document.getElementById('btn-play').disabled = false;
   document.getElementById('btn-stop').disabled = true;
   log('[seq] ■ stopped');
@@ -844,7 +936,10 @@ function bakeToJson() {
                      19: uk['u-decay'].val,  71: uk['u-res'].val };
   const padsCC   = { 74: pk['p-cutoff'].val, 73: pk['p-atk'].val,    72: pk['p-rel'].val,
                      91: pk['p-rev'].val,    30: pk['p-cho'].val,     31: pk['p-cho'].val };
-  const ccByType = { 1: buchlaCC, 2: bassCC, 6: padsCC };
+  const rhodesCC = { 74: rk['r-bright'].val, 72: rk['r-decay'].val,
+                     73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+                     26: rk['r-trate'].val,  27: rk['r-tdepth'].val, 30: rk['r-chorus'].val };
+  const ccByType = { 1: buchlaCC, 2: bassCC, 3: rhodesCC, 6: padsCC };
 
   // Drum knobs are 0-1 (direct p0/p1/p2); JSON CCs are 0-127 — multiply to convert.
   // drumNoteToParams: kick=CC74(pitch)/CC23(sweep)/CC75(decay),
@@ -974,6 +1069,78 @@ chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); 
 
 // ─── Log helper ────────────────────────────────────────────────────────────
 function log(msg) { document.getElementById('log').textContent += '\n' + msg; }
+
+// ─── Step Visualizer ───────────────────────────────────────────────────────
+const vizEl      = document.getElementById('step-viz');
+const vizStepsEl = document.getElementById('viz-steps');
+const vizBarEl   = document.getElementById('viz-bar');
+const vizBeatEl  = document.getElementById('viz-beat');
+let vizPips      = [];
+let vizRaf       = null;
+let vizLastSheet = null;   // detect sheet changes
+
+function buildVizPips(seq) {
+  vizStepsEl.innerHTML = '';
+  vizPips = [];
+  const stepBeats = seq._stepBeats;
+  const beatsPerBar = 4;
+
+  // Which steps have at least one real event?
+  const stepsWithEvents = new Set(seq._steps.map(ev => {
+    // find closest stepBeat index for this event
+    let idx = stepBeats.length - 1;
+    for (let i = 0; i < stepBeats.length - 1; i++) {
+      if (ev.beatTime < stepBeats[i + 1]) { idx = i; break; }
+    }
+    return idx;
+  }));
+
+  for (let i = 0; i < stepBeats.length; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'viz-step';
+    if (stepsWithEvents.has(i)) pip.classList.add('viz-has-event');
+    // Add a small gap at bar boundaries
+    const beat = stepBeats[i];
+    if (i > 0 && Math.floor(beat / beatsPerBar) > Math.floor(stepBeats[i - 1] / beatsPerBar)) {
+      pip.classList.add('bar-start');
+    }
+    vizStepsEl.appendChild(pip);
+    vizPips.push(pip);
+  }
+  vizLastSheet = seq.sheet;
+}
+
+function vizTick() {
+  if (!seq?.isPlaying) { vizRaf = null; return; }
+  vizRaf = requestAnimationFrame(vizTick);
+
+  // Rebuild pips if sheet changed
+  if (seq.sheet !== vizLastSheet) buildVizPips(seq);
+
+  const beat     = seq.getCurrentBeat();
+  const stepIdx  = seq.getCurrentStepIndex();
+  const bar      = Math.floor(beat / 4) + 1;
+  const beatInBar = (beat % 4) + 1;
+
+  vizBarEl.textContent  = bar;
+  vizBeatEl.textContent = beatInBar.toFixed(2);
+
+  for (let i = 0; i < vizPips.length; i++) {
+    vizPips[i].classList.toggle('viz-active', i === stepIdx);
+  }
+}
+
+function startViz() {
+  vizEl.style.display = 'block';
+  buildVizPips(seq);
+  if (!vizRaf) { vizRaf = requestAnimationFrame(vizTick); }
+}
+function stopViz() {
+  vizEl.style.display = 'none';
+  if (vizRaf) { cancelAnimationFrame(vizRaf); vizRaf = null; }
+  vizPips.forEach(p => p.classList.remove('viz-active'));
+}
+
 </script>
 </body>
 </html>

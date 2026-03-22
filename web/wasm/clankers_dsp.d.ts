@@ -87,6 +87,31 @@ export class ClankersPads {
     trigger_render(midi_note: number, velocity: number, hold_samples: number, cc_json: string): Float32Array;
 }
 
+/**
+ * Rhodes electric piano — FM tine model (Operator / Lounge Lizard style).
+ *
+ * ClankerBoy t:3 CC map:
+ *   CC74  Brightness  (peak FM index 0.5–8)
+ *   CC72  Decay       (amp decay 0.5–6 s at C4)
+ *   CC20  Tine ratio  (modulator harmonic ratio 0.9–2.0)
+ *   CC73  Bark time   (mod-index decay fraction, lower = longer bark)
+ *   CC26  Tremolo rate  (0–9 Hz)
+ *   CC27  Tremolo depth (0–0.8)
+ *   CC29  Chorus rate   (0.1–5 Hz)
+ *   CC30  Chorus mix    (0–0.85)
+ *   CC10  Pan           (0=L, 64=C, 127=R)
+ */
+export class ClankersRhodes {
+    free(): void;
+    [Symbol.dispose](): void;
+    constructor();
+    /**
+     * Trigger + render full tail — stereo interleaved Float32Array.
+     * hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
+     */
+    trigger_render(midi_note: number, velocity: number, hold_samples: number, cc_json: string): Float32Array;
+}
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -95,6 +120,7 @@ export interface InitOutput {
     readonly __wbg_clankersbuchla_free: (a: number, b: number) => void;
     readonly __wbg_clankersdrums_free: (a: number, b: number) => void;
     readonly __wbg_clankerspads_free: (a: number, b: number) => void;
+    readonly __wbg_clankersrhodes_free: (a: number, b: number) => void;
     readonly clankersbass_new: (a: number) => number;
     readonly clankersbass_render: (a: number, b: number) => any;
     readonly clankersbass_trigger: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
@@ -105,6 +131,8 @@ export interface InitOutput {
     readonly clankersdrums_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
     readonly clankerspads_new: () => number;
     readonly clankerspads_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
+    readonly clankersrhodes_new: () => number;
+    readonly clankersrhodes_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

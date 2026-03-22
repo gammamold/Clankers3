@@ -53,6 +53,7 @@ export class Sequencer {
     this.bass   = engines.bass   ?? null;
     this.buchla = engines.buchla ?? null;
     this.pads   = engines.pads   ?? null;
+    this.rhodes = engines.rhodes ?? null;
     this.sheet  = null;
     this._timer = null;
 
@@ -64,13 +65,15 @@ export class Sequencer {
     this._stepIdx   = 0;
 
     // Per-instrument mute/solo state
-    this._mute = { drum: false, bass: false, buchla: false, pads: false };
-    this._solo = { drum: false, bass: false, buchla: false, pads: false };
+    this._mute = { drum: false, bass: false, buchla: false, pads: false, rhodes: false };
+    this._solo = { drum: false, bass: false, buchla: false, pads: false, rhodes: false };
     // Per-instrument volume (0–1), persists across stop/start
-    this._volumes = { drum: 1.0, bass: 1.0, buchla: 1.0, pads: 1.0 };
+    this._volumes = { drum: 1.0, bass: 1.0, buchla: 1.0, pads: 1.0, rhodes: 1.0 };
 
     this.loop  = true;   // false = play once then fire onEnd
     this.onEnd = null;   // callback when non-looping song finishes
+
+    this._stepBeats = [];  // beat position of each sheet step (for visualizer)
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -88,12 +91,12 @@ export class Sequencer {
     // Fresh master gain per start — disconnecting old one kills lingering sources
     if (this._masterGain) this._masterGain.disconnect();
     this._masterGain = this.ctx.createGain();
-    this._masterGain.gain.value = 0.28;
+    this._masterGain.gain.value = 0.22;
     this._masterGain.connect(this.ctx.destination);
 
     // Per-instrument gain nodes for mute/solo
     this._instrGains = {};
-    for (const type of ['drum', 'bass', 'buchla', 'pads']) {
+    for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
       const g = this.ctx.createGain();
       g.connect(this._masterGain);
       this._instrGains[type] = g;
@@ -158,6 +161,30 @@ export class Sequencer {
   getMuteState() { return { ...this._mute }; }
   getSoloState() { return { ...this._solo }; }
 
+  /** Returns current playback position in beats (within the loop), or -1 if stopped. */
+  getCurrentBeat() {
+    if (!this._timer || !this._startTime) return -1;
+    const elapsed = this.ctx.currentTime - this._startTime;
+    const beat = elapsed * (this._bpm / 60);
+    return ((beat % this._loopBeats) + this._loopBeats) % this._loopBeats;
+  }
+
+  /** Returns the index into _stepBeats of the currently-playing sheet step, or -1. */
+  getCurrentStepIndex() {
+    const beat = this.getCurrentBeat();
+    if (beat < 0) return -1;
+    const beats = this._stepBeats;
+    if (!beats.length) return -1;
+    let idx = beats.length - 1;
+    for (let i = 0; i < beats.length - 1; i++) {
+      if (beat < beats[i + 1]) { idx = i; break; }
+    }
+    return idx;
+  }
+
+  get stepCount() { return this._stepBeats.length; }
+  get loopBeats() { return this._loopBeats; }
+
   /** Set per-instrument volume (0–1). Takes effect immediately. */
   setVolume(type, value) {
     this._volumes[type] = Math.max(0, Math.min(1, value));
@@ -172,7 +199,7 @@ export class Sequencer {
   }
 
   _updateGains() {
-    for (const type of ['drum', 'bass', 'buchla', 'pads']) {
+    for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
       if (this._instrGains && this._instrGains[type]) {
         this._instrGains[type].gain.value = this._isAudible(type) ? this._volumes[type] : 0.0;
       }
@@ -184,6 +211,14 @@ export class Sequencer {
   _compile(sheet) {
     const raw = [];
     let beat = 0;
+
+    // Capture beat position of each sheet step for the step visualizer
+    this._stepBeats = [];
+    for (const step of sheet.steps ?? []) {
+      this._stepBeats.push(beat);
+      beat += step.d ?? 0.5;
+    }
+    beat = 0;
 
     // Build automation lookup: { t -> { cc -> sortedControlPoints[] } }
     const autoMap = {};
@@ -230,6 +265,14 @@ export class Sequencer {
                        ccJson: JSON.stringify(cc), durBeats });
           }
         }
+
+        if (track.t === 3 && this.rhodes) {
+          const durBeats = track.dur ?? step.d ?? 0.5;
+          for (const note of notes) {
+            raw.push({ beatTime: beat, type: 'rhodes', midiNote: note, velocity: vel,
+                       ccJson: JSON.stringify(cc), durBeats });
+          }
+        }
       }
 
       beat += d;
@@ -268,6 +311,11 @@ export class Sequencer {
     } else if (ev.type === 'pads') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
       const interleaved = this.pads.trigger_render(ev.midiNote, ev.velocity, holdSamples, ev.ccJson);
+      return this._stereoInterleavedToAudioBuffer(interleaved);
+
+    } else if (ev.type === 'rhodes') {
+      const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
+      const interleaved = this.rhodes.trigger_render(ev.midiNote, ev.velocity, holdSamples, ev.ccJson);
       return this._stereoInterleavedToAudioBuffer(interleaved);
     }
     return null;

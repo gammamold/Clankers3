@@ -9,6 +9,7 @@ mod ms20_filter;
 mod oscillator;
 mod pads;
 mod reverb;
+mod rhodes;
 mod rng;
 mod tpt_ladder;
 mod vactrol;
@@ -18,6 +19,7 @@ use bass::{BassEngine, BassParams};
 use buchla::{BuchlaEngine, BuchlaParams};
 use drums::DrumsEngine;
 use pads::{PadsEngine, PadsParams};
+use rhodes::{RhodesEngine, RhodesParams};
 use js_sys::Float32Array;
 use wasm_bindgen::prelude::*;
 
@@ -189,6 +191,94 @@ impl ClankersBuchla {
 
         Float32Array::from(&buf[..end])
     }
+}
+
+// ── Rhodes ───────────────────────────────────────────────────────────────────
+
+/// Rhodes electric piano — FM tine model (Operator / Lounge Lizard style).
+///
+/// ClankerBoy t:3 CC map:
+///   CC74  Brightness  (peak FM index 0.5–8)
+///   CC72  Decay       (amp decay 0.5–6 s at C4)
+///   CC20  Tine ratio  (modulator harmonic ratio 0.9–2.0)
+///   CC73  Bark time   (mod-index decay fraction, lower = longer bark)
+///   CC26  Tremolo rate  (0–9 Hz)
+///   CC27  Tremolo depth (0–0.8)
+///   CC29  Chorus rate   (0.1–5 Hz)
+///   CC30  Chorus mix    (0–0.85)
+///   CC10  Pan           (0=L, 64=C, 127=R)
+#[wasm_bindgen]
+pub struct ClankersRhodes {
+    engine: RhodesEngine,
+}
+
+#[wasm_bindgen]
+impl ClankersRhodes {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> ClankersRhodes {
+        ClankersRhodes { engine: RhodesEngine::new() }
+    }
+
+    /// Trigger + render full tail — stereo interleaved Float32Array.
+    /// hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
+    pub fn trigger_render(
+        &mut self,
+        midi_note:    u8,
+        velocity:     f32,
+        hold_samples: u32,
+        cc_json:      &str,
+    ) -> Float32Array {
+        let p    = parse_rhodes_params(cc_json);
+        let hold = hold_samples as usize;
+
+        // Estimate total length: hold + full amp decay tail (6× decay time is safe)
+        let amp_decay_s  = p.amp_decay * (1.0 - (midi_note as f32 - 60.0) * p.key_scale / 48.0).clamp(0.25, 2.5);
+        let tail_samples = (amp_decay_s * 6.0 * 44100.0) as usize;
+        let total        = hold + tail_samples;
+
+        let mut buf_l = vec![0.0f32; total];
+        let mut buf_r = vec![0.0f32; total];
+
+        let mut voice = rhodes::RhodesVoice::new();
+        voice.trigger(midi_note, velocity, hold, &p);
+        voice.process(&mut buf_l, &mut buf_r, &p);
+
+        // Trim trailing silence
+        let end = buf_l.iter().zip(buf_r.iter())
+            .rposition(|(&l, &r)| l.abs() > 1e-5 || r.abs() > 1e-5)
+            .map(|i| (i + 441).min(total))
+            .unwrap_or(1024);
+
+        // Interleave stereo
+        let mut interleaved = vec![0.0f32; end * 2];
+        for i in 0..end {
+            interleaved[i * 2]     = buf_l[i];
+            interleaved[i * 2 + 1] = buf_r[i];
+        }
+
+        Float32Array::from(interleaved.as_slice())
+    }
+}
+
+fn parse_rhodes_params(cc_json: &str) -> RhodesParams {
+    let mut p = RhodesParams::default();
+    for (key, val) in parse_cc_map(cc_json) {
+        let n = val / 127.0;
+        match key {
+            74 => p.brightness    = 0.5 + n * 7.5,          // 0.5–8.0 FM index
+            72 => p.amp_decay     = 0.5 + n * 5.5,          // 0.5–6 s
+            20 => p.harm_ratio    = 0.9 + n * 1.1,          // 0.9–2.0
+            73 => p.mod_decay     = 0.03 + (1.0 - n) * 0.47, // lower CC = shorter bark
+            55 => p.key_scale     = n,
+            26 => p.tremolo_rate  = n * 9.0,                 // 0–9 Hz
+            27 => p.tremolo_depth = n * 0.8,
+            29 => p.chorus_rate   = 0.1 + n * 4.9,
+            30 => p.chorus_mix    = n * 0.85,
+            10 => p.pan           = n,
+            _  => {}
+        }
+    }
+    p
 }
 
 // ── Pads ──────────────────────────────────────────────────────────────────────

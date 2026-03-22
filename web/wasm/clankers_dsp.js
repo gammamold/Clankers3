@@ -201,6 +201,55 @@ export class ClankersPads {
 }
 if (Symbol.dispose) ClankersPads.prototype[Symbol.dispose] = ClankersPads.prototype.free;
 
+/**
+ * Rhodes electric piano — FM tine model (Operator / Lounge Lizard style).
+ *
+ * ClankerBoy t:3 CC map:
+ *   CC74  Brightness  (peak FM index 0.5–8)
+ *   CC72  Decay       (amp decay 0.5–6 s at C4)
+ *   CC20  Tine ratio  (modulator harmonic ratio 0.9–2.0)
+ *   CC73  Bark time   (mod-index decay fraction, lower = longer bark)
+ *   CC26  Tremolo rate  (0–9 Hz)
+ *   CC27  Tremolo depth (0–0.8)
+ *   CC29  Chorus rate   (0.1–5 Hz)
+ *   CC30  Chorus mix    (0–0.85)
+ *   CC10  Pan           (0=L, 64=C, 127=R)
+ */
+export class ClankersRhodes {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ClankersRhodesFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_clankersrhodes_free(ptr, 0);
+    }
+    constructor() {
+        const ret = wasm.clankersrhodes_new();
+        this.__wbg_ptr = ret >>> 0;
+        ClankersRhodesFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Trigger + render full tail — stereo interleaved Float32Array.
+     * hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
+     * @param {number} midi_note
+     * @param {number} velocity
+     * @param {number} hold_samples
+     * @param {string} cc_json
+     * @returns {Float32Array}
+     */
+    trigger_render(midi_note, velocity, hold_samples, cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.clankersrhodes_trigger_render(this.__wbg_ptr, midi_note, velocity, hold_samples, ptr0, len0);
+        return ret;
+    }
+}
+if (Symbol.dispose) ClankersRhodes.prototype[Symbol.dispose] = ClankersRhodes.prototype.free;
+
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -243,6 +292,9 @@ const ClankersDrumsFinalization = (typeof FinalizationRegistry === 'undefined')
 const ClankersPadsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_clankerspads_free(ptr >>> 0, 1));
+const ClankersRhodesFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_clankersrhodes_free(ptr >>> 0, 1));
 
 function getArrayF32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
