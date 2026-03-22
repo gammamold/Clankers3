@@ -364,6 +364,8 @@
         BEAT REPEAT <span>[2]</span>
         <button class="fx-arm" id="fx2-arm">ARM</button>
         <button class="fx-gate" id="fx2-gate">GATE</button>
+        <span class="fx-label" style="margin-left:auto">RETURN</span>
+        <input type="range" class="fx-send-sl" id="fx2-ret" min="0" max="100" value="70" style="width:44px">
       </div>
       <div class="fx-row">
         <span class="fx-label">SLICE</span>
@@ -1428,6 +1430,13 @@ function initFxUI() {
 
   // ── BEAT REPEAT (slot 2) ────────────────────────────────────────────────
   const repeat = rack.unit(2);
+  // Beat Repeat return is always active (ARM/GATE replace ON/OFF)
+  rack._on[2] = true;
+  rack._returns[2].gain.value = rack._retBase[2];
+
+  document.getElementById('fx2-ret').addEventListener('input', function() {
+    rack.setReturn(2, this.value / 100);
+  });
 
   const rateKnob2  = _fxK.r_rate   = new Knob(document.getElementById('fx2-rate-wrap'),
     { label:'', min:0.125, max:4, value:1, step:0.125 });
