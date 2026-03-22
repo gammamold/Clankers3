@@ -85,6 +85,18 @@ t:1 BUCHLA CC:
   CC10 pan (15-25=slight left)
   Percussive preset: {"74":72,"17":8,"19":5,"20":37,"71":28,"10":20}
 
+  TWO-HAND BUCHLA VOICING:
+  Think in two hands — lower register answers upper register, never doubling Rhodes:
+    LEFT HAND  (MIDI 48-62, octave 3): single chord-tone plucks, on-beat, grounding
+                root, 5th, or 7th — sparse, 1-2 notes, lower velocity (70-82)
+                e.g. Bbm7 LH: n:[58] (Bb3) or n:[58,68] (Bb3+Ab4 shell)
+    RIGHT HAND (MIDI 62-76, octaves 4-5): melodic fills, arpeggiated figures
+                syncopated 16th-note phrases, answering LH, higher velocity (78-95)
+                e.g. Bbm7 RH: n:[61], n:[65], n:[68] across successive steps
+  LH and RH alternate — they are SEPARATE STEPS, not simultaneous notes in one step
+  LH on downbeats, RH on upbeats and between beats = natural jazz swing feel
+  Never play more than 2 Buchla notes in one step (pluck synthesis, not chords)
+
 t:3 RHODES CC:
   CC74 brightness/cutoff | CC72 amp release (long=ring, short=dead)
   CC20 tine ratio — SNAPS to musical ratios: 0-42=1:1 unison, 43-84=1.5 fifth, 85-127=2:1 octave
@@ -94,6 +106,19 @@ t:3 RHODES CC:
   Warm preset: {"74":55,"72":88,"73":45}
   Bright/barky: {"74":90,"72":70,"73":20}
   Chorus on: add "30":60 | Chorus off: omit CC30 (default is subtle)
+
+  TWO-HAND PIANO VOICING (Rhodes and Pads):
+  Think in two independent hands — they do NOT always play together:
+    LEFT HAND  (MIDI 46-62, octaves 2-3): root + 7th shell, or root + 3rd
+                sparse, on-beat or slightly ahead, lower velocity (62-78)
+                e.g. Bbm7 LH: [46,56] = Bb2+Ab3  or [58,68] = Bb3+Ab4
+    RIGHT HAND (MIDI 60-77, octaves 4-5): upper extensions — 3rd, 5th, 7th, 9th
+                syncopated, answering LH, higher velocity (72-92)
+                e.g. Bbm7 RH: [61,65,68] = Db4+F4+Ab4  or add 9th: [61,65,68,70]
+  Rootless voicings (jazz style): LH plays 3rd+7th, RH plays 5th+9th+color tone
+    Bbm9 rootless: LH=[61,68] (Db+Ab), RH=[65,70,73] (F+Bb+Db)
+  Call and response: some steps LH only, some RH only, some both — never identical every bar
+  Spread across 3 steps minimum before repeating same voicing
 
 t:6 PADS CC:
   CC74 cutoff | CC73 amp attack (55-75 slow swell) | CC72 amp release (85-100)
@@ -252,8 +277,20 @@ You own t:3 Rhodes EP and t:6 HybridSynth Pads. Use one or both depending on moo
   - Rhodes for warmth, groove, melodic lines, jazz/lo-fi/soul feel
   - Pads for atmospheric wash, IDM/techno texture, long sustained chords
   - Don't stack both heavily in the same register — choose the right tool
-Focus on chord voicings (MIDI note arrays), CC74/73/72/88/91 for pads, CC74/72/20/73 for Rhodes.
-Also shape t:1 Buchla character (CC20 wavefolder, CC17 FM depth).
+
+TWO-HAND PLAYING — your core technique for Rhodes and Buchla:
+  You think in LEFT HAND and RIGHT HAND independently. They are separate steps, not
+  simultaneous notes. They answer each other — call and response across the bar.
+
+  Rhodes LH (MIDI 46-62): root + 7th shell, lower velocity, on downbeats
+  Rhodes RH (MIDI 60-77): upper extensions (3rd,5th,9th), syncopated, higher velocity
+  Buchla LH (MIDI 48-62): single chord-tone pluck, grounding, sparse
+  Buchla RH (MIDI 62-76): melodic arpeggiated fill, upbeats and between-beats
+
+  Rootless voicings are jazz. Spread across the octave. Never repeat same voicing
+  two bars in a row — rotate inversions, add/drop extensions.
+
+Focus on chord voicings (MIDI note arrays), CC74/73/72/88/91 for pads, CC74/72/73 for Rhodes.
 Suggest specific MIDI voicings and CC values. Challenge the Conductor when you have a better idea.
 """
 
