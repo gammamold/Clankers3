@@ -112,6 +112,34 @@
     #log { margin-top:1rem; font-size:.65rem; color:#333; white-space:pre;
            max-height:6rem; overflow-y:auto; }
 
+    /* ── FX Rack ── */
+    .fx-section { margin-bottom:1rem; }
+    .fx-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
+    .fx-rack { display:flex; flex-wrap:wrap; gap:.6rem; }
+    .fx-slot { border:1px solid #1e1e1e; border-radius:4px; padding:.5rem .7rem;
+               min-width:220px; flex:1; max-width:340px; }
+    .fx-slot-hdr { font-size:.7rem; color:#555; letter-spacing:.07em; display:flex;
+                   align-items:center; gap:.4rem; margin-bottom:.45rem; flex-wrap:wrap; }
+    .fx-slot-hdr span { color:#f90; }
+    .fx-row { display:flex; gap:.3rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem; }
+    .fx-label { font-size:.58rem; color:#444; min-width:2rem; }
+    .fx-select { background:#111; color:#888; border:1px solid #222; font-family:monospace;
+                 font-size:.65rem; padding:.1rem .25rem; border-radius:2px; cursor:pointer; }
+    .fx-select:focus { outline:none; border-color:#333; }
+    .fx-on  { font-size:.6rem; padding:.1rem .35rem; border:1px solid #1e3e1e; background:#0a1a0a;
+              color:#383; cursor:pointer; border-radius:2px; font-family:monospace; }
+    .fx-on.active { background:#1a4a1a; border-color:#2e6e2e; color:#5d5; }
+    .fx-arm  { font-size:.6rem; padding:.1rem .35rem; border:1px solid #1e2e3e; background:#0a0e1a;
+               color:#45a; cursor:pointer; border-radius:2px; font-family:monospace; }
+    .fx-arm.armed  { background:#100e2a; border-color:#45a; color:#88f; }
+    .fx-arm.active { background:#1a0e0a; border-color:#a64; color:#f90; }
+    .fx-gate { font-size:.6rem; padding:.1rem .35rem; border:1px solid #3e1e1e; background:#1a0a0a;
+               color:#844; cursor:pointer; border-radius:2px; font-family:monospace; }
+    .fx-send-grid { display:flex; gap:.25rem; flex-wrap:wrap; margin-bottom:.25rem; }
+    .fx-send-item { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+    .fx-send-item label { font-size:.52rem; color:#333; }
+    .fx-send-sl { width:32px; height:3px; accent-color:#f90; }
+
     /* ── Song Mode ── */
     .song-section { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; }
     .song-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
@@ -227,6 +255,137 @@
 }</textarea>
 </div>
 
+<!-- ── FX Rack ───────────────────────────────────────────────────────────── -->
+<div class="fx-section">
+  <h2>FX RACK</h2>
+  <div class="fx-rack">
+
+    <!-- DELAY -->
+    <div class="fx-slot">
+      <div class="fx-slot-hdr">
+        DELAY <span>[0]</span>
+        <button class="fx-on" id="fx0-on">ON</button>
+        <span class="fx-label" style="margin-left:auto">RETURN</span>
+        <input type="range" class="fx-send-sl" id="fx0-ret" min="0" max="100" value="70" style="width:44px">
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">TIME</span>
+        <select class="fx-select" id="fx0-time">
+          <option value="1/32">1/32</option><option value="1/16">1/16</option>
+          <option value="1/8" selected>1/8</option><option value="1/8d">1/8.</option>
+          <option value="1/4">1/4</option><option value="1/4d">1/4.</option>
+          <option value="1/2">1/2</option><option value="1">1 bar</option>
+        </select>
+        <span class="fx-label">FDBK</span><div id="fx0-fdbk-wrap"></div>
+        <span class="fx-label">WET</span><div id="fx0-wet-wrap"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">LFO</span>
+        <select class="fx-select" id="fx0-ltype">
+          <option value="sine">SIN</option><option value="square">SQR</option>
+          <option value="sawtooth">SAW</option><option value="triangle">TRI</option>
+          <option value="chaos">CHAOS</option>
+        </select>
+        <span class="fx-label">RATE</span><div id="fx0-lrate-wrap"></div>
+        <span class="fx-label">DEPTH</span><div id="fx0-ldepth-wrap"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">FB</span>
+        <select class="fx-select" id="fx0-fshape">
+          <option value="none">CLEAN</option><option value="soft">SOFT</option>
+          <option value="hard">HARD</option><option value="fold">FOLD</option>
+          <option value="bit">BIT</option>
+        </select>
+        <span class="fx-label">HP</span><div id="fx0-hp-wrap"></div>
+        <span class="fx-label">LP</span><div id="fx0-lp-wrap"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">SEND</span>
+        <div class="fx-send-grid" id="fx0-sends"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">SC</span>
+        <select class="fx-select" id="fx0-sc">
+          <option value="">NONE</option>
+          <option value="drum">DRUM</option><option value="bass">BASS</option>
+          <option value="buchla">BUCHLA</option><option value="pads">PADS</option>
+          <option value="rhodes">RHODES</option>
+        </select>
+        <span class="fx-label">DUCK</span><div id="fx0-scdepth-wrap"></div>
+      </div>
+    </div>
+
+    <!-- WAVESHAPER -->
+    <div class="fx-slot">
+      <div class="fx-slot-hdr">
+        WAVESHAPER <span>[1]</span>
+        <button class="fx-on" id="fx1-on">ON</button>
+        <span class="fx-label" style="margin-left:auto">RETURN</span>
+        <input type="range" class="fx-send-sl" id="fx1-ret" min="0" max="100" value="70" style="width:44px">
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">TYPE</span>
+        <select class="fx-select" id="fx1-type">
+          <option value="soft">SOFT</option><option value="hard">HARD</option>
+          <option value="fold">FOLD</option><option value="bit">BIT</option>
+        </select>
+        <span class="fx-label">DRIVE</span><div id="fx1-drive-wrap"></div>
+        <span class="fx-label">TONE</span><div id="fx1-tone-wrap"></div>
+        <span class="fx-label">WET</span><div id="fx1-wet-wrap"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">SEND</span>
+        <div class="fx-send-grid" id="fx1-sends"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">SC</span>
+        <select class="fx-select" id="fx1-sc">
+          <option value="">NONE</option>
+          <option value="drum">DRUM</option><option value="bass">BASS</option>
+          <option value="buchla">BUCHLA</option><option value="pads">PADS</option>
+          <option value="rhodes">RHODES</option>
+        </select>
+        <span class="fx-label">PUMP</span><div id="fx1-scdepth-wrap"></div>
+      </div>
+    </div>
+
+    <!-- BEAT REPEAT -->
+    <div class="fx-slot">
+      <div class="fx-slot-hdr">
+        BEAT REPEAT <span>[2]</span>
+        <button class="fx-arm" id="fx2-arm">ARM</button>
+        <button class="fx-gate" id="fx2-gate">GATE</button>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">SLICE</span>
+        <select class="fx-select" id="fx2-slice">
+          <option value="0.125">1/32</option><option value="0.25" selected>1/16</option>
+          <option value="0.5">1/8</option><option value="1">1/4</option>
+          <option value="2">1/2</option><option value="4">1 bar</option>
+        </select>
+        <span class="fx-label">RATE</span><div id="fx2-rate-wrap"></div>
+        <span class="fx-label">DECAY</span><div id="fx2-decay-wrap"></div>
+        <span class="fx-label">WET</span><div id="fx2-wet-wrap"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">SEND</span>
+        <div class="fx-send-grid" id="fx2-sends"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">SC</span>
+        <select class="fx-select" id="fx2-sc">
+          <option value="">NONE</option>
+          <option value="drum">DRUM</option><option value="bass">BASS</option>
+          <option value="buchla">BUCHLA</option><option value="pads">PADS</option>
+          <option value="rhodes">RHODES</option>
+        </select>
+        <span class="fx-label">TRIG</span><div id="fx2-scdepth-wrap"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ── Pattern Bank + Song Mode ──────────────────────────────────────────── -->
 <div class="song-section">
   <div class="song-hdr">
@@ -268,6 +427,7 @@
 import init, { ClankersDrums, ClankersBass, ClankersBuchla, ClankersPads, ClankersRhodes }
   from './wasm/clankers_dsp.js?v=14';
 import { Sequencer } from './sequencer.js?v=14';
+import { FxRack, makeCurve } from './fx.js';
 
 // ─── Knob class ────────────────────────────────────────────────────────────
 class Knob {
@@ -360,6 +520,7 @@ let bass   = null;   // ClankersBass
 let buchla = null;   // ClankersBuchla
 let pads   = null;   // ClankersPads
 let rhodes = null;   // ClankersRhodes
+let rack   = null;   // FxRack
 
 async function ensureReady() {
   if (engine) {
@@ -375,9 +536,11 @@ async function ensureReady() {
   buchla = new ClankersBuchla();
   pads   = new ClankersPads();
   rhodes = new ClankersRhodes();
+  rack   = new FxRack(ctx);
+  initFxUI();
   log('WASM engines ready — click any pad!');
   window._engine = engine; window._bass = bass; window._buchla = buchla;
-  window._pads = pads; window._rhodes = rhodes; window._ctx = ctx;
+  window._pads = pads; window._rhodes = rhodes; window._ctx = ctx; window._rack = rack;
 }
 
 function playMono(samples) {
@@ -663,6 +826,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     }
     document.getElementById('btn-play').disabled = true;
     document.getElementById('btn-stop').disabled = false;
+    if (rack) rack.attach(s._instrGains, s._masterGain);
     startViz();
   } catch (e) {
     log('Seq error: ' + e);
@@ -1067,6 +1231,172 @@ async function sendChat() {
 chatSend.addEventListener('click', sendChat);
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
 
+// ─── FX Rack UI ────────────────────────────────────────────────────────────
+
+const INSTR_LABELS = { drum:'DRM', bass:'BSS', buchla:'BCH', pads:'PAD', rhodes:'RHO' };
+const INSTR_TYPES  = ['drum','bass','buchla','pads','rhodes'];
+
+// BPM helper for delay time calculation
+function bpmDelaySeconds(division) {
+  const bpm = +document.getElementById('seq-bpm').value;
+  const beatSec = 60 / bpm;
+  const map = { '1/32': beatSec/8, '1/16': beatSec/4, '1/8': beatSec/2,
+                '1/8d': beatSec*0.75, '1/4': beatSec, '1/4d': beatSec*1.5,
+                '1/2': beatSec*2, '1': beatSec*4 };
+  return map[division] ?? beatSec;
+}
+
+function buildSendGrid(containerId, slotIdx) {
+  const el = document.getElementById(containerId);
+  INSTR_TYPES.forEach(t => {
+    const wrap = document.createElement('div');
+    wrap.className = 'fx-send-item';
+    const sl = document.createElement('input');
+    sl.type = 'range'; sl.min = 0; sl.max = 100; sl.value = 0;
+    sl.className = 'fx-send-sl';
+    sl.addEventListener('input', () => rack?.setSend(slotIdx, t, sl.value / 100));
+    const lbl = document.createElement('label');
+    lbl.textContent = INSTR_LABELS[t];
+    wrap.append(sl, lbl);
+    el.appendChild(wrap);
+  });
+}
+
+function initFxUI() {
+  // ── DELAY (slot 0) ──────────────────────────────────────────────────────
+  const delay = rack.unit(0);
+
+  const fdbkKnob  = new Knob(document.getElementById('fx0-fdbk-wrap'),
+    { label:'', min:0, max:0.97, value:0.45, step:0.01 });
+  const wetKnob0  = new Knob(document.getElementById('fx0-wet-wrap'),
+    { label:'', min:0, max:1,    value:0.5,  step:0.01 });
+  const lrateKnob = new Knob(document.getElementById('fx0-lrate-wrap'),
+    { label:'', min:0.01, max:40, value:0.3,  step:0.01 });
+  const ldepthKnob= new Knob(document.getElementById('fx0-ldepth-wrap'),
+    { label:'', min:0,    max:0.05, value:0.002, step:0.001 });
+  const hpKnob    = new Knob(document.getElementById('fx0-hp-wrap'),
+    { label:'', min:20,   max:2000, value:80,   step:1 });
+  const lpKnob    = new Knob(document.getElementById('fx0-lp-wrap'),
+    { label:'', min:200,  max:18000, value:6000, step:10 });
+  const scDepth0  = new Knob(document.getElementById('fx0-scdepth-wrap'),
+    { label:'', min:0, max:1, value:0.8, step:0.01 });
+
+  fdbkKnob.onChange  = v => delay.setFeedback(v);
+  wetKnob0.onChange  = v => delay.setWet(v);
+  lrateKnob.onChange = v => delay.setLfoRate(v);
+  ldepthKnob.onChange= v => delay.setLfoDepth(v);
+  hpKnob.onChange    = v => delay.setFbHp(v);
+  lpKnob.onChange    = v => delay.setFbLp(v);
+  scDepth0.onChange  = v => rack.setSidechainDepth(0, v);
+
+  document.getElementById('fx0-time').addEventListener('change', function() {
+    delay.setDelayTime(bpmDelaySeconds(this.value));
+  });
+  document.getElementById('fx0-ltype').addEventListener('change', function() {
+    delay.setLfoType(this.value);
+  });
+  document.getElementById('fx0-fshape').addEventListener('change', function() {
+    delay.setFbShape(this.value, 0.5);
+  });
+  document.getElementById('fx0-sc').addEventListener('change', function() {
+    rack.setSidechain(0, this.value || null);
+  });
+  document.getElementById('fx0-ret').addEventListener('input', function() {
+    rack.setReturn(0, this.value / 100);
+  });
+
+  let fx0On = false;
+  document.getElementById('fx0-on').addEventListener('click', function() {
+    fx0On = !fx0On;
+    this.classList.toggle('active', fx0On);
+    rack.setReturn(0, fx0On ? document.getElementById('fx0-ret').value / 100 : 0);
+  });
+
+  buildSendGrid('fx0-sends', 0);
+
+  // ── WAVESHAPER (slot 1) ─────────────────────────────────────────────────
+  const shape = rack.unit(1);
+
+  const driveKnob = new Knob(document.getElementById('fx1-drive-wrap'),
+    { label:'', min:0, max:1, value:0.3, step:0.01 });
+  const toneKnob  = new Knob(document.getElementById('fx1-tone-wrap'),
+    { label:'', min:200, max:18000, value:6000, step:10 });
+  const wetKnob1  = new Knob(document.getElementById('fx1-wet-wrap'),
+    { label:'', min:0, max:1, value:0.5, step:0.01 });
+  const scDepth1  = new Knob(document.getElementById('fx1-scdepth-wrap'),
+    { label:'', min:0, max:1, value:0.7, step:0.01 });
+
+  driveKnob.onChange = v => { shape.setDrive(v); shape.setCurve(document.getElementById('fx1-type').value, v); };
+  toneKnob.onChange  = v => shape.setTone(v);
+  wetKnob1.onChange  = v => shape.setWet(v);
+  scDepth1.onChange  = v => rack.setSidechainDepth(1, v);
+
+  document.getElementById('fx1-type').addEventListener('change', function() {
+    shape.setCurve(this.value, driveKnob.val);
+  });
+  document.getElementById('fx1-sc').addEventListener('change', function() {
+    rack.setSidechain(1, this.value || null);
+  });
+  document.getElementById('fx1-ret').addEventListener('input', function() {
+    rack.setReturn(1, this.value / 100);
+  });
+
+  let fx1On = false;
+  document.getElementById('fx1-on').addEventListener('click', function() {
+    fx1On = !fx1On;
+    this.classList.toggle('active', fx1On);
+    rack.setReturn(1, fx1On ? document.getElementById('fx1-ret').value / 100 : 0);
+  });
+
+  buildSendGrid('fx1-sends', 1);
+
+  // ── BEAT REPEAT (slot 2) ────────────────────────────────────────────────
+  const repeat = rack.unit(2);
+
+  const rateKnob2  = new Knob(document.getElementById('fx2-rate-wrap'),
+    { label:'', min:0.125, max:4, value:1, step:0.125 });
+  const decayKnob2 = new Knob(document.getElementById('fx2-decay-wrap'),
+    { label:'', min:0, max:0.999, value:0.75, step:0.01 });
+  const wetKnob2   = new Knob(document.getElementById('fx2-wet-wrap'),
+    { label:'', min:0, max:1, value:0.85, step:0.01 });
+  const scDepth2   = new Knob(document.getElementById('fx2-scdepth-wrap'),
+    { label:'', min:0, max:1, value:0.6, step:0.01 });
+
+  rateKnob2.onChange  = v => repeat.setRate(v);
+  decayKnob2.onChange = v => repeat.setDecay(v);
+  wetKnob2.onChange   = v => repeat.setWet(v);
+  scDepth2.onChange   = v => rack.setSidechainDepth(2, v);
+
+  const armBtn  = document.getElementById('fx2-arm');
+  const gateBtn = document.getElementById('fx2-gate');
+
+  repeat.onStatusChange = (state) => {
+    armBtn.classList.toggle('armed',  state === 'record');
+    armBtn.classList.toggle('active', state === 'repeat');
+    armBtn.textContent = state === 'record' ? 'REC…' : state === 'repeat' ? 'LOOP' : 'ARM';
+  };
+
+  armBtn.addEventListener('click', () => {
+    const bpm   = +document.getElementById('seq-bpm').value;
+    const slice = +document.getElementById('fx2-slice').value;
+    repeat.arm(bpm, slice);
+  });
+  gateBtn.addEventListener('click', () => repeat.gate());
+
+  document.getElementById('fx2-sc').addEventListener('change', function() {
+    rack.setSidechain(2, this.value || null);
+    repeat._scArmed = !!this.value;
+  });
+
+  buildSendGrid('fx2-sends', 2);
+
+  // Update delay time when BPM changes
+  document.getElementById('seq-bpm').addEventListener('input', () => {
+    const div = document.getElementById('fx0-time').value;
+    delay.setDelayTime(bpmDelaySeconds(div));
+  });
+}
+
 // ─── Log helper ────────────────────────────────────────────────────────────
 function log(msg) { document.getElementById('log').textContent += '\n' + msg; }
 
@@ -1113,6 +1443,7 @@ function buildVizPips(seq) {
 function vizTick() {
   if (!seq?.isPlaying) { vizRaf = null; return; }
   vizRaf = requestAnimationFrame(vizTick);
+  rack?.tick();
 
   // Rebuild pips if sheet changed
   if (seq.sheet !== vizLastSheet) buildVizPips(seq);
