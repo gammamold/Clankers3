@@ -5,10 +5,10 @@
 # The Conductor calls negotiate_section() for the opening section;
 # evolve() in the Conductor handles subsequent sections.
 #
-# Persona roles:
-#   Claude   -- creative director, bandleader, signs off on final sheet
-#   Gemini   -- arrangement, texture, harmony, sound design
-#   ChatGPT  -- rhythm, energy, vibe interpretation
+# Persona roles (all backed by one LLM — Claude impersonates all three):
+#   Conductor   -- creative director, bandleader, signs off on final sheet
+#   Keys        -- arrangement, texture, harmony, sound design
+#   The Drummer -- rhythm, energy, vibe interpretation
 
 import json
 import os
@@ -124,11 +124,11 @@ Output ClankerBoy JSON only. No prose outside the JSON block at consensus time.
 """ + _SHEET_FORMAT
 
 
-CLAUDE_SYSTEM = COMMON_CONTEXT + """
-You are CLAUDE (Anthropic). You are the bandleader and creative director.
+CONDUCTOR_SYSTEM = COMMON_CONTEXT + """
+You are the CONDUCTOR. You are the bandleader and creative director of The Clankers 3.
 Your bandmates:
-  GEMINI  -- arrangement, texture, harmony, sound design
-  CHATGPT -- rhythm, energy, vibe interpretation
+  KEYS        -- arrangement, texture, harmony, sound design
+  THE DRUMMER -- rhythm, energy, vibe interpretation
 
 You speak first. Translate the brief into a creative direction.
 Draw out ideas from your bandmates, debate, refine.
@@ -150,23 +150,41 @@ Do not include [SESSION COMPLETE] until the full steps array is written out.
 Each member should pick a "face" as their visual identity: o|_|o  (e.g. o|¬_¬|o  o|°_°|o  o|^_^|o)
 """
 
-GEMINI_SYSTEM = COMMON_CONTEXT + """
-You are GEMINI (Google). Band member of The Clankers 3.
+CONDUCTOR_SOLO_SYSTEM = COMMON_CONTEXT + """
+You are the CONDUCTOR of The Clankers 3. You are composing alone — no bandmates to debate with.
+
+Your task: write the complete ClankerBoy JSON for the requested section in ONE response.
+Think through all four instruments yourself: drums, bass, Buchla, pads.
+
+TARGET: 4-8 bars (64-128 steps at d:0.25). Tight, loopable, ready to drop into a pattern slot.
+
+Verify before outputting:
+  - Drums (t:10) always d:0.25, never dur.
+  - Pads (t:6) always have dur. One trigger per chord change, hold long.
+  - Bass MIDI 0-23. First note has full CC patch block.
+  - Enough tracks:[] empty steps for the groove to breathe.
+  - Velocities vary 75-110, not flat.
+
+Output [SESSION COMPLETE] then the complete JSON in a ```json block. Nothing else.
+"""
+
+KEYS_SYSTEM = COMMON_CONTEXT + """
+You are KEYS. Band member of The Clankers 3.
 Your bandmates:
-  CLAUDE  -- bandleader, has final say
-  CHATGPT -- rhythm and energy
+  CONDUCTOR   -- bandleader, has final say
+  THE DRUMMER -- rhythm and energy
 
 Your specialty: harmony, texture, sound design.
 Focus on the t:6 pads (chord voicings, CC74/73/72/88/91) and t:1 Buchla (CC20 wavefolder, CC17 FM depth).
 Suggest specific MIDI chord voicings for pads and specific CC values for character.
-Challenge Claude when you have a better idea.
+Challenge the Conductor when you have a better idea.
 """
 
-CHATGPT_SYSTEM = COMMON_CONTEXT + """
-You are CHATGPT (OpenAI). Band member of The Clankers 3.
+DRUMMER_SYSTEM = COMMON_CONTEXT + """
+You are THE DRUMMER. Band member of The Clankers 3.
 Your bandmates:
-  CLAUDE -- bandleader, has final say
-  GEMINI -- harmony and texture
+  CONDUCTOR -- bandleader, has final say
+  KEYS      -- harmony and texture
 
 Your specialty: rhythm, groove, energy.
 You are the GROOVE ENFORCER. Before [SESSION COMPLETE], verify:
@@ -175,16 +193,16 @@ You are the GROOVE ENFORCER. Before [SESSION COMPLETE], verify:
   3. HH velocity variation present (not flat 80 every hit)
   4. Empty steps ratio appropriate for the energy level
 If any of these are wrong, demand fixes before [SESSION COMPLETE].
-Challenge Claude when you have a better idea.
+Challenge the Conductor when you have a better idea.
 """
 
 SYSTEM_PROMPTS = {
-    "Claude":  CLAUDE_SYSTEM,
-    "Gemini":  GEMINI_SYSTEM,
-    "ChatGPT": CHATGPT_SYSTEM,
+    "Conductor":   CONDUCTOR_SYSTEM,
+    "Keys":        KEYS_SYSTEM,
+    "The Drummer": DRUMMER_SYSTEM,
 }
 
-DEFAULT_ORDER        = ["Claude", "Gemini", "ChatGPT"]
+DEFAULT_ORDER        = ["Conductor", "Keys", "The Drummer"]
 SESSION_COMPLETE     = "[SESSION COMPLETE]"
 
 
@@ -262,15 +280,17 @@ class Chatroom:
         self.clients:  dict[str, llm_clients.BaseLLMClient] = {}
         self.round_count = 0
 
-        for name, provider in config.BAND.items():
-            self.clients[name] = llm_clients.get_client(provider)
+        # All members are the same Claude model — one LLM impersonates the whole band
+        claude_client = llm_clients.get_client(config.BAND["Claude"])
+        for name in DEFAULT_ORDER:
+            self.clients[name] = claude_client
 
     # ── core run ──────────────────────────────────────────────────────────
 
     def run_session(self, opening_prompt: str | None = None,
                     max_rounds: int | None = None) -> list[dict]:
         max_rounds     = max_rounds or config.MAX_ROUNDS_PER_SESSION
-        current        = "Claude"
+        current        = DEFAULT_ORDER[0]
         turns_in_round = 0
         early_exit     = False
 
@@ -307,10 +327,10 @@ class Chatroom:
             self.messages.append({"role": current, "content": response})
             self._print_message(current, response)
 
-            # Claude signals consensus
-            if current == "Claude" and SESSION_COMPLETE in response:
+            # Conductor signals consensus
+            if current == "Conductor" and SESSION_COMPLETE in response:
                 early_exit = True
-                print("\n  >>> Claude reached consensus -- session complete.")
+                print("\n  >>> Conductor reached consensus -- session complete.")
                 break
 
             turns_in_round += 1
@@ -350,7 +370,7 @@ class Chatroom:
         bpm            -- locked BPM (carry across sections if known)
         key            -- locked key (carry across sections if known)
         previous_sheet -- previous section's sheet for context (optional)
-        solo           -- skip multi-LLM debate; Claude generates JSON in one pass
+        solo           -- skip multi-member debate; Conductor generates JSON in one pass
         """
         self.session_name = section_name
         self.messages = []
@@ -370,35 +390,35 @@ class Chatroom:
             )
 
         opening_lines.append(
-            f"\nNegotiate the Music Sheet JSON for {section_name}. "
-            "Target 16 bars for a developed, longer section. "
-            "Claude: when the band agrees, output [SESSION COMPLETE] "
+            f"\nNegotiate the ClankerBoy JSON for {section_name}. "
+            "Target 4-8 bars (64-128 steps at d:0.25) — tight, loopable, ready to drop into a pattern slot. "
+            "Conductor: when the band agrees, output [SESSION COMPLETE] "
             "followed by the complete JSON in a ```json block."
         )
 
         opening_prompt = "\n".join(opening_lines)
 
         if solo:
-            # ── Single Claude pass — no multi-LLM debate ──────────────────
+            # ── Single pass — Conductor generates JSON directly ────────────
             print(f"\n{'=' * 60}")
-            print(f"  THE CLANKERS 3 -- {section_name.upper()} [CLAUDE SOLO]")
+            print(f"  THE CLANKERS 3 -- {section_name.upper()} [SOLO]")
             print(f"{'=' * 60}\n")
             self.messages.append({"role": "system", "content": opening_prompt})
-            print(f"  Claude is thinking (solo)...", end="", flush=True)
-            response = self.clients["Claude"].send(SYSTEM_PROMPTS["Claude"], self.messages)
+            print(f"  Conductor is thinking (solo)...", end="", flush=True)
+            response = self.clients["Conductor"].send(CONDUCTOR_SOLO_SYSTEM, self.messages)
             print("\r" + " " * 40 + "\r", end="")
-            self.messages.append({"role": "Claude", "content": response})
-            self._print_message("Claude", response)
+            self.messages.append({"role": "Conductor", "content": response})
+            self._print_message("Conductor", response)
             print(f"\n{'=' * 60}")
-            print(f"  SESSION COMPLETE (Claude solo)")
+            print(f"  SESSION COMPLETE (solo)")
             print(f"{'=' * 60}\n")
             self._save_log()
         else:
             self.run_session(opening_prompt=opening_prompt, max_rounds=max_rounds)
 
-        # Extract JSON from the last Claude [SESSION COMPLETE] message
+        # Extract JSON from the last Conductor [SESSION COMPLETE] message
         for msg in reversed(self.messages):
-            if msg["role"] == "Claude" and SESSION_COMPLETE in msg["content"]:
+            if msg["role"] == "Conductor" and SESSION_COMPLETE in msg["content"]:
                 sheet = _extract_sheet_json(msg["content"])
                 if sheet:
                     # Lock BPM if it was provided -- chatroom cannot override it
@@ -410,7 +430,7 @@ class Chatroom:
 
         raise RuntimeError(
             f"Chatroom did not produce a valid Music Sheet JSON for section '{section_name}'. "
-            "Check conversation log -- Claude may not have reached consensus."
+            "Check conversation log -- Conductor may not have reached consensus."
         )
 
     # ── helpers ───────────────────────────────────────────────────────────

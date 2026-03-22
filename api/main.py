@@ -201,7 +201,7 @@ Return ONLY valid JSON -- no prose, no markdown fences:
 
 def _chat_evolve(sheet: dict, message: str, history: list) -> tuple[dict, str, str]:
     """Use Claude to parse a user message, update the sheet, return (sheet, reply, companion)."""
-    client = llm_clients.get_client(config.BAND["Claude"])
+    client = llm_clients.get_client(config.BAND["Claude"])  # all members use Claude
 
     # Last 4 history entries (2 turns) for context, formatted as user messages
     ctx = ""
