@@ -1328,7 +1328,7 @@ function applyFxParams(fx) {
 
   const r = fx.beatrepeat;
   if (r) {
-    if (r.ret != null) document.getElementById('fx2-ret')?.value = Math.round(r.ret * 100);
+    if (r.ret != null) { const el = document.getElementById('fx2-ret'); if (el) el.value = Math.round(r.ret * 100); }
     if (r.slice) {
       const beatMap = { '1/32': '0.125', '1/16': '0.25', '1/8': '0.5', '1/4': '1' };
       document.getElementById('fx2-slice').value = beatMap[r.slice] ?? '0.25';
