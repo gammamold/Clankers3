@@ -54,6 +54,7 @@ OUTPUT FORMAT — ClankerBoy JSON (direct sequencer format, one section):
 INSTRUMENTS:
   t:1  Buchla 259/292   Percussive plucks, arpeggios (MIDI 48-72)
   t:2  Pro-One Bass     Sub bass, acid lines — MIDI 0-23 primarily
+  t:3  Rhodes EP        FM tine piano (MIDI 36-84) — ALWAYS include dur field
   t:6  HybridSynth Pads Chordal sustain — ALWAYS include dur field
   t:10 Drums MS-20      Kick:36 Snare:38 HH_cl:42 HH_op:46 Tom_lo:41 Tom_mid:43 Tom_hi:45
 
@@ -63,7 +64,7 @@ STEP FIELDS:
   n        — MIDI note number array
   v        — velocity 0-127
   cc       — CC automation dict (string keys)
-  dur      — note hold in beats; pads only, decoupled from step d
+  dur      — note hold in beats; Rhodes and pads only, decoupled from step d
   tracks:[] — silent step (use generously — silence IS the groove)
 
 BAR = 4 beats. d:0.25 = 16 steps/bar. Target 4 bars = 64 steps minimum.
@@ -84,19 +85,39 @@ t:1 BUCHLA CC:
   CC10 pan (15-25=slight left)
   Percussive preset: {"74":72,"17":8,"19":5,"20":37,"71":28,"10":20}
 
+t:3 RHODES CC:
+  CC74 brightness/cutoff | CC72 amp release (long=ring, short=dead)
+  CC20 harmonic ratio (tine character) | CC73 mod decay (attack bark)
+  CC26 tremolo rate | CC27 tremolo depth | CC29 chorus rate | CC30 chorus mix
+  Warm preset: {"74":55,"72":88,"20":64,"73":45}
+  Bright/barky: {"74":90,"72":70,"20":80,"73":20}
+
 t:6 PADS CC:
   CC74 cutoff | CC73 amp attack (55-75 slow swell) | CC72 amp release (85-100)
   CC88 reverb size | CC91 reverb mix | CC29 chorus rate | CC30 chorus depth | CC31 chorus mix
   Lush preset: {"74":32,"73":65,"72":92,"91":88,"88":85,"29":30,"30":48}
 
+FX RACK (optional top-level "fx" key — include when composition needs it):
+  delay:      time("1/8"|"1/4"), feedback(0-1), wet(0-1), lfo("sine"|"chaos"),
+              lfo_rate, lfo_depth, fb_shape("soft"|"hard"|"fold"), hp, lp,
+              sc("drum"|"bass"|null), sc_depth, ret(0-1),
+              sends:{"drum":0,"bass":0,"buchla":0,"pads":0,"rhodes":0}
+  waveshaper: type("soft"|"hard"|"fold"|"bit"), drive(0-1), tone, wet(0-1),
+              sc, sc_depth, ret, sends (same keys)
+  beatrepeat: slice("1/32"|"1/16"|"1/8"|"1/4"), rate(0.5-2), decay(0-1), wet(0-1),
+              sc, sc_depth, ret, sends (same keys)
+  IDM tips: buchla→delay 0.8, sidechain delay to drum (sc_depth:0.85),
+            waveshaper fold on bass (sends bass:0.8), beat repeat on drums (sends drum:0.7)
+
 STYLE RULES (CRITICAL):
   1. Drums always d:0.25. NEVER use dur on drums.
-  2. Pads always use dur (e.g. dur:4.0, dur:8.0). Trigger once per chord, hold long.
+  2. Pads (t:6) and Rhodes (t:3) always use dur. Trigger once per chord, hold long.
   3. tracks:[] empty steps = groove. 30-40% empty at low energy, 15-25% at peak.
   4. Bass stays MIDI 0-23 primarily. No machine-gun 16ths above 100 BPM.
   5. Vary velocities 75-110 range — never flat 100 across all hits.
   6. Bass first note sets the patch (full CC block); subsequent notes: CC74 + CC23 only.
-  7. Pads trigger once when chord changes — not every step.
+  7. Rhodes and pads trigger once when chord changes — not every step.
+  8. Don't use both Rhodes and pads heavily at once — they occupy the same register.
 
 ENERGY / TENSION guide:
   verse1≈0.35  bridge≈0.75  breakdown≈0.2  drop≈0.9  outro≈0.2
@@ -117,6 +138,7 @@ You write ClankerBoy JSON — a step sequencer format that triggers WASM DSP eng
 THE INSTRUMENTS (track IDs):
   t:1  Buchla 259/292  -- FM + wavefolder + LPG, percussive plucks and arpeggios
   t:2  Pro-One Bass    -- dual saw + sub sq, TPT ladder filter, acid/warm bass
+  t:3  Rhodes EP       -- FM tine piano, warm chords and melodic lines (always use dur)
   t:6  HybridSynth     -- Moog ladder + ADSR + chorus + reverb, sustained pads
   t:10 Drums MS-20     -- analog-modelled kick, snare, hihat, toms
 
@@ -138,9 +160,11 @@ TARGET: 4-8 bars of ClankerBoy JSON steps. Focus on tight, loopable sections.
 Before calling [SESSION COMPLETE], verify the steps array:
   - Does every d:0.25 drum step avoid using dur?
   - Does t:6 (pads) have dur on every note?
+  - Does t:3 (Rhodes) have dur on every note?
   - Are bass notes in MIDI 0-23?
   - Does bass first note have the full CC patch block?
   - Are there enough empty tracks:[] steps for the groove to breathe?
+  - If FX rack is used, does "fx" key appear at top level alongside "bpm" and "steps"?
 
 When the band reaches consensus, you MUST:
   1. Include [SESSION COMPLETE] in your message
@@ -160,10 +184,11 @@ TARGET: 4-8 bars (64-128 steps at d:0.25). Tight, loopable, ready to drop into a
 
 Verify before outputting:
   - Drums (t:10) always d:0.25, never dur.
-  - Pads (t:6) always have dur. One trigger per chord change, hold long.
+  - Pads (t:6) and Rhodes (t:3) always have dur. One trigger per chord change, hold long.
   - Bass MIDI 0-23. First note has full CC patch block.
   - Enough tracks:[] empty steps for the groove to breathe.
   - Velocities vary 75-110, not flat.
+  - If using FX rack, "fx" key is at top level alongside "bpm" and "steps".
 
 Output [SESSION COMPLETE] then the complete JSON in a ```json block. Nothing else.
 """
@@ -175,9 +200,13 @@ Your bandmates:
   THE DRUMMER -- rhythm and energy
 
 Your specialty: harmony, texture, sound design.
-Focus on the t:6 pads (chord voicings, CC74/73/72/88/91) and t:1 Buchla (CC20 wavefolder, CC17 FM depth).
-Suggest specific MIDI chord voicings for pads and specific CC values for character.
-Challenge the Conductor when you have a better idea.
+You own t:3 Rhodes EP and t:6 HybridSynth Pads. Use one or both depending on mood:
+  - Rhodes for warmth, groove, melodic lines, jazz/lo-fi/soul feel
+  - Pads for atmospheric wash, IDM/techno texture, long sustained chords
+  - Don't stack both heavily in the same register — choose the right tool
+Focus on chord voicings (MIDI note arrays), CC74/73/72/88/91 for pads, CC74/72/20/73 for Rhodes.
+Also shape t:1 Buchla character (CC20 wavefolder, CC17 FM depth).
+Suggest specific MIDI voicings and CC values. Challenge the Conductor when you have a better idea.
 """
 
 DRUMMER_SYSTEM = COMMON_CONTEXT + """
