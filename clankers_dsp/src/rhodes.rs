@@ -12,7 +12,7 @@
 /// ClankerBoy CC map (t:3):
 ///   CC74  Brightness  (0-127 → peak FM index 0.5–8.0)
 ///   CC72  Decay       (0-127 → amp decay 0.5–6 s at C4)
-///   CC20  Tine mix    (0-127 → modulator harmonic ratio 0.9–2.0)
+///   CC20  Tine ratio  snaps to musical ratios: 0-42=1:1(unison) 43-84=1.5(fifth) 85-127=2:1(octave)
 ///   CC73  Bark decay  (0-127 → mod-index decay speed, lower=longer bark)
 ///   CC26  Tremolo rate  (0-127 → 0–9 Hz)
 ///   CC27  Tremolo depth (0-127 → 0–0.8)
@@ -54,7 +54,7 @@ impl Default for RhodesParams {
             tremolo_rate:  4.8,
             tremolo_depth: 0.18,
             chorus_rate:   0.7,
-            chorus_mix:    0.38,
+            chorus_mix:    0.12,  // subtle by default — CC30 to taste
             pan:           0.5,
         }
     }

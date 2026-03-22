@@ -87,10 +87,13 @@ t:1 BUCHLA CC:
 
 t:3 RHODES CC:
   CC74 brightness/cutoff | CC72 amp release (long=ring, short=dead)
-  CC20 harmonic ratio (tine character) | CC73 mod decay (attack bark)
-  CC26 tremolo rate | CC27 tremolo depth | CC29 chorus rate | CC30 chorus mix
-  Warm preset: {"74":55,"72":88,"20":64,"73":45}
-  Bright/barky: {"74":90,"72":70,"20":80,"73":20}
+  CC20 tine ratio — SNAPS to musical ratios: 0-42=1:1 unison, 43-84=1.5 fifth, 85-127=2:1 octave
+        DO NOT use CC20=50-80 range expecting intermediate values — they all snap. Omit for default 1:1.
+  CC73 mod decay (attack bark, lower=longer bark) | CC30 chorus mix (0=dry, 127=lush)
+  CC26 tremolo rate (0-127 → 0-9Hz) | CC27 tremolo depth (0-127 → 0-0.8)
+  Warm preset: {"74":55,"72":88,"73":45}
+  Bright/barky: {"74":90,"72":70,"73":20}
+  Chorus on: add "30":60 | Chorus off: omit CC30 (default is subtle)
 
 t:6 PADS CC:
   CC74 cutoff | CC73 amp attack (55-75 slow swell) | CC72 amp release (85-100)

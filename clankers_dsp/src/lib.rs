@@ -267,7 +267,9 @@ fn parse_rhodes_params(cc_json: &str) -> RhodesParams {
         match key {
             74 => p.brightness    = 0.5 + n * 7.5,          // 0.5–8.0 FM index
             72 => p.amp_decay     = 0.5 + n * 5.5,          // 0.5–6 s
-            20 => p.harm_ratio    = 0.9 + n * 1.1,          // 0.9–2.0
+            // CC20 snaps to musical ratios only — avoids inharmonic beating
+            // 0-42 = 1.0 (unison), 43-84 = 1.5 (fifth), 85-127 = 2.0 (octave)
+            20 => p.harm_ratio    = if val < 43.0 { 1.0 } else if val < 85.0 { 1.5 } else { 2.0 },
             73 => p.mod_decay     = 0.03 + (1.0 - n) * 0.47, // lower CC = shorter bark
             55 => p.key_scale     = n,
             26 => p.tremolo_rate  = n * 9.0,                 // 0–9 Hz
