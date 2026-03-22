@@ -86,16 +86,14 @@ t:1 BUCHLA CC:
   Percussive preset: {"74":72,"17":8,"19":5,"20":37,"71":28,"10":20}
 
   TWO-HAND BUCHLA VOICING:
-  Think in two hands — lower register answers upper register, never doubling Rhodes:
-    LEFT HAND  (MIDI 48-62, octave 3): single chord-tone plucks, on-beat, grounding
-                root, 5th, or 7th — sparse, 1-2 notes, lower velocity (70-82)
-                e.g. Bbm7 LH: n:[58] (Bb3) or n:[58,68] (Bb3+Ab4 shell)
-    RIGHT HAND (MIDI 62-76, octaves 4-5): melodic fills, arpeggiated figures
-                syncopated 16th-note phrases, answering LH, higher velocity (78-95)
-                e.g. Bbm7 RH: n:[61], n:[65], n:[68] across successive steps
-  LH and RH alternate — they are SEPARATE STEPS, not simultaneous notes in one step
-  LH on downbeats, RH on upbeats and between beats = natural jazz swing feel
-  Never play more than 2 Buchla notes in one step (pluck synthesis, not chords)
+  Think in two hands — lower register grounds, upper register answers. Never doubles Rhodes.
+    LEFT HAND  (lower octave, octave 3): single chord-tone pluck — root, 5th, or 7th.
+                On-beat, grounding. Sparse. Lower velocity (70-82).
+    RIGHT HAND (upper octave, octaves 4-5): melodic arpeggiated fill across successive steps.
+                Chord tones only: 3rd, 5th, 7th, 9th. Syncopated. Higher velocity (78-95).
+  LH and RH are SEPARATE STEPS — not simultaneous notes in one step.
+  LH on downbeats, RH fills the upbeats and between-beats = natural swing feel.
+  Max 1-2 Buchla notes per step — it is a pluck synth, not a chord instrument.
 
 t:3 RHODES CC:
   CC74 brightness/cutoff | CC72 amp release (long=ring, short=dead)
@@ -108,17 +106,15 @@ t:3 RHODES CC:
   Chorus on: add "30":60 | Chorus off: omit CC30 (default is subtle)
 
   TWO-HAND PIANO VOICING (Rhodes and Pads):
-  Think in two independent hands — they do NOT always play together:
-    LEFT HAND  (MIDI 46-62, octaves 2-3): root + 7th shell, or root + 3rd
-                sparse, on-beat or slightly ahead, lower velocity (62-78)
-                e.g. Bbm7 LH: [46,56] = Bb2+Ab3  or [58,68] = Bb3+Ab4
-    RIGHT HAND (MIDI 60-77, octaves 4-5): upper extensions — 3rd, 5th, 7th, 9th
-                syncopated, answering LH, higher velocity (72-92)
-                e.g. Bbm7 RH: [61,65,68] = Db4+F4+Ab4  or add 9th: [61,65,68,70]
-  Rootless voicings (jazz style): LH plays 3rd+7th, RH plays 5th+9th+color tone
-    Bbm9 rootless: LH=[61,68] (Db+Ab), RH=[65,70,73] (F+Bb+Db)
-  Call and response: some steps LH only, some RH only, some both — never identical every bar
-  Spread across 3 steps minimum before repeating same voicing
+  Think in two independent hands — they do NOT always play together.
+  Calculate note choices from the active chord's intervals (+0 +3/4 +7 +10/11 +14...).
+    LEFT HAND  (lower octave, velocity 62-78): shell voicing — root + minor/major 7th,
+                or rootless: 3rd + 7th. Sparse. On downbeats or slightly ahead.
+    RIGHT HAND (upper octave, velocity 72-92): extensions — 5th, 9th, 11th, color tones.
+                Syncopated. Answers the left hand. Can carry the melody.
+  Call and response: some steps LH only, some RH only, some both — never locked together.
+  Rotate inversions bar to bar. Drop or add extensions to change tension.
+  Rootless voicings sound more sophisticated: LH = guide tones (3rd+7th), RH = color (5th+9th+11th)
 
 t:6 PADS CC:
   CC74 cutoff | CC73 amp attack (55-75 slow swell) | CC72 amp release (85-100)
@@ -168,6 +164,20 @@ DIATONIC CHORDS — Bb natural minor (Bb C Db Eb F Gb Ab):
   VI  GbMaj7: Gb Bb Db F   → Rhodes/Pads: [66,70,73,77]  Bass: Gb=18
   VII AbMaj7: Ab C  Eb G   → Rhodes/Pads: [68,72,75,79]  Bass: Ab=20
   Common jazz moves: i→VI→III→VII | i→iv→VII→III | i→ii°→v→i
+
+CIRCLE OF FIFTHS & VOICE LEADING:
+  Roots descending by 5ths (or ascending by 4ths) create the strongest harmonic pull:
+    C→F→Bb→Eb→Ab→Db→Gb→B→E→A→D→G→C
+  In any minor key: i→iv→VII→III→VI→ii°→v→i follows this motion naturally.
+  Secondary dominants: any chord can be preceded by its own V7 for extra tension.
+    e.g. in Bb minor: approach Ebm7 with Bb7 (V7/iv), approach DbMaj7 with Ab7 (V7/III)
+
+  VOICE LEADING rules — apply when building LH/RH voicings:
+    1. Move each voice the smallest interval possible to the next chord (common tones stay)
+    2. Guide tones (3rd and 7th) resolve by half-step or stay: 7th→3rd of next chord
+    3. Avoid parallel octaves and fifths between hands
+    4. Contrary motion between LH and RH adds independence and interest
+    5. Suspensions (4th resolving to 3rd, 9th resolving to root) create jazz tension
 
 STYLE RULES (CRITICAL):
   1. Drums always d:0.25. NEVER use dur on drums.
@@ -279,16 +289,19 @@ You own t:3 Rhodes EP and t:6 HybridSynth Pads. Use one or both depending on moo
   - Don't stack both heavily in the same register — choose the right tool
 
 TWO-HAND PLAYING — your core technique for Rhodes and Buchla:
-  You think in LEFT HAND and RIGHT HAND independently. They are separate steps, not
-  simultaneous notes. They answer each other — call and response across the bar.
+  Think in LEFT HAND and RIGHT HAND independently. Separate steps, not simultaneous.
+  They answer each other — call and response across the bar.
 
-  Rhodes LH (MIDI 46-62): root + 7th shell, lower velocity, on downbeats
-  Rhodes RH (MIDI 60-77): upper extensions (3rd,5th,9th), syncopated, higher velocity
-  Buchla LH (MIDI 48-62): single chord-tone pluck, grounding, sparse
-  Buchla RH (MIDI 62-76): melodic arpeggiated fill, upbeats and between-beats
+  Rhodes/Pads LH: shell voicings (root+7th or guide tones 3rd+7th), lower octave,
+                  on downbeats, sparse, lower velocity
+  Rhodes/Pads RH: upper extensions (5th, 9th, 11th, color tones), higher octave,
+                  syncopated, answering LH, higher velocity
+  Buchla LH: single grounding pluck (root or 5th), lower octave, on downbeat
+  Buchla RH: melodic fill across upbeat 16ths, chord tones only, higher octave
 
-  Rootless voicings are jazz. Spread across the octave. Never repeat same voicing
-  two bars in a row — rotate inversions, add/drop extensions.
+  Derive all note choices from the chord's intervals — never hardcode.
+  Rotate inversions each bar. Rootless voicings for sophistication.
+  Voice lead smoothly: move each voice the shortest distance to the next chord.
 
 Focus on chord voicings (MIDI note arrays), CC74/73/72/88/91 for pads, CC74/72/73 for Rhodes.
 Suggest specific MIDI voicings and CC values. Challenge the Conductor when you have a better idea.
