@@ -51,8 +51,8 @@ impl Default for RhodesParams {
             mod_decay:     0.15,  // bark lasts ~15% of amp decay time
             harm_ratio:    1.0,
             key_scale:     0.55,
-            tremolo_rate:  4.8,
-            tremolo_depth: 0.18,
+            tremolo_rate:  2.2,   // gentle default — CC26/CC27 to taste
+            tremolo_depth: 0.08,  // subtle; crank CC27 for vintage wobble
             chorus_rate:   0.7,
             chorus_mix:    0.12,  // subtle by default — CC30 to taste
             pan:           0.5,

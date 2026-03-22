@@ -221,6 +221,9 @@ CRITICAL RULES:
   6. Buchla: chord tones only, max 1-2 notes per step.
   7. All harmonic instruments derive notes from the same chord map — no exceptions.
   8. Timbre (CC74 brightness) should track energy: dark at low energy, brighter at high.
+  9. dur must NOT extend past the loop end — last bar notes keep dur short (0.5-1.0)
+     to avoid semitone clashes when the loop restarts on a different chord.
+  10. Rhodes tremolo defaults are subtle. Send CC27=0 for dry, CC27=80+ for vintage wobble.
 """
 
 # ── SYSTEM PROMPTS ────────────────────────────────────────────────────────
