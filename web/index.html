@@ -143,6 +143,15 @@
     .fx-send-item.active label { color:#f90; }
     .fx-send-item.active .fx-send-val { color:#f90; }
 
+    /* ── FX Step Grid ── */
+    .fx-step-seq { display:flex; gap:2px; margin:.45rem 0 .1rem; flex-wrap:nowrap; }
+    .fx-step-btn { width:13px; height:13px; background:#111; border:1px solid #1e1e1e;
+                   cursor:pointer; border-radius:2px; flex-shrink:0; transition:background .05s; }
+    .fx-step-btn.on   { background:#603000; border-color:#a05000; }
+    .fx-step-btn.play { border-color:#fff !important; }
+    .fx-step-btn.on.play { background:#f90; border-color:#ffb040; }
+    .fx-step-divider { width:1px; background:#2a2a2a; align-self:stretch; margin:0 1px; flex-shrink:0; }
+
     /* ── Song Mode ── */
     .song-section { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; }
     .song-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
@@ -319,6 +328,7 @@
         </select>
         <span class="fx-label">DUCK</span><div id="fx0-scdepth-wrap"></div>
       </div>
+      <div class="fx-step-seq" id="fx0-steps"></div>
     </div>
 
     <!-- WAVESHAPER -->
@@ -356,6 +366,7 @@
         </select>
         <span class="fx-label">PUMP</span><div id="fx1-scdepth-wrap"></div>
       </div>
+      <div class="fx-step-seq" id="fx1-steps"></div>
     </div>
 
     <!-- BEAT REPEAT -->
@@ -395,6 +406,7 @@
         </select>
         <span class="fx-label">TRIG</span><div id="fx2-scdepth-wrap"></div>
       </div>
+      <div class="fx-step-seq" id="fx2-steps"></div>
     </div>
 
   </div>
@@ -1491,6 +1503,44 @@ let vizPips      = [];
 let vizRaf       = null;
 let vizLastSheet = null;   // detect sheet changes
 
+// ── FX Step Sequencer ───────────────────────────────────────────────────────
+const FX_STEPS = 16;
+// fxStepState[slot][step] = true means FX active on that step
+const fxStepState = [
+  Array(FX_STEPS).fill(true),   // Delay — all on by default
+  Array(FX_STEPS).fill(true),   // Waveshaper — all on by default
+  Array(FX_STEPS).fill(false),  // Beat Repeat — all off (manual paint)
+];
+let fxStepBtns = [[], [], []];  // DOM button refs
+let lastFxStep = -1;
+
+function buildFxStepGrids() {
+  for (let slot = 0; slot < 3; slot++) {
+    const container = document.getElementById(`fx${slot}-steps`);
+    if (!container) continue;
+    container.innerHTML = '';
+    for (let step = 0; step < FX_STEPS; step++) {
+      // Beat dividers at every 4 steps
+      if (step > 0 && step % 4 === 0) {
+        const div = document.createElement('div');
+        div.className = 'fx-step-divider';
+        container.appendChild(div);
+      }
+      const btn = document.createElement('div');
+      btn.className = 'fx-step-btn' + (fxStepState[slot][step] ? ' on' : '');
+      btn.dataset.slot = slot;
+      btn.dataset.step = step;
+      btn.addEventListener('click', () => {
+        fxStepState[slot][step] = !fxStepState[slot][step];
+        btn.classList.toggle('on', fxStepState[slot][step]);
+      });
+      container.appendChild(btn);
+      fxStepBtns[slot][step] = btn;
+    }
+  }
+}
+buildFxStepGrids();
+
 function buildVizPips(seq) {
   vizStepsEl.innerHTML = '';
   vizPips = [];
@@ -1530,9 +1580,9 @@ function vizTick() {
   // Rebuild pips if sheet changed
   if (seq.sheet !== vizLastSheet) buildVizPips(seq);
 
-  const beat     = seq.getCurrentBeat();
-  const stepIdx  = seq.getCurrentStepIndex();
-  const bar      = Math.floor(beat / 4) + 1;
+  const beat      = seq.getCurrentBeat();
+  const stepIdx   = seq.getCurrentStepIndex();
+  const bar       = Math.floor(beat / 4) + 1;
   const beatInBar = (beat % 4) + 1;
 
   vizBarEl.textContent  = bar;
@@ -1540,6 +1590,42 @@ function vizTick() {
 
   for (let i = 0; i < vizPips.length; i++) {
     vizPips[i].classList.toggle('viz-active', i === stepIdx);
+  }
+
+  // ── FX Step Sequencer ────────────────────────────────────────────────────
+  if (rack) {
+    const loopBeats = seq.loopBeats || 4;
+    const fxStep    = Math.floor((beat / loopBeats) * FX_STEPS) % FX_STEPS;
+
+    if (fxStep !== lastFxStep) {
+      const bpm = seq.bpm ?? 128;
+
+      for (let slot = 0; slot < 3; slot++) {
+        const active = fxStepState[slot][fxStep];
+
+        // Update pip highlight
+        for (let s = 0; s < FX_STEPS; s++) {
+          fxStepBtns[slot][s]?.classList.toggle('play', s === fxStep);
+        }
+
+        if (slot === 2) {
+          // Beat Repeat: arm on rising edge (off → on)
+          const wasActive = fxStepState[slot][lastFxStep] ?? false;
+          if (active && !wasActive) {
+            const sliceBeats = +document.getElementById('fx2-slice').value;
+            rack.unit(2).arm(bpm, sliceBeats);
+          } else if (!active && wasActive) {
+            rack.unit(2).gate();
+          }
+        } else {
+          // Delay / Waveshaper: gate return level
+          if (_fxOn[slot]) {
+            rack.setReturn(slot, active ? rack._retBase[slot] : 0);
+          }
+        }
+      }
+      lastFxStep = fxStep;
+    }
   }
 }
 
@@ -1552,6 +1638,10 @@ function stopViz() {
   vizEl.style.display = 'none';
   if (vizRaf) { cancelAnimationFrame(vizRaf); vizRaf = null; }
   vizPips.forEach(p => p.classList.remove('viz-active'));
+  // Clear FX step playhead highlights
+  for (let slot = 0; slot < 3; slot++)
+    fxStepBtns[slot].forEach(b => b?.classList.remove('play'));
+  lastFxStep = -1;
 }
 
 </script>
