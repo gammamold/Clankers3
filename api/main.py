@@ -75,6 +75,7 @@ class EvolveRequest(BaseModel):
 
 class EvolveResponse(BaseModel):
     sheet: dict
+    reply: str = ""
 
 
 class PatchSheetRequest(BaseModel):
@@ -138,7 +139,13 @@ def sheet_evolve(req: EvolveRequest):
 
     evolved = evolve(session["sheet"], req.section)
     update_sheet(req.session_id, evolved)
-    return {"sheet": evolved}
+    tension = evolved.get("tension", 0.5)
+    reply = (
+        f"Moving into {req.section}. "
+        f"Tension {tension:.0%}. "
+        f"BPM locked at {evolved.get('bpm', '?')}."
+    )
+    return {"sheet": evolved, "reply": reply}
 
 
 @app.get("/sheet/{session_id}", response_model=SheetResponse)
@@ -173,21 +180,34 @@ The band has four companion personas:
   Keys         -- harmonic, opinionated. Talks about textures and progressions.
   Conductor    -- orchestrates; listens to user intent. Formal but warm.
 
-The band's sequencer uses ClankerBoy JSON format:
+INSTRUMENTS (track IDs):
   t:1  Buchla 259/292   Percussive plucks/arps (MIDI 48-72)
   t:2  Pro-One Bass     Sub bass (MIDI 0-23 primarily)
+  t:3  Rhodes EP        FM tine piano (MIDI 36-84), use dur
   t:6  HybridSynth Pads Chordal sustain — always include dur field
   t:10 Drums MS-20      Kick:36 Snare:38 HH_cl:42 HH_op:46
+
+FX RACK (optional top-level "fx" key — include when the style needs it):
+{
+  "fx": {
+    "delay":      { "on": true,  "time": "1/8", "feedback": 0.5, "wet": 0.6, "lfo": "sine", "lfo_rate": 0.3, "lfo_depth": 0.003, "fb_shape": "soft", "hp": 120, "lp": 5000, "sc": "drum", "sc_depth": 0.85, "ret": 0.7, "sends": { "drum": 0, "bass": 0, "buchla": 0.8, "pads": 0.4, "rhodes": 0 } },
+    "waveshaper": { "on": true,  "type": "fold", "drive": 0.5, "tone": 3200, "wet": 0.5, "sc": null, "sc_depth": 0.7, "ret": 0.6, "sends": { "drum": 0, "bass": 0.8, "buchla": 0, "pads": 0, "rhodes": 0 } },
+    "beatrepeat": { "slice": "1/16", "rate": 1.0, "decay": 0.9, "wet": 0.85, "sc": null, "sc_depth": 0.6, "ret": 0.75, "sends": { "drum": 0.6, "bass": 0, "buchla": 0, "pads": 0, "rhodes": 0 } }
+  }
+}
+FX tips: IDM/Dubstep → buchla→delay 0.8, bass→waveshaper fold 0.8, drums→beatrepeat 0.6.
+         Sidechain delay to drum (sc:"drum", sc_depth:0.85) for pumping tails.
 
 You receive the current ClankerBoy JSON sheet and a user message.
 1. Pick the companion best suited to respond.
 2. Update the sheet's steps array to reflect the user's request.
    You may change BPM, add/remove/modify steps, adjust CC values, swap notes.
+   Include or update the "fx" key when the user asks for FX changes.
 3. Write a short in-character reply from that companion (1-3 sentences max).
 
 RULES when editing steps:
   - Drums (t:10) always d:0.25, never use dur.
-  - Pads (t:6) always use dur. One trigger, long hold.
+  - Pads (t:6) and Rhodes (t:3) always use dur.
   - Bass first note per phrase needs full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   - Bass MIDI 0-23 primarily.
 

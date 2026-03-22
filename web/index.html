@@ -441,6 +441,17 @@
     <button id="btn-new-session">START SESSION</button>
   </div>
   <div id="chat-messages"><span class="msg-sys">Start a session to talk to the band.</span></div>
+  <div class="input-row" id="evolve-row" style="display:none">
+    <select id="evolve-section" style="background:#0e0e0e;color:#888;border:1px solid #1e1e1e;font-family:monospace;font-size:.72rem;padding:.3rem .4rem;">
+      <option value="instrumental">→ instrumental</option>
+      <option value="verse2">→ verse 2</option>
+      <option value="bridge">→ bridge</option>
+      <option value="verse3">→ verse 3</option>
+      <option value="outro">→ outro</option>
+    </select>
+    <button id="btn-evolve">EVOLVE →</button>
+    <button id="btn-autoplay" style="background:#0a1a0a;border-color:#1e3e1e;color:#383">▶ AUTO</button>
+  </div>
   <div class="input-row">
     <input id="chat-input" type="text" placeholder="Talk to the band…" disabled />
     <button id="chat-send" disabled>SEND</button>
@@ -1194,21 +1205,53 @@ function chatAppend(text, cls) {
   chatMsgs.scrollTop = chatMsgs.scrollHeight;
 }
 
-function sheetToSequencer(sheet) {
+function sheetToSequencer(sheet, { autoStore = true, autoPlay = false } = {}) {
   try {
     const steps = sheet.steps;
     if (!steps || !steps.length) return;
     const bpm = sheet.bpm ?? 120;
+
+    // Load into textarea + BPM slider
     document.getElementById('sheet-json').value = JSON.stringify(sheet, null, 2);
     document.getElementById('seq-bpm').value = bpm;
     document.getElementById('bpm-val').textContent = bpm;
-    const ex = sheet.explanation;
-    if (ex) {
-      const info = [ex.style, ex.key, ex.section].filter(Boolean).join(' · ');
-      chatAppend(`[${info} — ${steps.length} steps @ ${bpm} BPM]`, 'msg-sys');
-    } else {
-      chatAppend(`[sheet — ${steps.length} steps @ ${bpm} BPM]`, 'msg-sys');
+
+    // Apply FX params if sheet carries them
+    if (sheet.fx && rack) applyFxParams(sheet.fx);
+
+    // Auto-store to current active slot
+    if (autoStore) {
+      const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
+      const stored = Object.assign({}, sheet);
+      if (rack) stored.fx = rack.getParams();
+      patternBank[activeSlot] = { sheet: stored, label };
+      patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
+      patBtns[activeSlot].classList.add('has-pat');
+      updateArrGrid();
+      log(`Band → P${activeSlot + 1} "${label}"`);
+
+      // Auto-append to arrangement if in song mode
+      if (songMode) {
+        const firstEmpty = arrSlots.findIndex(s => !s.dataset.pat);
+        if (firstEmpty !== -1) {
+          arrSlots[firstEmpty].dataset.pat = activeSlot;
+          arrSlots[firstEmpty].textContent  = `P${activeSlot + 1}`;
+          arrSlots[firstEmpty].classList.add('has-pat');
+          updateArrGrid();
+        }
+      }
+
+      // Advance to next free slot for the next section
+      const nextFree = patternBank.findIndex((p, i) => i > activeSlot && !p);
+      if (nextFree !== -1) selectSlot(nextFree);
     }
+
+    const ex = sheet.explanation;
+    const info = ex ? [ex.style, ex.key, ex.section].filter(Boolean).join(' · ') : '';
+    chatAppend(`♩ ${info || 'sheet'} — ${steps.length} steps @ ${bpm} BPM → P${activeSlot > 0 ? activeSlot : 1}`, 'msg-sys');
+
+    // Optionally fire playback
+    if (autoPlay) document.getElementById('btn-play')?.click();
   } catch (e) {
     chatAppend('[sheet parse error: ' + e + ']', 'msg-sys');
   }
@@ -1229,8 +1272,11 @@ document.getElementById('btn-new-session').addEventListener('click', async () =>
     sessionId = data.session_id;
     document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
     chatInput.disabled = false; chatSend.disabled = false;
+    document.getElementById('evolve-row').style.display = '';
+    // Switch to song mode so new sections auto-fill the arrangement
+    if (!songMode) document.getElementById('btn-mode-song')?.click();
     chatAppend('Session started. The band is ready.', 'msg-sys');
-    sheetToSequencer(data.sheet);
+    sheetToSequencer(data.sheet, { autoStore: true, autoPlay: false });
   } catch (e) {
     chatAppend('Error: ' + e + ' — is the API running? (uvicorn api.main:app --port 8000)', 'msg-sys');
   } finally {
@@ -1262,6 +1308,45 @@ async function sendChat() {
 
 chatSend.addEventListener('click', sendChat);
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+// ── EVOLVE: ask the band to mutate for the next section ──────────────────
+let autoPlayOnEvolve = false;
+document.getElementById('btn-autoplay').addEventListener('click', function() {
+  autoPlayOnEvolve = !autoPlayOnEvolve;
+  this.style.background = autoPlayOnEvolve ? '#1a4a1a' : '#0a1a0a';
+  this.style.borderColor = autoPlayOnEvolve ? '#2e6e2e' : '#1e3e1e';
+  this.style.color = autoPlayOnEvolve ? '#5d5' : '#383';
+});
+
+document.getElementById('btn-evolve').addEventListener('click', async () => {
+  if (!sessionId) return;
+  const section = document.getElementById('evolve-section').value;
+  const btn = document.getElementById('btn-evolve');
+  btn.disabled = true;
+  btn.textContent = 'thinking…';
+  chatAppend(`Conductor: evolving to ${section}…`, 'msg-sys');
+  try {
+    const res = await fetch(`${API}/sheet/evolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, section }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.reply) chatAppend(`Conductor: ${data.reply}`, 'msg-band');
+    sheetToSequencer(data.sheet, { autoStore: true, autoPlay: autoPlayOnEvolve });
+    // Advance section selector to next in arc
+    const arcOrder = ['instrumental','verse2','bridge','verse3','outro'];
+    const sel = document.getElementById('evolve-section');
+    const idx = arcOrder.indexOf(section);
+    if (idx !== -1 && idx + 1 < arcOrder.length) sel.value = arcOrder[idx + 1];
+  } catch (e) {
+    chatAppend('Evolve error: ' + e, 'msg-sys');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'EVOLVE →';
+  }
+});
 
 // ─── FX Rack UI ────────────────────────────────────────────────────────────
 
