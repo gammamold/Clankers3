@@ -77,7 +77,13 @@ t:2 BASS CC (first note only, sets patch):
   CC71=42 resonance | CC73=8 amp attack | CC75=50 amp decay
   CC79=80 amp sustain | CC72=22 amp release | CC18=10 osc B detune
   Per-note expressive: CC74 filter cutoff (44-55 warm) | CC23 filter decay
-  Bass MIDI roots: F#=6, D=2, A=9, B=11, C#=13, E=16, G#=8
+
+  BASS HARMONY — derives directly from the chord map:
+  Bass plays the ROOT of the active chord, transposed to MIDI 0-23 (use Bass reference above).
+  On chord change: move to new root. Passing tones (5th, octave) only on weak beats.
+  Never play a note outside the active chord's scale — the bass defines the harmony.
+  Calculate root from MIDI chromatic reference: note name → find it in Bass 0-23 row.
+  Walking bass: connect chord roots via scale tones or chromatic approach on beat 4.
 
 t:1 BUCHLA CC:
   CC74 LPG cutoff | CC71 resonance (20-40) | CC20 wavefolder (37=woody percussive)
@@ -121,6 +127,14 @@ t:6 PADS CC:
   CC88 reverb size | CC91 reverb mix | CC29 chorus rate | CC30 chorus depth | CC31 chorus mix
   Lush preset: {"74":32,"73":65,"72":92,"91":88,"88":85,"29":30,"30":48}
 
+  PADS HARMONY — same chord map as all other instruments:
+  Pads voice the active chord using the same two-hand interval logic as Rhodes.
+  Derive note arrays from the chord's intervals (+0 +3/4 +7 +10/11 +14...).
+  Apply voice leading: common tones held, guide tones resolve by step, contrary motion.
+  Do NOT use pads and Rhodes heavily at the same time — they share the same register.
+  When Rhodes plays: pads rest or hold a minimal shell (root+5th only) in the background.
+  When pads play: Rhodes rests or comps sparse single-note fills.
+
 FX RACK (optional top-level "fx" key — include when composition needs it):
   delay:      time("1/8"|"1/4"), feedback(0-1), wet(0-1), lfo("sine"|"chaos"),
               lfo_rate, lfo_depth, fb_shape("soft"|"hard"|"fold"), hp, lp,
@@ -136,11 +150,14 @@ FX RACK (optional top-level "fx" key — include when composition needs it):
 HARMONY — MANDATORY STEP BEFORE WRITING JSON:
   When a key/style is given, derive the chord progression first:
   1. State mode (e.g. "Bb natural minor")
-  2. List each chord with Roman numeral + exact MIDI note array
-  3. ALL instruments must use ONLY notes from those chord arrays
-  4. Bass root = lowest note of chord transposed to MIDI 0-23
-  5. Buchla arpeggiates chord tones — does NOT double Rhodes register (stay above C4=60)
-  6. Never guess MIDI note numbers — calculate from the reference below
+  2. List each chord with Roman numeral + interval structure
+  3. Calculate exact MIDI note arrays for that chord using the reference below
+  4. ALL four harmonic instruments share the SAME chord map — no exceptions:
+       t:2 Bass   → chord root, MIDI 0-23, passing tones on weak beats only
+       t:1 Buchla → chord tones arpeggiated across two-hand registers
+       t:3 Rhodes → two-hand voicing from chord intervals, upper octaves
+       t:6 Pads   → same chord intervals as Rhodes, not both heavy at once
+  5. Never guess MIDI note numbers — calculate from the reference below
 
 MIDI CHROMATIC REFERENCE (C4=60 = middle C):
   Octave 2: Bb2=46 B2=47
