@@ -135,10 +135,13 @@
     .fx-arm.active { background:#1a0e0a; border-color:#a64; color:#f90; }
     .fx-gate { font-size:.6rem; padding:.1rem .35rem; border:1px solid #3e1e1e; background:#1a0a0a;
                color:#844; cursor:pointer; border-radius:2px; font-family:monospace; }
-    .fx-send-grid { display:flex; gap:.25rem; flex-wrap:wrap; margin-bottom:.25rem; }
-    .fx-send-item { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
-    .fx-send-item label { font-size:.52rem; color:#333; }
-    .fx-send-sl { width:32px; height:3px; accent-color:#f90; }
+    .fx-send-grid { display:flex; flex-direction:column; gap:.2rem; margin:.25rem 0; }
+    .fx-send-item { display:flex; align-items:center; gap:.4rem; }
+    .fx-send-item label { font-size:.6rem; color:#555; width:3.2rem; letter-spacing:.04em; }
+    .fx-send-sl { flex:1; min-width:60px; max-width:100px; height:3px; accent-color:#f90; cursor:pointer; }
+    .fx-send-val { font-size:.58rem; color:#444; width:1.8rem; text-align:right; }
+    .fx-send-item.active label { color:#f90; }
+    .fx-send-item.active .fx-send-val { color:#f90; }
 
     /* ── Song Mode ── */
     .song-section { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; }
@@ -299,9 +302,12 @@
         <span class="fx-label">HP</span><div id="fx0-hp-wrap"></div>
         <span class="fx-label">LP</span><div id="fx0-lp-wrap"></div>
       </div>
-      <div class="fx-row">
-        <span class="fx-label">SEND</span>
-        <div class="fx-send-grid" id="fx0-sends"></div>
+      <div class="fx-send-grid" id="fx0-sends">
+        <div class="fx-send-item"><label>DRUMS</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="drum"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>BASS</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="bass"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>BUCHLA</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="buchla" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>PADS</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="pads"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>RHODES</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="rhodes" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
       </div>
       <div class="fx-row">
         <span class="fx-label">SC</span>
@@ -333,9 +339,12 @@
         <span class="fx-label">TONE</span><div id="fx1-tone-wrap"></div>
         <span class="fx-label">WET</span><div id="fx1-wet-wrap"></div>
       </div>
-      <div class="fx-row">
-        <span class="fx-label">SEND</span>
-        <div class="fx-send-grid" id="fx1-sends"></div>
+      <div class="fx-send-grid" id="fx1-sends">
+        <div class="fx-send-item"><label>DRUMS</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="drum"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>BASS</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="bass"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>BUCHLA</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="buchla" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>PADS</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="pads"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>RHODES</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="rhodes" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
       </div>
       <div class="fx-row">
         <span class="fx-label">SC</span>
@@ -367,9 +376,12 @@
         <span class="fx-label">DECAY</span><div id="fx2-decay-wrap"></div>
         <span class="fx-label">WET</span><div id="fx2-wet-wrap"></div>
       </div>
-      <div class="fx-row">
-        <span class="fx-label">SEND</span>
-        <div class="fx-send-grid" id="fx2-sends"></div>
+      <div class="fx-send-grid" id="fx2-sends">
+        <div class="fx-send-item"><label>DRUMS</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="drum"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>BASS</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="bass"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>BUCHLA</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="buchla" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>PADS</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="pads"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
+        <div class="fx-send-item"><label>RHODES</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="rhodes" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
       </div>
       <div class="fx-row">
         <span class="fx-label">SC</span>
@@ -1233,8 +1245,21 @@ chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); 
 
 // ─── FX Rack UI ────────────────────────────────────────────────────────────
 
-const INSTR_LABELS = { drum:'DRM', bass:'BSS', buchla:'BCH', pads:'PAD', rhodes:'RHO' };
-const INSTR_TYPES  = ['drum','bass','buchla','pads','rhodes'];
+const INSTR_TYPES = ['drum','bass','buchla','pads','rhodes'];
+
+// Wire all send sliders via delegation — works before rack exists
+document.querySelectorAll('.fx-send-sl').forEach(sl => {
+  sl.addEventListener('input', () => {
+    const slot  = +sl.dataset.slot;
+    const instr =  sl.dataset.instr;
+    const val   = sl.value / 100;
+    // Update value display + active highlight
+    const valEl = sl.nextElementSibling;
+    if (valEl) valEl.textContent = sl.value;
+    sl.closest('.fx-send-item').classList.toggle('active', +sl.value > 0);
+    rack?.setSend(slot, instr, val);
+  });
+});
 
 // BPM helper for delay time calculation
 function bpmDelaySeconds(division) {
@@ -1244,22 +1269,6 @@ function bpmDelaySeconds(division) {
                 '1/8d': beatSec*0.75, '1/4': beatSec, '1/4d': beatSec*1.5,
                 '1/2': beatSec*2, '1': beatSec*4 };
   return map[division] ?? beatSec;
-}
-
-function buildSendGrid(containerId, slotIdx) {
-  const el = document.getElementById(containerId);
-  INSTR_TYPES.forEach(t => {
-    const wrap = document.createElement('div');
-    wrap.className = 'fx-send-item';
-    const sl = document.createElement('input');
-    sl.type = 'range'; sl.min = 0; sl.max = 100; sl.value = 0;
-    sl.className = 'fx-send-sl';
-    sl.addEventListener('input', () => rack?.setSend(slotIdx, t, sl.value / 100));
-    const lbl = document.createElement('label');
-    lbl.textContent = INSTR_LABELS[t];
-    wrap.append(sl, lbl);
-    el.appendChild(wrap);
-  });
 }
 
 function initFxUI() {
