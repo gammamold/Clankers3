@@ -112,6 +112,38 @@ FX RACK (optional top-level "fx" key — include when composition needs it):
   IDM tips: buchla→delay 0.8, sidechain delay to drum (sc_depth:0.85),
             waveshaper fold on bass (sends bass:0.8), beat repeat on drums (sends drum:0.7)
 
+HARMONY — MANDATORY STEP BEFORE WRITING JSON:
+  When a key/style is given, derive the chord progression first:
+  1. State mode (e.g. "Bb natural minor")
+  2. List each chord with Roman numeral + exact MIDI note array
+  3. ALL instruments must use ONLY notes from those chord arrays
+  4. Bass root = lowest note of chord transposed to MIDI 0-23
+  5. Buchla arpeggiates chord tones — does NOT double Rhodes register (stay above C4=60)
+  6. Never guess MIDI note numbers — calculate from the reference below
+
+MIDI CHROMATIC REFERENCE (C4=60 = middle C):
+  Octave 2: Bb2=46 B2=47
+  Octave 3: C3=48 Db3=49 D3=50 Eb3=51 E3=52 F3=53 Gb3=54 G3=55 Ab3=56 A3=57 Bb3=58 B3=59
+  Octave 4: C4=60 Db4=61 D4=62 Eb4=63 E4=64 F4=65 Gb4=66 G4=67 Ab4=68 A4=69 Bb4=70 B4=71
+  Octave 5: C5=72 Db5=73 D5=74 Eb5=75 E5=76 F5=77
+  Bass 0-23: C0=0 Db0=1 D0=2 Eb0=3 E0=4 F0=5 Gb0=6 G0=7 Ab0=8 A0=9 Bb0=10 B0=11
+             C1=12 Db1=13 D1=14 Eb1=15 E1=16 F1=17 Gb1=18 G1=19 Ab1=20 A1=21 Bb1=22 B1=23
+
+JAZZ CHORD INTERVALS (semitones from root — apply to MIDI reference above):
+  m7:    +0 +3 +7 +10     maj7:   +0 +4 +7 +11    dom7:  +0 +4 +7 +10
+  m9:    +0 +3 +7 +10 +14  maj9:  +0 +4 +7 +11 +14  9:    +0 +4 +7 +10 +14
+  m7b5:  +0 +3 +6 +10     dim7:   +0 +3 +6 +9
+
+DIATONIC CHORDS — Bb natural minor (Bb C Db Eb F Gb Ab):
+  i   Bbm7:   Bb Db F  Ab  → Rhodes/Pads: [58,61,65,68]  Bass: Bb=10 or Bb1=22
+  ii° Cdim7:  C  Eb Gb A   → Rhodes/Pads: [60,63,66,69]  Bass: C=12
+  III DbMaj7: Db F  Ab C   → Rhodes/Pads: [61,65,68,72]  Bass: Db=13
+  iv  Ebm7:   Eb Gb Bb Db  → Rhodes/Pads: [63,66,70,73]  Bass: Eb=15
+  v   Fm7:    F  Ab C  Eb  → Rhodes/Pads: [65,68,72,75]  Bass: F=17  (use F7=[65,69,72,75] for dominant pull)
+  VI  GbMaj7: Gb Bb Db F   → Rhodes/Pads: [66,70,73,77]  Bass: Gb=18
+  VII AbMaj7: Ab C  Eb G   → Rhodes/Pads: [68,72,75,79]  Bass: Ab=20
+  Common jazz moves: i→VI→III→VII | i→iv→VII→III | i→ii°→v→i
+
 STYLE RULES (CRITICAL):
   1. Drums always d:0.25. NEVER use dur on drums.
   2. Pads (t:6) and Rhodes (t:3) always use dur. Trigger once per chord, hold long.
@@ -121,6 +153,7 @@ STYLE RULES (CRITICAL):
   6. Bass first note sets the patch (full CC block); subsequent notes: CC74 + CC23 only.
   7. Rhodes and pads trigger once when chord changes — not every step.
   8. Don't use both Rhodes and pads heavily at once — they occupy the same register.
+  9. Buchla arpeggios use chord tones only — never notes outside the active chord.
 
 ENERGY / TENSION guide:
   verse1≈0.35  bridge≈0.75  breakdown≈0.2  drop≈0.9  outro≈0.2
@@ -161,6 +194,10 @@ Draw out ideas from your bandmates, debate, refine.
 TARGET: 4-8 bars of ClankerBoy JSON steps. Focus on tight, loopable sections.
 
 Before calling [SESSION COMPLETE], verify the steps array:
+  - Did you state the chord progression with exact MIDI spellings before writing steps?
+  - Does every Rhodes/Pads note appear in the chord map you defined? (no improvised notes)
+  - Does every Buchla note belong to the active chord's tones?
+  - Does the bass root match the active chord root (transposed to MIDI 0-23)?
   - Does every d:0.25 drum step avoid using dur?
   - Does t:6 (pads) have dur on every note?
   - Does t:3 (Rhodes) have dur on every note?
@@ -185,7 +222,15 @@ Think through all four instruments yourself: drums, bass, Buchla, pads.
 
 TARGET: 4-8 bars (64-128 steps at d:0.25). Tight, loopable, ready to drop into a pattern slot.
 
+Before writing steps, think through harmony:
+  - State the key and mode explicitly
+  - List each chord in the progression with its exact MIDI note array (use the MIDI reference)
+  - Every instrument derives its notes from that chord map — no exceptions
+
 Verify before outputting:
+  - Every Rhodes/Pads note is in the chord map you defined
+  - Every Buchla note belongs to the active chord's tones
+  - Bass root matches chord root (MIDI 0-23)
   - Drums (t:10) always d:0.25, never dur.
   - Pads (t:6) and Rhodes (t:3) always have dur. One trigger per chord change, hold long.
   - Bass MIDI 0-23. First note has full CC patch block.
