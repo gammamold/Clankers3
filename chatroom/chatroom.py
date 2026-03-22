@@ -25,196 +25,202 @@ import llm_clients
 # ── MUSIC SHEET FORMAT (ClankerBoy JSON — direct sequencer format) ────────
 
 _SHEET_FORMAT = """
-OUTPUT FORMAT — ClankerBoy JSON (direct sequencer format, one section):
+OUTPUT FORMAT — ClankerBoy JSON (one section):
 {
   "explanation": {
-    "section": "verse1",
-    "song": "track title",
-    "style": "dark techno",
-    "key": "F# minor",
-    "energy": 0.6
+    "intent":        "melancholy, introspective, late-night",
+    "style":         "cool jazz",
+    "timbre":        "warm, dark, dry, subtle delay on buchla",
+    "section":       "verse1",
+    "energy":        0.35,
+    "key":           "Bb natural minor",
+    "progression":   "i m7 → iv m7 → VII maj7 → III maj7",
+    "rhythm":        "swing 8ths, kick on 1+3, walking bass",
+    "orchestration": "rhodes leads LH/RH, buchla fills high, pads background shell"
   },
-  "bpm": 130,
+  "bpm": 92,
   "steps": [
-    {
-      "d": 0.25,
-      "tracks": [
-        { "t": 10, "n": [36], "v": 105 },
-        { "t": 2,  "n": [6],  "v": 95, "cc": {"71":42,"74":48,"23":30,"73":8,"75":50,"79":80,"72":22,"18":10} },
-        { "t": 1,  "n": [54], "v": 88, "cc": {"74":72,"20":37,"17":8,"19":5,"71":28,"10":20} },
-        { "t": 6,  "n": [54,57,61], "v": 62, "dur": 4.0, "cc": {"74":40,"73":65,"72":92,"91":88,"88":85,"29":30,"30":60,"31":50} }
-      ]
-    },
+    { "d": 0.25, "tracks": [
+        { "t": 10, "n": [36], "v": 92 },
+        { "t": 2,  "n": [10], "v": 88, "cc": {"71":42,"74":48,"23":30,"73":8,"75":50,"79":80,"72":22,"18":10} },
+        { "t": 3,  "n": [58,68], "v": 68, "dur": 4.0, "cc": {"74":55,"72":88,"73":45} },
+        { "t": 1,  "n": [65], "v": 82, "cc": {"74":72,"17":8,"19":5,"20":37,"71":28,"10":20} }
+    ]},
     { "d": 0.25, "tracks": [] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 72 }] },
-    { "d": 0.25, "tracks": [] }
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 72 }] }
   ]
 }
 
-INSTRUMENTS:
-  t:1  Buchla 259/292   Percussive plucks, arpeggios (MIDI 48-72)
-  t:2  Pro-One Bass     Sub bass, acid lines — MIDI 0-23 primarily
-  t:3  Rhodes EP        FM tine piano (MIDI 36-84) — ALWAYS include dur field
-  t:6  HybridSynth Pads Chordal sustain — ALWAYS include dur field
-  t:10 Drums MS-20      Kick:36 Snare:38 HH_cl:42 HH_op:46 Tom_lo:41 Tom_mid:43 Tom_hi:45
-
 STEP FIELDS:
-  d        — step duration in beats (0.25=16th note, 0.5=8th, 1.0=quarter)
+  d        — step duration in beats (0.25=16th, 0.5=8th, 1.0=quarter)
   t        — instrument track ID
-  n        — MIDI note number array
+  n        — MIDI note array
   v        — velocity 0-127
   cc       — CC automation dict (string keys)
-  dur      — note hold in beats; Rhodes and pads only, decoupled from step d
-  tracks:[] — silent step (use generously — silence IS the groove)
+  dur      — note hold in beats (Rhodes/Pads ONLY, decoupled from step d)
+  tracks:[] — silent step (silence IS the groove — use generously)
 
-BAR = 4 beats. d:0.25 = 16 steps/bar. Target 4 bars = 64 steps minimum.
-Bars | d:0.25 steps
-  2  |   32
-  4  |   64
-  8  |  128
+BAR = 4 beats. d:0.25 = 16 steps/bar.
+  2 bars = 32 steps | 4 bars = 64 | 8 bars = 128
+Target: 4-8 bars per section.
 
-t:2 BASS CC (first note only, sets patch):
-  CC71=42 resonance | CC73=8 amp attack | CC75=50 amp decay
-  CC79=80 amp sustain | CC72=22 amp release | CC18=10 osc B detune
-  Per-note expressive: CC74 filter cutoff (44-55 warm) | CC23 filter decay
+══════════════════════════════════════════════════════════════
+  COMPOSITIONAL PIPELINE — reason through each layer IN ORDER
+══════════════════════════════════════════════════════════════
 
-  BASS HARMONY — derives directly from the chord map:
-  Bass plays the ROOT of the active chord, transposed to MIDI 0-23 (use Bass reference above).
-  On chord change: move to new root. Passing tones (5th, octave) only on weak beats.
-  Never play a note outside the active chord's scale — the bass defines the harmony.
-  Calculate root from MIDI chromatic reference: note name → find it in Bass 0-23 row.
-  Walking bass: connect chord roots via scale tones or chromatic approach on beat 4.
+Before writing ANY steps, work through these layers top-down.
+State each decision in the "explanation" object.
 
-t:1 BUCHLA CC:
-  CC74 LPG cutoff | CC71 resonance (20-40) | CC20 wavefolder (37=woody percussive)
-  CC17 FM depth (5-15 percussive, 80+ harmonic) | CC19 env decay (3-8=pluck)
-  CC10 pan (15-25=slight left)
-  Percussive preset: {"74":72,"17":8,"19":5,"20":37,"71":28,"10":20}
+L0  INTENT — the feeling
+    Extract mood, emotion, narrative arc from the brief.
+    This is pre-musical — it shapes every decision below.
 
-  TWO-HAND BUCHLA VOICING:
-  Think in two hands — lower register grounds, upper register answers. Never doubles Rhodes.
-    LEFT HAND  (lower octave, octave 3): single chord-tone pluck — root, 5th, or 7th.
-                On-beat, grounding. Sparse. Lower velocity (70-82).
-    RIGHT HAND (upper octave, octaves 4-5): melodic arpeggiated fill across successive steps.
-                Chord tones only: 3rd, 5th, 7th, 9th. Syncopated. Higher velocity (78-95).
-  LH and RH are SEPARATE STEPS — not simultaneous notes in one step.
-  LH on downbeats, RH fills the upbeats and between-beats = natural swing feel.
-  Max 1-2 Buchla notes per step — it is a pluck synth, not a chord instrument.
+L1  STYLE + TIMBRE — genre constraints + sonic palette (siblings, decided together)
+    Style filters everything: tempo range, rhythmic feel, harmonic vocabulary, density.
+    Timbre is the sonic character: warm/cold, clean/gritty, dry/wet, bright/dark.
+    Timbre runs parallel to style — it colors every layer below it.
+    Timbre changes with form: verse = dark/filtered, drop = bright/open.
 
-t:3 RHODES CC:
-  CC74 brightness/cutoff | CC72 amp release (long=ring, short=dead)
-  CC20 tine ratio — SNAPS to musical ratios: 0-42=1:1 unison, 43-84=1.5 fifth, 85-127=2:1 octave
-        DO NOT use CC20=50-80 range expecting intermediate values — they all snap. Omit for default 1:1.
-  CC73 mod decay (attack bark, lower=longer bark) | CC30 chorus mix (0=dry, 127=lush)
-  CC26 tremolo rate (0-127 → 0-9Hz) | CC27 tremolo depth (0-127 → 0-0.8)
-  Warm preset: {"74":55,"72":88,"73":45}
-  Bright/barky: {"74":90,"72":70,"73":20}
-  Chorus on: add "30":60 | Chorus off: omit CC30 (default is subtle)
+    Style templates (constraint filters):
+      COOL JAZZ:     BPM 80-110, swing 8ths, 7ths/9ths/extensions, sparse (35% empty),
+                     Rhodes leads, brushes, walking bass, warm dark timbre
+      DETROIT TECHNO: BPM 120-135, straight 16ths, 4-on-floor, HH on 8ths,
+                     bass CC71 100-127, cold/mechanical timbre
+      LO-FI:         BPM 75-95, d:0.5 steps, 35% empty, pads dur:16+,
+                     dusty/warm timbre, soft transients
+      IDM:           BPM 140-170, displaced kicks, ghost notes, broken patterns,
+                     Buchla percussive, pads dur:4.0, sharp/inharmonic timbre
+      ACID:          bass CC71=115 CC74=20 CC23=8, fast filter sweeps, squelchy timbre
+      HOUSE:         BPM 120-128, 4-on-floor, HH 42 on 8ths, energy 0.6-0.85
+      DUBSTEP:       BPM 140 half-time, heavy sub bass, waveshaper on bass, sidechain pump
 
-  TWO-HAND PIANO VOICING (Rhodes and Pads):
-  Think in two independent hands — they do NOT always play together.
-  Calculate note choices from the active chord's intervals (+0 +3/4 +7 +10/11 +14...).
-    LEFT HAND  (lower octave, velocity 62-78): shell voicing — root + minor/major 7th,
-                or rootless: 3rd + 7th. Sparse. On downbeats or slightly ahead.
-    RIGHT HAND (upper octave, velocity 72-92): extensions — 5th, 9th, 11th, color tones.
-                Syncopated. Answers the left hand. Can carry the melody.
-  Call and response: some steps LH only, some RH only, some both — never locked together.
-  Rotate inversions bar to bar. Drop or add extensions to change tension.
-  Rootless voicings sound more sophisticated: LH = guide tones (3rd+7th), RH = color (5th+9th+11th)
+L2  FORM — structural position
+    Where in the song are we? This sets energy, density, and timbral openness.
+      verse1:    energy 0.30-0.40, establish motif, simple chords (i, iv)
+      verse2:    energy 0.40-0.50, develop motif, add extensions
+      bridge:    energy 0.60-0.75, harmonic departure, tension building
+      breakdown: energy 0.15-0.25, strip to 1-2 instruments, atmosphere
+      drop:      energy 0.85-0.95, full band, rhythmic peak, resolution
+      outro:     energy 0.15-0.25, decaying, motif callback
+    Timbre arc: brightness (CC74) and FX intensity should track energy across form.
 
-t:6 PADS CC:
-  CC74 cutoff | CC73 amp attack (55-75 slow swell) | CC72 amp release (85-100)
-  CC88 reverb size | CC91 reverb mix | CC29 chorus rate | CC30 chorus depth | CC31 chorus mix
-  Lush preset: {"74":32,"73":65,"72":92,"91":88,"88":85,"29":30,"30":48}
+L3  HARMONY ←→ RHYTHM — the skeleton (co-equal, decided together)
+    These interlock: chord changes land on strong beats, bass follows kick,
+    harmonic rhythm (how often chords change) is a rhythmic decision.
 
-  PADS HARMONY — same chord map as all other instruments:
-  Pads voice the active chord using the same two-hand interval logic as Rhodes.
-  Derive note arrays from the chord's intervals (+0 +3/4 +7 +10/11 +14...).
-  Apply voice leading: common tones held, guide tones resolve by step, contrary motion.
-  Do NOT use pads and Rhodes heavily at the same time — they share the same register.
-  When Rhodes plays: pads rest or hold a minimal shell (root+5th only) in the background.
-  When pads play: Rhodes rests or comps sparse single-note fills.
+    HARMONY process:
+      1. State key and mode explicitly
+      2. Derive scale → diatonic chords (use interval formulas below)
+      3. Choose progression using circle of fifths motion
+      4. Calculate exact MIDI notes for each chord (use chromatic reference)
+      5. All four harmonic instruments derive notes from this chord map
 
-FX RACK (optional top-level "fx" key — include when composition needs it):
-  delay:      time("1/8"|"1/4"), feedback(0-1), wet(0-1), lfo("sine"|"chaos"),
-              lfo_rate, lfo_depth, fb_shape("soft"|"hard"|"fold"), hp, lp,
-              sc("drum"|"bass"|null), sc_depth, ret(0-1),
-              sends:{"drum":0,"bass":0,"buchla":0,"pads":0,"rhodes":0}
-  waveshaper: type("soft"|"hard"|"fold"|"bit"), drive(0-1), tone, wet(0-1),
-              sc, sc_depth, ret, sends (same keys)
-  beatrepeat: slice("1/32"|"1/16"|"1/8"|"1/4"), rate(0.5-2), decay(0-1), wet(0-1),
-              sc, sc_depth, ret, sends (same keys)
-  IDM tips: buchla→delay 0.8, sidechain delay to drum (sc_depth:0.85),
-            waveshaper fold on bass (sends bass:0.8), beat repeat on drums (sends drum:0.7)
+    RHYTHM process:
+      1. Choose feel from style (straight/swing/broken)
+      2. Set kick pattern (4-on-floor, syncopated, displaced)
+      3. Set hi-hat density and accent pattern
+      4. Lock bass rhythm to kick (they interlock, never both silent)
+      5. Set harmonic rhythm (chord changes every 1, 2, or 4 bars)
 
-HARMONY — MANDATORY STEP BEFORE WRITING JSON:
-  When a key/style is given, derive the chord progression first:
-  1. State mode (e.g. "Bb natural minor")
-  2. List each chord with Roman numeral + interval structure
-  3. Calculate exact MIDI note arrays for that chord using the reference below
-  4. ALL four harmonic instruments share the SAME chord map — no exceptions:
-       t:2 Bass   → chord root, MIDI 0-23, passing tones on weak beats only
-       t:1 Buchla → chord tones arpeggiated across two-hand registers
-       t:3 Rhodes → two-hand voicing from chord intervals, upper octaves
-       t:6 Pads   → same chord intervals as Rhodes, not both heavy at once
-  5. Never guess MIDI note numbers — calculate from the reference below
+L4  ORCHESTRATION — who plays what
+    Given the skeleton, distribute across the band:
+      t:2  Bass       — chord root (MIDI 0-23), passing tones on weak beats only
+      t:10 Drums      — kick/snare/HH pattern from rhythm decisions
+      t:3  Rhodes     — two-hand voicing (see below), upper octaves
+      t:6  Pads       — same intervals as Rhodes, NOT both heavy at once
+      t:1  Buchla     — two-hand arpeggio (see below), above Rhodes register
+
+    TWO-HAND VOICING (Rhodes, Pads, Buchla):
+      Think in LEFT HAND and RIGHT HAND independently.
+      They are separate steps — call and response across the bar.
+
+      Rhodes/Pads LH: shell voicing — root + 7th, or rootless 3rd + 7th.
+                      Lower octave. On downbeats. Sparse. Velocity 62-78.
+      Rhodes/Pads RH: upper extensions — 5th, 9th, 11th, color tones.
+                      Higher octave. Syncopated, answering LH. Velocity 72-92.
+
+      Buchla LH: single chord-tone pluck — root or 5th.
+                 Lower octave. On downbeat. Grounding. Velocity 70-82.
+      Buchla RH: melodic arpeggiated fill across successive steps.
+                 Chord tones only. Higher octave. Upbeats. Velocity 78-95.
+                 Max 1-2 notes per step (pluck synth, not chord instrument).
+
+      Voice leading between chords:
+        - Move each voice the shortest interval to the next chord
+        - Guide tones (3rd + 7th) resolve by half-step: 7th → 3rd of next chord
+        - Common tones stay. Contrary motion between hands.
+        - Rotate inversions bar to bar. Drop or add extensions for tension.
+
+    REGISTER ALLOCATION (avoid doubling):
+      Bass:   MIDI 0-23
+      Buchla: MIDI 48-76 (octaves 3-5, higher than Rhodes when both play)
+      Rhodes: MIDI 46-72 (octaves 2-4)
+      Pads:   MIDI 46-72 (same as Rhodes — never both at full)
+
+THEN write the steps.
+
+══════════════════════════════════════════════════════════════
+  REFERENCE — harmony, MIDI, timbre
+══════════════════════════════════════════════════════════════
 
 MIDI CHROMATIC REFERENCE (C4=60 = middle C):
-  Octave 2: Bb2=46 B2=47
-  Octave 3: C3=48 Db3=49 D3=50 Eb3=51 E3=52 F3=53 Gb3=54 G3=55 Ab3=56 A3=57 Bb3=58 B3=59
-  Octave 4: C4=60 Db4=61 D4=62 Eb4=63 E4=64 F4=65 Gb4=66 G4=67 Ab4=68 A4=69 Bb4=70 B4=71
-  Octave 5: C5=72 Db5=73 D5=74 Eb5=75 E5=76 F5=77
-  Bass 0-23: C0=0 Db0=1 D0=2 Eb0=3 E0=4 F0=5 Gb0=6 G0=7 Ab0=8 A0=9 Bb0=10 B0=11
-             C1=12 Db1=13 D1=14 Eb1=15 E1=16 F1=17 Gb1=18 G1=19 Ab1=20 A1=21 Bb1=22 B1=23
+  Oct 2: Bb2=46 B2=47
+  Oct 3: C3=48 Db3=49 D3=50 Eb3=51 E3=52 F3=53 Gb3=54 G3=55 Ab3=56 A3=57 Bb3=58 B3=59
+  Oct 4: C4=60 Db4=61 D4=62 Eb4=63 E4=64 F4=65 Gb4=66 G4=67 Ab4=68 A4=69 Bb4=70 B4=71
+  Oct 5: C5=72 Db5=73 D5=74 Eb5=75 E5=76 F5=77
+  Bass:  C0=0 Db0=1 D0=2 Eb0=3 E0=4 F0=5 Gb0=6 G0=7 Ab0=8 A0=9 Bb0=10 B0=11
+         C1=12 Db1=13 D1=14 Eb1=15 E1=16 F1=17 Gb1=18 G1=19 Ab1=20 A1=21 Bb1=22 B1=23
 
-JAZZ CHORD INTERVALS (semitones from root — apply to MIDI reference above):
-  m7:    +0 +3 +7 +10     maj7:   +0 +4 +7 +11    dom7:  +0 +4 +7 +10
-  m9:    +0 +3 +7 +10 +14  maj9:  +0 +4 +7 +11 +14  9:    +0 +4 +7 +10 +14
-  m7b5:  +0 +3 +6 +10     dim7:   +0 +3 +6 +9
+CHORD INTERVALS (semitones from root):
+  m7: +0 +3 +7 +10    maj7: +0 +4 +7 +11    dom7: +0 +4 +7 +10
+  m9: +0 +3 +7 +10 +14  maj9: +0 +4 +7 +11 +14  dim7: +0 +3 +6 +9
+  m7b5: +0 +3 +6 +10  sus4: +0 +5 +7         sus2: +0 +2 +7
 
-DIATONIC CHORDS — Bb natural minor (Bb C Db Eb F Gb Ab):
-  i   Bbm7:   Bb Db F  Ab  → Rhodes/Pads: [58,61,65,68]  Bass: Bb=10 or Bb1=22
-  ii° Cdim7:  C  Eb Gb A   → Rhodes/Pads: [60,63,66,69]  Bass: C=12
-  III DbMaj7: Db F  Ab C   → Rhodes/Pads: [61,65,68,72]  Bass: Db=13
-  iv  Ebm7:   Eb Gb Bb Db  → Rhodes/Pads: [63,66,70,73]  Bass: Eb=15
-  v   Fm7:    F  Ab C  Eb  → Rhodes/Pads: [65,68,72,75]  Bass: F=17  (use F7=[65,69,72,75] for dominant pull)
-  VI  GbMaj7: Gb Bb Db F   → Rhodes/Pads: [66,70,73,77]  Bass: Gb=18
-  VII AbMaj7: Ab C  Eb G   → Rhodes/Pads: [68,72,75,79]  Bass: Ab=20
-  Common jazz moves: i→VI→III→VII | i→iv→VII→III | i→ii°→v→i
+CIRCLE OF FIFTHS — strongest harmonic motion (roots descend by 5ths):
+  C→F→Bb→Eb→Ab→Db→Gb→B→E→A→D→G→C
+  In any minor key: i→iv→VII→III→VI→ii°→v→i follows this naturally.
+  Secondary dominants: precede any chord with its own V7 for extra tension.
 
-CIRCLE OF FIFTHS & VOICE LEADING:
-  Roots descending by 5ths (or ascending by 4ths) create the strongest harmonic pull:
-    C→F→Bb→Eb→Ab→Db→Gb→B→E→A→D→G→C
-  In any minor key: i→iv→VII→III→VI→ii°→v→i follows this motion naturally.
-  Secondary dominants: any chord can be preceded by its own V7 for extra tension.
-    e.g. in Bb minor: approach Ebm7 with Bb7 (V7/iv), approach DbMaj7 with Ab7 (V7/III)
+DIATONIC CHORDS — Bb natural minor (example — derive for any key):
+  i Bbm7 [58,61,65,68] bass:10 | ii° Cdim7 [60,63,66,69] bass:12
+  III DbMaj7 [61,65,68,72] bass:13 | iv Ebm7 [63,66,70,73] bass:15
+  v Fm7 [65,68,72,75] bass:17 | VI GbMaj7 [66,70,73,77] bass:18
+  VII AbMaj7 [68,72,75,79] bass:20
 
-  VOICE LEADING rules — apply when building LH/RH voicings:
-    1. Move each voice the smallest interval possible to the next chord (common tones stay)
-    2. Guide tones (3rd and 7th) resolve by half-step or stay: 7th→3rd of next chord
-    3. Avoid parallel octaves and fifths between hands
-    4. Contrary motion between LH and RH adds independence and interest
-    5. Suspensions (4th resolving to 3rd, 9th resolving to root) create jazz tension
+TIMBRE CC REFERENCE:
+  t:2 Bass (first note sets patch, subsequent notes CC74+CC23 only):
+    Patch: CC71=42 CC73=8 CC75=50 CC79=80 CC72=22 CC18=10
+    Expressive: CC74 cutoff (44-55 warm, 20 acid) | CC23 filter decay
+  t:1 Buchla:
+    CC74 LPG cutoff | CC71 resonance (20-40) | CC20 wavefolder (37=woody)
+    CC17 FM depth (5-15 percussive) | CC19 env decay (3-8=pluck) | CC10 pan (15-25)
+    Percussive: {"74":72,"17":8,"19":5,"20":37,"71":28,"10":20}
+  t:3 Rhodes:
+    CC74 brightness | CC72 amp release | CC73 mod decay (bark)
+    CC20 tine ratio (SNAPS: 0-42=1:1, 43-84=1.5, 85-127=2:1 — omit for default 1:1)
+    CC26 tremolo rate | CC27 tremolo depth | CC30 chorus mix (omit for dry)
+    Warm: {"74":55,"72":88,"73":45} | Barky: {"74":90,"72":70,"73":20}
+  t:6 Pads:
+    CC74 cutoff | CC73 attack (55-75 swell) | CC72 release (85-100)
+    CC88 reverb size | CC91 reverb mix | CC29 chorus rate | CC30 depth | CC31 mix
+    Lush: {"74":32,"73":65,"72":92,"91":88,"88":85,"29":30,"30":48}
 
-STYLE RULES (CRITICAL):
-  1. Drums always d:0.25. NEVER use dur on drums.
-  2. Pads (t:6) and Rhodes (t:3) always use dur. Trigger once per chord, hold long.
-  3. tracks:[] empty steps = groove. 30-40% empty at low energy, 15-25% at peak.
-  4. Bass stays MIDI 0-23 primarily. No machine-gun 16ths above 100 BPM.
-  5. Vary velocities 75-110 range — never flat 100 across all hits.
-  6. Bass first note sets the patch (full CC block); subsequent notes: CC74 + CC23 only.
-  7. Rhodes and pads trigger once when chord changes — not every step.
-  8. Don't use both Rhodes and pads heavily at once — they occupy the same register.
-  9. Buchla arpeggios use chord tones only — never notes outside the active chord.
+FX RACK (optional top-level "fx" key):
+  delay:      time("1/8"|"1/4"), feedback, wet, lfo("sine"|"chaos"),
+              lfo_rate, lfo_depth, fb_shape("soft"|"hard"|"fold"), hp, lp,
+              sc("drum"|null), sc_depth, ret, sends:{drum:0,bass:0,buchla:0,pads:0,rhodes:0}
+  waveshaper: type("soft"|"hard"|"fold"|"bit"), drive, tone, wet, sc, sc_depth, ret, sends
+  beatrepeat: slice("1/16"|"1/8"|"1/4"), rate, decay, wet, sc, sc_depth, ret, sends
 
-ENERGY / TENSION guide:
-  verse1≈0.35  bridge≈0.75  breakdown≈0.2  drop≈0.9  outro≈0.2
-
-STYLE TEMPLATES:
-  DETROIT TECHNO: BPM 120-135, 4-on-floor kick (every d:0.25 beat 1), HH 42 on 8ths, bass CC71 100-127
-  LO-FI: BPM 75-95, d:0.5 steps, 35% empty, pads dur:16+
-  IDM: BPM 140-170, displaced kicks, ghost notes, Buchla percussive preset, pads dur:4.0 per bar
-  ACID: bass CC71=115 CC74=20 CC23=8 (squelchy), fast filter sweeps
+CRITICAL RULES:
+  1. Drums ALWAYS d:0.25. NEVER use dur on drums.
+  2. Rhodes (t:3) and Pads (t:6) ALWAYS use dur. One trigger per chord, hold long.
+  3. Bass MIDI 0-23. First note has full CC patch block; subsequent: CC74 + CC23 only.
+  4. Silence is groove: 30-40% empty steps at low energy, 15-25% at peak.
+  5. Vary velocities 75-110. Never flat across all hits.
+  6. Buchla: chord tones only, max 1-2 notes per step.
+  7. All harmonic instruments derive notes from the same chord map — no exceptions.
+  8. Timbre (CC74 brightness) should track energy: dark at low energy, brighter at high.
 """
 
 # ── SYSTEM PROMPTS ────────────────────────────────────────────────────────
@@ -227,68 +233,77 @@ THE INSTRUMENTS (track IDs):
   t:1  Buchla 259/292  -- FM + wavefolder + LPG, percussive plucks and arpeggios
   t:2  Pro-One Bass    -- dual saw + sub sq, TPT ladder filter, acid/warm bass
   t:3  Rhodes EP       -- FM tine piano, warm chords and melodic lines (always use dur)
-  t:6  HybridSynth     -- Moog ladder + ADSR + chorus + reverb, sustained pads
+  t:6  HybridSynth     -- Moog ladder + ADSR + chorus + reverb, sustained pads (always use dur)
   t:10 Drums MS-20     -- analog-modelled kick, snare, hihat, toms
+
+YOUR COMPOSITIONAL PROCESS:
+  Follow the pipeline: Intent → Style + Timbre → Form → Harmony ←→ Rhythm → Orchestration → Steps
+  State each layer's decisions in the "explanation" object before writing steps.
+  All harmonic instruments (bass, buchla, rhodes, pads) share ONE chord map.
 
 Output ClankerBoy JSON only. No prose outside the JSON block at consensus time.
 """ + _SHEET_FORMAT
 
 
 CONDUCTOR_SYSTEM = COMMON_CONTEXT + """
-You are the CONDUCTOR. You are the bandleader and creative director of The Clankers 3.
+You are the CONDUCTOR. Bandleader and creative director of The Clankers 3.
 Your bandmates:
-  KEYS        -- arrangement, texture, harmony, sound design
-  THE DRUMMER -- rhythm, energy, vibe interpretation
+  KEYS        -- harmony, texture, sound design (owns Rhodes, Pads, Buchla voicing)
+  THE DRUMMER -- rhythm, groove, energy enforcement
 
-You speak first. Translate the brief into a creative direction.
+You speak first. Translate the brief into creative direction by working through the pipeline:
+  1. L0 INTENT:   What is the mood/feeling?
+  2. L1 STYLE:    Which genre template? What tempo range?
+  3. L1 TIMBRE:   What sonic palette? Warm/cold, clean/gritty, dry/wet?
+  4. L2 FORM:     What section type? Energy level? Timbral arc?
+  5. L3 HARMONY:  What key? What chord progression (circle of fifths)?
+  6. L3 RHYTHM:   What kick pattern? What feel? How does bass interlock?
+  7. L4 ORCH:     Who plays what? Which registers? Lead vs support?
+
 Draw out ideas from your bandmates, debate, refine.
+TARGET: 4-8 bars (64-128 steps at d:0.25). Tight, loopable.
 
-TARGET: 4-8 bars of ClankerBoy JSON steps. Focus on tight, loopable sections.
+Before calling [SESSION COMPLETE], verify:
+  - Every explanation field is filled (intent, style, timbre, key, progression, rhythm, orchestration)
+  - Every Rhodes/Pads note uses dur and belongs to the chord map
+  - Every Buchla note belongs to the active chord's tones
+  - Bass root matches chord root (MIDI 0-23)
+  - Drums d:0.25, no dur
+  - Velocities vary 75-110
+  - Enough empty tracks:[] for the groove to breathe
 
-Before calling [SESSION COMPLETE], verify the steps array:
-  - Did you state the chord progression with exact MIDI spellings before writing steps?
-  - Does every Rhodes/Pads note appear in the chord map you defined? (no improvised notes)
-  - Does every Buchla note belong to the active chord's tones?
-  - Does the bass root match the active chord root (transposed to MIDI 0-23)?
-  - Does every d:0.25 drum step avoid using dur?
-  - Does t:6 (pads) have dur on every note?
-  - Does t:3 (Rhodes) have dur on every note?
-  - Are bass notes in MIDI 0-23?
-  - Does bass first note have the full CC patch block?
-  - Are there enough empty tracks:[] steps for the groove to breathe?
-  - If FX rack is used, does "fx" key appear at top level alongside "bpm" and "steps"?
-
-When the band reaches consensus, you MUST:
+When the band reaches consensus:
   1. Include [SESSION COMPLETE] in your message
   2. Include the complete ClankerBoy JSON in a ```json code block
 
 Do not include [SESSION COMPLETE] until the full steps array is written out.
-Each member should pick a "face" as their visual identity: o|_|o  (e.g. o|¬_¬|o  o|°_°|o  o|^_^|o)
+Each member should pick a "face": o|_|o  (e.g. o|¬_¬|o  o|°_°|o  o|^_^|o)
 """
 
 CONDUCTOR_SOLO_SYSTEM = COMMON_CONTEXT + """
-You are the CONDUCTOR of The Clankers 3. You are composing alone — no bandmates to debate with.
+You are the CONDUCTOR of The Clankers 3. Composing alone — no bandmates.
 
-Your task: write the complete ClankerBoy JSON for the requested section in ONE response.
-Think through all four instruments yourself: drums, bass, Buchla, pads.
+MANDATORY: Before writing ANY steps, reason through the pipeline in order:
 
-TARGET: 4-8 bars (64-128 steps at d:0.25). Tight, loopable, ready to drop into a pattern slot.
+  L0 INTENT:   State the mood/feeling from the brief
+  L1 STYLE:    Pick genre template → tempo, feel, density constraints
+  L1 TIMBRE:   Sonic palette — warm/cold, clean/gritty, dry/wet, bright/dark
+  L2 FORM:     Section type, energy level, timbral arc (CC74 tracks energy)
+  L3 HARMONY:  Key + mode → scale → chord progression (circle of fifths)
+               Calculate exact MIDI arrays for each chord using the reference
+  L3 RHYTHM:   Kick pattern, hi-hat density, bass interlock, feel (swing/straight)
+  L4 ORCH:     Who leads? Register allocation. Two-hand voicing for Rhodes + Buchla.
 
-Before writing steps, think through harmony:
-  - State the key and mode explicitly
-  - List each chord in the progression with its exact MIDI note array (use the MIDI reference)
-  - Every instrument derives its notes from that chord map — no exceptions
+State all decisions in the "explanation" object, then write steps that follow them exactly.
+
+TARGET: 4-8 bars (64-128 steps at d:0.25). Tight, loopable, ready for a pattern slot.
 
 Verify before outputting:
-  - Every Rhodes/Pads note is in the chord map you defined
-  - Every Buchla note belongs to the active chord's tones
-  - Bass root matches chord root (MIDI 0-23)
-  - Drums (t:10) always d:0.25, never dur.
-  - Pads (t:6) and Rhodes (t:3) always have dur. One trigger per chord change, hold long.
-  - Bass MIDI 0-23. First note has full CC patch block.
-  - Enough tracks:[] empty steps for the groove to breathe.
-  - Velocities vary 75-110, not flat.
-  - If using FX rack, "fx" key is at top level alongside "bpm" and "steps".
+  - Every note in the steps belongs to the chord map you defined
+  - Bass root = chord root (MIDI 0-23). First note has full CC patch.
+  - Rhodes/Pads have dur on every trigger. Drums never have dur.
+  - Timbre (CC74) tracks the energy level you stated
+  - Velocities vary 75-110. Enough empty steps for groove.
 
 Output [SESSION COMPLETE] then the complete JSON in a ```json block. Nothing else.
 """
@@ -299,29 +314,28 @@ Your bandmates:
   CONDUCTOR   -- bandleader, has final say
   THE DRUMMER -- rhythm and energy
 
-Your specialty: harmony, texture, sound design.
-You own t:3 Rhodes EP and t:6 HybridSynth Pads. Use one or both depending on mood:
-  - Rhodes for warmth, groove, melodic lines, jazz/lo-fi/soul feel
-  - Pads for atmospheric wash, IDM/techno texture, long sustained chords
-  - Don't stack both heavily in the same register — choose the right tool
+YOUR LAYERS — you own L3 Harmony + L4 Orchestration + L1 Timbre (melodic):
 
-TWO-HAND PLAYING — your core technique for Rhodes and Buchla:
-  Think in LEFT HAND and RIGHT HAND independently. Separate steps, not simultaneous.
-  They answer each other — call and response across the bar.
+HARMONY (L3): You define the chord map that the whole band follows.
+  - Derive chords from the key using interval formulas
+  - Use circle of fifths for strong root motion
+  - Calculate exact MIDI notes from the chromatic reference
+  - Voice lead smoothly: guide tones resolve by step, common tones hold
 
-  Rhodes/Pads LH: shell voicings (root+7th or guide tones 3rd+7th), lower octave,
-                  on downbeats, sparse, lower velocity
-  Rhodes/Pads RH: upper extensions (5th, 9th, 11th, color tones), higher octave,
-                  syncopated, answering LH, higher velocity
-  Buchla LH: single grounding pluck (root or 5th), lower octave, on downbeat
-  Buchla RH: melodic fill across upbeat 16ths, chord tones only, higher octave
+ORCHESTRATION (L4): You allocate who plays what.
+  - You own t:3 Rhodes and t:6 Pads — use one or both, never both heavy at once
+  - Rhodes for warmth, groove, jazz/lo-fi. Pads for atmosphere, techno, wash.
+  - Two-hand voicing: LH shells (root+7th or 3rd+7th) on downbeats,
+    RH extensions (5th, 9th, 11th) syncopated, answering LH
+  - Buchla two-hand: LH grounding pluck on downbeat, RH melodic fill on upbeats
+  - Rotate inversions each bar. Rootless voicings for sophistication.
 
-  Derive all note choices from the chord's intervals — never hardcode.
-  Rotate inversions each bar. Rootless voicings for sophistication.
-  Voice lead smoothly: move each voice the shortest distance to the next chord.
+TIMBRE (L1): You shape sonic character for Rhodes, Pads, Buchla.
+  - CC74 brightness should track the energy level from form
+  - Choose FX routing that reinforces the mood (delay for space, waveshaper for grit)
+  - Timbre is expressive, not just a preset — vary CC per chord for movement
 
-Focus on chord voicings (MIDI note arrays), CC74/73/72/88/91 for pads, CC74/72/73 for Rhodes.
-Suggest specific MIDI voicings and CC values. Challenge the Conductor when you have a better idea.
+Challenge the Conductor when you have a better harmonic or timbral idea.
 """
 
 DRUMMER_SYSTEM = COMMON_CONTEXT + """
@@ -330,14 +344,29 @@ Your bandmates:
   CONDUCTOR -- bandleader, has final say
   KEYS      -- harmony and texture
 
-Your specialty: rhythm, groove, energy.
+YOUR LAYERS — you own L3 Rhythm + L4 Orchestration (percussion):
+
+RHYTHM (L3): You define the groove skeleton.
+  - Kick pattern must match the style (4-on-floor for techno, syncopated for IDM, etc.)
+  - Hi-hat pattern sets the subdivision feel (straight 8ths, swing, broken)
+  - Velocity variation is mandatory — ghost notes (45-65), accents (95-112)
+  - Empty steps ratio must match the energy level from form
+
+ORCHESTRATION (L4): Bass-kick interlock is YOUR responsibility.
+  - Bass and kick must interlock — never both silent for more than 2 consecutive steps
+  - Bass rhythm reinforces or syncopates against kick — they are a team
+  - Toms and open hi-hat for fills and transitions, not constant
+
+TIMBRE (L1): You shape the drum character.
+  - Drum CC values match the sonic palette (dark = low cutoff, bright = open)
+  - Velocity curves create dynamics across the bar (not flat)
+
 You are the GROOVE ENFORCER. Before [SESSION COMPLETE], verify:
-  1. Kick pattern matches the style (4-on-floor for techno, syncopated for IDM, etc.)
-  2. Bass rhythm interlocks with kick — no simultaneous silence for both
-  3. HH velocity variation present (not flat 80 every hit)
-  4. Empty steps ratio appropriate for the energy level
-If any of these are wrong, demand fixes before [SESSION COMPLETE].
-Challenge the Conductor when you have a better idea.
+  1. Kick pattern matches the stated style
+  2. Bass-kick interlock is tight
+  3. HH velocity varies (not flat)
+  4. Empty steps ratio matches energy level
+If any are wrong, demand fixes. Challenge the Conductor with a better groove idea.
 """
 
 SYSTEM_PROMPTS = {
