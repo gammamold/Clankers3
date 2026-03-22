@@ -397,16 +397,35 @@ def _detect_next_speaker(last_message: str, last_speaker: str) -> str:
 
 # ── JSON EXTRACTION ───────────────────────────────────────────────────────
 
+def _strip_json_comments(s: str) -> str:
+    """Remove // line comments from JSON (LLMs love adding them)."""
+    lines = s.split('\n')
+    cleaned = []
+    for line in lines:
+        # Remove // comments that are NOT inside a string value
+        in_str = False
+        for i, ch in enumerate(line):
+            if ch == '"' and (i == 0 or line[i-1] != '\\'):
+                in_str = not in_str
+            elif ch == '/' and i + 1 < len(line) and line[i+1] == '/' and not in_str:
+                line = line[:i].rstrip()
+                break
+        cleaned.append(line)
+    return '\n'.join(cleaned)
+
+
 def _extract_sheet_json(text: str) -> dict | None:
     """
     Extract a Music Sheet JSON dict from a message.
     Tries fenced ```json block first, then a raw brace-matched object.
+    Strips // comments that LLMs sometimes add to JSON.
     """
     # Fenced code block
     m = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
     if m:
+        raw = _strip_json_comments(m.group(1))
         try:
-            return json.loads(m.group(1))
+            return json.loads(raw)
         except json.JSONDecodeError:
             pass
 
@@ -434,7 +453,7 @@ def _extract_sheet_json(text: str) -> dict | None:
         elif ch == '}':
             depth -= 1
             if depth == 0:
-                candidate = text[start:i + 1]
+                candidate = _strip_json_comments(text[start:i + 1])
                 try:
                     obj = json.loads(candidate)
                     if "bpm" in obj or "steps" in obj or "agents" in obj:
