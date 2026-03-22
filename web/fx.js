@@ -394,16 +394,14 @@ export class BeatRepeat {
     try {
       await this.ctx.audioWorklet.addModule('./worklets/beat-repeat-worklet.js');
       this._node = new AudioWorkletNode(this.ctx, 'beat-repeat', {
-        numberOfInputs:  1,
-        numberOfOutputs: 1,
-        channelCount: 1,
+        numberOfInputs:     1,
+        numberOfOutputs:    1,
+        channelCount:       2,
+        channelCountMode:   'explicit',
+        channelInterpretation: 'speakers',
       });
       this._node.port.onmessage = ({ data }) => {
-        if (data.event === 'recordDone') {
-          this._armed  = false;
-          this._active = true;
-          this.onStatusChange?.('repeat');
-        } else if (data.event === 'loopDone') {
+        if (data.event === 'loopDone') {
           this._active = false;
           this.onStatusChange?.('idle');
         }
@@ -411,21 +409,24 @@ export class BeatRepeat {
       this.input.connect(this._node);
       this._node.connect(this.output);
       this._ready = true;
+      // Apply any params set before worklet was ready
+      this._node.port.postMessage({ cmd: 'set',
+        rate: this._rate, decay: this._decay, wet: this._wet });
     } catch (e) {
       console.warn('[BeatRepeat] worklet load failed:', e);
     }
   }
 
-  // Arm: start recording a slice of N beats
+  // Arm: grab last N beats from ring buffer and loop immediately
   arm(bpm, sliceBeats) {
     if (!this._ready) return;
     this._bpm      = bpm;
     this._sliceBts = sliceBeats;
     const samples  = Math.round(sliceBeats * (60 / bpm) * this.ctx.sampleRate);
-    this._node.port.postMessage({ cmd: 'record', samples });
-    this._armed = true;
-    this._active = false;
-    this.onStatusChange?.('record');
+    this._node.port.postMessage({ cmd: 'arm', samples });
+    this._armed  = false;
+    this._active = true;
+    this.onStatusChange?.('repeat');
   }
 
   gate() {

@@ -1456,9 +1456,8 @@ function initFxUI() {
   const gateBtn = document.getElementById('fx2-gate');
 
   repeat.onStatusChange = (state) => {
-    armBtn.classList.toggle('armed',  state === 'record');
     armBtn.classList.toggle('active', state === 'repeat');
-    armBtn.textContent = state === 'record' ? 'REC…' : state === 'repeat' ? 'LOOP' : 'ARM';
+    armBtn.textContent = state === 'repeat' ? 'LOOP' : 'ARM';
   };
 
   armBtn.addEventListener('click', () => {
