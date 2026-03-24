@@ -33,7 +33,7 @@ const THRESH: f32 = 1e-5;
 pub struct RhodesParams {
     pub brightness:     f32,  // peak FM index at velocity=1  (0.5–8.0)
     pub amp_decay:      f32,  // amplitude decay time at C4, seconds
-    pub mod_decay:      f32,  // mod-index decay time (fraction of amp_decay, 0.05–0.5)
+    pub mod_decay:      f32,  // mod-index decay time in seconds (0.02–0.6), independent of amp
     pub harm_ratio:     f32,  // modulator frequency ratio (0.9–2.0)
     pub key_scale:      f32,  // how much higher notes decay faster (0–1)
     pub tremolo_rate:   f32,  // Hz
@@ -48,7 +48,7 @@ impl Default for RhodesParams {
         RhodesParams {
             brightness:    3.0,
             amp_decay:     2.5,
-            mod_decay:     0.15,  // bark lasts ~15% of amp decay time
+            mod_decay:     0.18,  // bark duration in seconds (~180ms), independent of amp
             harm_ratio:    1.0,
             key_scale:     0.55,
             tremolo_rate:  2.2,   // gentle default — CC26/CC27 to taste
@@ -132,7 +132,8 @@ impl RhodesVoice {
         let key_factor = (1.0 - semitones_from_c4 * p.key_scale / 48.0).clamp(0.25, 2.5);
 
         let amp_decay_s  = p.amp_decay  * key_factor;
-        let mod_decay_s  = amp_decay_s  * p.mod_decay;
+        // Bark is independent of amp decay — only key_factor scales it
+        let mod_decay_s  = p.mod_decay  * key_factor;
 
         self.amp_coef  = decay_coef(amp_decay_s);
         self.mod_coef  = decay_coef(mod_decay_s.max(0.02));
@@ -211,8 +212,9 @@ impl RhodesVoice {
             let sample = raw * trem;
 
             // ── Stereo via chorus ──────────────────────────────────────────
+            // depth 0.04 → ±0.6ms sweep → ~±5 cents, proper subtle chorus
             let (cl, cr) = self.chorus.process(sample, sample,
-                                               p.chorus_rate, 0.5, p.chorus_mix);
+                                               p.chorus_rate, 0.04, p.chorus_mix);
 
             *sl += cl * pan_l;
             *sr += cr * pan_r;

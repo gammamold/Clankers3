@@ -146,7 +146,7 @@ fn parse_bass_params(cc_json: &str) -> BassParams {
             79 => p.amp_sustain    = n,
             72 => p.amp_release    = 0.01  + n * 1.99,
             23 => p.flt_decay      = 0.01  + n * 0.99,
-            18 => p.detune_cents   = (n * 100.0) - 50.0,
+            18 => p.detune_cents   = n * 40.0,            // 0–40 cents (unipolar thickening)
             5  => p.glide_time     = n * 0.5,
             _  => {}
         }
@@ -201,7 +201,7 @@ impl ClankersBuchla {
 ///   CC74  Brightness  (peak FM index 0.5–8)
 ///   CC72  Decay       (amp decay 0.5–6 s at C4)
 ///   CC20  Tine ratio  (modulator harmonic ratio 0.9–2.0)
-///   CC73  Bark time   (mod-index decay fraction, lower = longer bark)
+///   CC73  Bark time   (mod-index decay 20ms–600ms, independent of amp decay)
 ///   CC26  Tremolo rate  (0–9 Hz)
 ///   CC27  Tremolo depth (0–0.8)
 ///   CC29  Chorus rate   (0.1–5 Hz)
@@ -265,12 +265,12 @@ fn parse_rhodes_params(cc_json: &str) -> RhodesParams {
     for (key, val) in parse_cc_map(cc_json) {
         let n = val / 127.0;
         match key {
-            74 => p.brightness    = 0.5 + n * 7.5,          // 0.5–8.0 FM index
+            74 => p.brightness    = 0.5 + n.sqrt() * 4.35,  // sqrt curve: 0.5–4.85; CC42≈3.0 (default)
             72 => p.amp_decay     = 0.5 + n * 5.5,          // 0.5–6 s
             // CC20 snaps to musical ratios only — avoids inharmonic beating
             // 0-42 = 1.0 (unison), 43-84 = 1.5 (fifth), 85-127 = 2.0 (octave)
             20 => p.harm_ratio    = if val < 43.0 { 1.0 } else if val < 85.0 { 1.5 } else { 2.0 },
-            73 => p.mod_decay     = 0.03 + (1.0 - n) * 0.47, // lower CC = shorter bark
+            73 => p.mod_decay     = 0.02 + n * 0.58,          // 20ms–600ms absolute bark time
             55 => p.key_scale     = n,
             26 => p.tremolo_rate  = n * 9.0,                 // 0–9 Hz
             27 => p.tremolo_depth = n * 0.8,

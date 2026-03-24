@@ -5,11 +5,12 @@
   <title>Clankers 3</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { background:#111; color:#eee; font-family:monospace; padding:1.5rem; margin:0; }
+    body { background:#111; color:#eee; font-family:monospace; padding:1.5rem; margin:0; display:flex; flex-direction:column; }
     h1 { color:#f90; margin:0 0 1.2rem; font-size:1.3rem; letter-spacing:.1em; }
 
     /* ── Instruments ── */
-    .inst { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; }
+    .inst-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:.6rem; margin-bottom:1rem; }
+    .inst { border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; min-width:0; }
     .inst-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; margin-bottom:.5rem; display:flex; align-items:center; gap:.5rem; }
     .inst-hdr span { color:#f90; }
     .ms-btn { font-size:.6rem; padding:.1rem .35rem; border:1px solid #333; background:#1a1a1a;
@@ -42,7 +43,7 @@
     /* ── Knobs ── */
     .knob-row { display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-start; }
     .knob-group { display:flex; gap:.4rem; align-items:flex-start; padding-right:.6rem;
-                  border-right:1px solid #1e1e1e; }
+                  border-right:1px solid #1e1e1e; flex-wrap:wrap; min-width:0; }
     .knob-group:last-child { border-right:none; }
     .knob-group-label { font-size:.6rem; color:#444; writing-mode:vertical-rl;
                         text-orientation:mixed; padding-right:.2rem; align-self:center; }
@@ -67,7 +68,7 @@
     .viz-step.viz-active.viz-has-event { background:#f90; border-color:#f90; }
 
     /* ── Sequencer ── */
-    .seq-section { margin-bottom:1rem; }
+    .seq-section { margin-bottom:1rem; order:3; }
     .seq-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
     #seq-controls { display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; margin-bottom:.5rem; }
     #bpm-val { color:#f90; min-width:2.5rem; display:inline-block; }
@@ -94,7 +95,7 @@
     .bake-btn:hover { background:#221800; border-color:#6a5000; }
 
     /* ── Chat ── */
-    .chat-section { max-width:700px; }
+    .chat-section { max-width:700px; order:5; }
     .chat-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
     #chat-messages { background:#0a0a0a; border:1px solid #1a1a1a; padding:.5rem;
                      height:9rem; overflow-y:auto; font-size:.72rem; margin-bottom:.4rem; }
@@ -110,14 +111,12 @@
 
     /* ── Log ── */
     #log { margin-top:1rem; font-size:.65rem; color:#333; white-space:pre;
-           max-height:6rem; overflow-y:auto; }
+           max-height:6rem; overflow-y:auto; order:6; }
 
     /* ── FX Rack ── */
-    .fx-section { margin-bottom:1rem; }
-    .fx-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
-    .fx-rack { display:flex; flex-wrap:wrap; gap:.6rem; }
-    .fx-slot { border:1px solid #1e1e1e; border-radius:4px; padding:.5rem .7rem;
-               min-width:220px; flex:1; max-width:340px; }
+    .fx-slot { border:1px solid #1e1e1e; border-radius:4px; padding:.5rem .7rem; min-width:0; }
+    .grid-sep { grid-column:1/-1; font-size:.68rem; color:#444; letter-spacing:.1em;
+                padding:.4rem 0 .1rem; border-top:1px solid #1a1a1a; margin-top:.1rem; }
     .fx-slot-hdr { font-size:.7rem; color:#555; letter-spacing:.07em; display:flex;
                    align-items:center; gap:.4rem; margin-bottom:.45rem; flex-wrap:wrap; }
     .fx-slot-hdr span { color:#f90; }
@@ -153,7 +152,7 @@
     .fx-step-divider { width:1px; background:#2a2a2a; align-self:stretch; margin:0 1px; flex-shrink:0; }
 
     /* ── Song Mode ── */
-    .song-section { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; }
+    .song-section { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; order:4; }
     .song-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
     .song-hdr span { color:#f90; }
     .pat-bank { display:flex; flex-wrap:wrap; gap:.35rem; }
@@ -174,6 +173,8 @@
 </head>
 <body>
 <h1>CLANKERS 3</h1>
+
+<div class="inst-grid">
 
 <!-- ── Drums ───────────────────────────────────────────────────────────── -->
 <div class="inst">
@@ -210,69 +211,10 @@
   <div class="knob-row" id="rhodes-knobs"></div>
 </div>
 
-<!-- ── Sequencer ────────────────────────────────────────────────────────── -->
-<div class="seq-section">
-  <h2>STEP SEQUENCER</h2>
-  <div id="seq-controls">
-    <button class="play-btn" id="btn-play">▶ PLAY</button>
-    <button class="stop-btn" id="btn-stop" disabled>■ STOP</button>
-    <button class="bake-btn" id="btn-bake" title="Write current knob state into JSON">⬇ BAKE</button>
-    <label style="display:inline-flex;align-items:center;gap:.4rem;margin:0;font-size:.78rem;">
-      BPM <input type="range" id="seq-bpm" min="60" max="200" step="1" value="128" style="width:110px;">
-      <span id="bpm-val">128</span>
-    </label>
-  </div>
-  <div id="step-viz">
-    <div id="viz-pos">BAR <span id="viz-bar">—</span> · BEAT <span id="viz-beat">—</span></div>
-    <div id="viz-steps"></div>
-  </div>
-  <span class="label-sm">ClankerBoy JSON — edit &amp; press PLAY</span>
-  <textarea id="sheet-json">{
-  "explanation": { "section": "verse", "style": "detroit techno", "key": "D minor", "energy": 0.75 },
-  "bpm": 126,
-  "steps": [
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [42], "v": 60 }, { "t": 2, "n": [2], "v": 98, "cc": {"71":42,"74":48,"23":30,"73":8,"75":50,"79":80,"72":22,"18":10} }, { "t": 6, "n": [50,53,57,62], "v": 58, "dur": 8.0, "cc": {"74":45,"73":12,"72":55,"91":50,"88":60,"29":25,"30":45,"31":40} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 45 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 65 }, { "t": 1, "n": [62], "v": 82, "cc": {"74":72,"20":37,"17":8,"19":6,"71":28} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 48 }, { "t": 2, "n": [2], "v": 85, "cc": {"74":50,"23":26} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 108 }, { "t": 10, "n": [38], "v": 100 }, { "t": 10, "n": [42], "v": 62 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 42 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 68 }, { "t": 2, "n": [9], "v": 88, "cc": {"74":44,"23":22} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 50 }, { "t": 1, "n": [57], "v": 72, "cc": {"74":68,"20":35,"17":10,"19":8} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [42], "v": 58 }, { "t": 2, "n": [2], "v": 92, "cc": {"74":52,"23":28} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 44 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 66 }, { "t": 1, "n": [54], "v": 78, "cc": {"74":70,"20":40,"17":12,"19":5} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 105 }, { "t": 10, "n": [38], "v": 95 }, { "t": 10, "n": [42], "v": 70 }, { "t": 2, "n": [6], "v": 90, "cc": {"74":46,"23":24} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 40 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [46], "v": 78 }, { "t": 2, "n": [9], "v": 82, "cc": {"74":42,"23":20} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 52 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 108 }, { "t": 10, "n": [42], "v": 62 }, { "t": 2, "n": [2], "v": 95, "cc": {"74":48,"23":30} }, { "t": 6, "n": [53,57,60,65], "v": 55, "dur": 8.0, "cc": {"74":42,"73":10,"72":58,"91":55,"88":62} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 64 }, { "t": 1, "n": [60], "v": 85, "cc": {"74":75,"20":42,"17":15,"19":7,"71":25} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 50 }, { "t": 2, "n": [6], "v": 86, "cc": {"74":50,"23":25} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [38], "v": 98 }, { "t": 10, "n": [42], "v": 60 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 44 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 66 }, { "t": 2, "n": [4], "v": 84, "cc": {"74":44,"23":22} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 48 }, { "t": 1, "n": [65], "v": 75, "cc": {"74":65,"20":32,"17":8,"19":10} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 106 }, { "t": 10, "n": [42], "v": 58 }, { "t": 2, "n": [2], "v": 90, "cc": {"74":50,"23":28} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 42 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 68 }, { "t": 1, "n": [58], "v": 80, "cc": {"74":72,"20":38,"17":10,"19":5} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 104 }, { "t": 10, "n": [38], "v": 92 }, { "t": 10, "n": [42], "v": 72 }, { "t": 2, "n": [9], "v": 88, "cc": {"74":46,"23":26} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 38 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [46], "v": 82 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 55 }, { "t": 2, "n": [4], "v": 80, "cc": {"74":42,"23":18} }] }
-  ]
-}</textarea>
-</div>
+<!-- ── FX separator ─────────────────────────────────────────────────────── -->
+<div class="grid-sep">FX RACK</div>
 
-<!-- ── FX Rack ───────────────────────────────────────────────────────────── -->
-<div class="fx-section">
-  <h2>FX RACK</h2>
-  <div class="fx-rack">
-
-    <!-- DELAY -->
+<!-- DELAY -->
     <div class="fx-slot">
       <div class="fx-slot-hdr">
         DELAY <span>[0]</span>
@@ -409,7 +351,63 @@
       <div class="fx-step-seq" id="fx2-steps"></div>
     </div>
 
+</div><!-- /inst-grid -->
+
+<!-- ── Sequencer ────────────────────────────────────────────────────────── -->
+<div class="seq-section">
+  <h2>STEP SEQUENCER</h2>
+  <div id="seq-controls">
+    <button class="play-btn" id="btn-play">▶ PLAY</button>
+    <button class="stop-btn" id="btn-stop" disabled>■ STOP</button>
+    <button class="bake-btn" id="btn-bake" title="Write current knob state into JSON">⬇ BAKE</button>
+    <label style="display:inline-flex;align-items:center;gap:.4rem;margin:0;font-size:.78rem;">
+      BPM <input type="range" id="seq-bpm" min="60" max="200" step="1" value="128" style="width:110px;">
+      <span id="bpm-val">128</span>
+    </label>
   </div>
+  <div id="step-viz">
+    <div id="viz-pos">BAR <span id="viz-bar">—</span> · BEAT <span id="viz-beat">—</span></div>
+    <div id="viz-steps"></div>
+  </div>
+  <span class="label-sm">ClankerBoy JSON — edit &amp; press PLAY</span>
+  <textarea id="sheet-json">{
+  "explanation": { "section": "verse", "style": "detroit techno", "key": "D minor", "energy": 0.75 },
+  "bpm": 126,
+  "steps": [
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [42], "v": 60 }, { "t": 2, "n": [2], "v": 98, "cc": {"71":42,"74":48,"23":30,"73":8,"75":50,"79":80,"72":22,"18":10} }, { "t": 6, "n": [50,53,57,62], "v": 58, "dur": 8.0, "cc": {"74":45,"73":12,"72":55,"91":50,"88":60,"29":25,"30":45,"31":40} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 45 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 65 }, { "t": 1, "n": [62], "v": 82, "cc": {"74":72,"20":37,"17":8,"19":6,"71":28} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 48 }, { "t": 2, "n": [2], "v": 85, "cc": {"74":50,"23":26} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 108 }, { "t": 10, "n": [38], "v": 100 }, { "t": 10, "n": [42], "v": 62 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 42 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 68 }, { "t": 2, "n": [9], "v": 88, "cc": {"74":44,"23":22} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 50 }, { "t": 1, "n": [57], "v": 72, "cc": {"74":68,"20":35,"17":10,"19":8} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [42], "v": 58 }, { "t": 2, "n": [2], "v": 92, "cc": {"74":52,"23":28} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 44 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 66 }, { "t": 1, "n": [54], "v": 78, "cc": {"74":70,"20":40,"17":12,"19":5} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 105 }, { "t": 10, "n": [38], "v": 95 }, { "t": 10, "n": [42], "v": 70 }, { "t": 2, "n": [6], "v": 90, "cc": {"74":46,"23":24} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 40 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [46], "v": 78 }, { "t": 2, "n": [9], "v": 82, "cc": {"74":42,"23":20} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 52 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 108 }, { "t": 10, "n": [42], "v": 62 }, { "t": 2, "n": [2], "v": 95, "cc": {"74":48,"23":30} }, { "t": 6, "n": [53,57,60,65], "v": 55, "dur": 8.0, "cc": {"74":42,"73":10,"72":58,"91":55,"88":62} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 64 }, { "t": 1, "n": [60], "v": 85, "cc": {"74":75,"20":42,"17":15,"19":7,"71":25} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 50 }, { "t": 2, "n": [6], "v": 86, "cc": {"74":50,"23":25} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [38], "v": 98 }, { "t": 10, "n": [42], "v": 60 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 44 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 66 }, { "t": 2, "n": [4], "v": 84, "cc": {"74":44,"23":22} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 48 }, { "t": 1, "n": [65], "v": 75, "cc": {"74":65,"20":32,"17":8,"19":10} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 106 }, { "t": 10, "n": [42], "v": 58 }, { "t": 2, "n": [2], "v": 90, "cc": {"74":50,"23":28} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 42 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 68 }, { "t": 1, "n": [58], "v": 80, "cc": {"74":72,"20":38,"17":10,"19":5} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 104 }, { "t": 10, "n": [38], "v": 92 }, { "t": 10, "n": [42], "v": 72 }, { "t": 2, "n": [9], "v": 88, "cc": {"74":46,"23":26} }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 38 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [46], "v": 82 }] },
+    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 55 }, { "t": 2, "n": [4], "v": 80, "cc": {"74":42,"23":18} }] }
+  ]
+}</textarea>
 </div>
 
 <!-- ── Pattern Bank + Song Mode ──────────────────────────────────────────── -->
@@ -462,8 +460,8 @@
 
 <script type="module">
 import init, { ClankersDrums, ClankersBass, ClankersBuchla, ClankersPads, ClankersRhodes }
-  from './wasm/clankers_dsp.js?v=16';
-import { Sequencer } from './sequencer.js?v=16';
+  from './wasm/clankers_dsp.js?v=17';
+import { Sequencer } from './sequencer.js?v=17';
 import { FxRack, makeCurve, divToSec } from './fx.js';
 
 // ─── Knob class ────────────────────────────────────────────────────────────
@@ -786,15 +784,15 @@ RHODES_PADS.forEach(({ label, midi }) => {
 const rhodesKnobContainer = document.getElementById('rhodes-knobs');
 const rk = {
   ...makeKnobGroup(rhodesKnobContainer, 'TONE', [
-    { id: 'r-bright', label: 'BRIGHT', min: 0,   max: 127, value: 74,  step: 1 },
-    { id: 'r-decay',  label: 'DECAY',  min: 0,   max: 127, value: 80,  step: 1 },
-    { id: 'r-bark',   label: 'BARK',   min: 0,   max: 127, value: 60,  step: 1 },
-    { id: 'r-ratio',  label: 'RATIO',  min: 0,   max: 127, value: 8,   step: 1 },
+    { id: 'r-bright', label: 'BRIGHT', min: 0,   max: 127, value: 42,  step: 1 },  // → brightness 3.0
+    { id: 'r-decay',  label: 'DECAY',  min: 0,   max: 127, value: 46,  step: 1 },  // → amp_decay 2.5s
+    { id: 'r-bark',   label: 'BARK',   min: 0,   max: 127, value: 35,  step: 1 },  // → mod_decay 0.18s
+    { id: 'r-ratio',  label: 'RATIO',  min: 0,   max: 127, value: 8,   step: 1 },  // → harm_ratio 1.0
   ]),
   ...makeKnobGroup(rhodesKnobContainer, 'VIBE', [
-    { id: 'r-trate',  label: 'T.RATE', min: 0,   max: 127, value: 62,  step: 1 },
-    { id: 'r-tdepth', label: 'T.DEPT', min: 0,   max: 127, value: 23,  step: 1 },
-    { id: 'r-chorus', label: 'CHORUS', min: 0,   max: 127, value: 48,  step: 1 },
+    { id: 'r-trate',  label: 'T.RATE', min: 0,   max: 127, value: 31,  step: 1 },  // → tremolo_rate 2.2Hz
+    { id: 'r-tdepth', label: 'T.DEPT', min: 0,   max: 127, value: 13,  step: 1 },  // → tremolo_depth 0.08
+    { id: 'r-chorus', label: 'CHORUS', min: 0,   max: 127, value: 18,  step: 1 },  // → chorus_mix 0.12
   ]),
 };
 

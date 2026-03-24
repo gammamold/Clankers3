@@ -12,7 +12,7 @@
 ///   CC23  Filter env decay   (0-127 → 0.01-2 s)
 ///   CC24  Filter env sustain (0-127 → 0-1)
 ///   CC25  Filter env release (0-127 → 0.01-2 s)
-///   CC18  Osc B detune cents (0-127 → -50..+50 cents)
+///   CC18  Osc B detune cents (0-127 → 0..+40 cents, unipolar thickening)
 ///   CC5   Glide time         (0-127 → 0 .. 0.5 s)
 
 use crate::envelope::Envelope;
