@@ -15,6 +15,12 @@
 
 import sys
 import json
+
+# Windows console defaults to cp1252 — force utf-8 so LLM unicode output doesn't crash
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import copy
 import re
 from pathlib import Path
@@ -37,7 +43,7 @@ app = FastAPI(title="Clankers3 API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174", "http://127.0.0.1:5174"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -54,6 +60,7 @@ class NewSessionRequest(BaseModel):
 class NewSessionResponse(BaseModel):
     session_id: str
     sheet:      dict
+    messages:   list = []
 
 
 class ChatRequest(BaseModel):
@@ -104,7 +111,22 @@ def session_new(req: NewSessionRequest):
         sheet["tension"] = _SECTION_TENSION.get(req.section, 0.35)
 
     session_id = create_session(sheet)
-    return {"session_id": session_id, "sheet": sheet}
+
+    # Build chat transcript for multi-LLM mode
+    transcript = []
+    if not req.solo:
+        for m in room.messages:
+            role = m.get("role", "")
+            if role == "system":
+                continue
+            content = m.get("content", "")
+            # Strip JSON code blocks and SESSION COMPLETE marker
+            content = re.sub(r'```(?:json)?\s*[\s\S]*?```', '', content).strip()
+            content = content.replace("[SESSION COMPLETE]", "").strip()
+            if content:
+                transcript.append({"role": role, "content": content[:400]})
+
+    return {"session_id": session_id, "sheet": sheet, "messages": transcript}
 
 
 @app.post("/chat", response_model=ChatResponse)

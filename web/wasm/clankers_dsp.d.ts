@@ -9,28 +9,33 @@
  *   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
  *   CC5  glide_time
  *
- * trigger(midi_note, velocity_0_1, cc_json_string)
- *   cc_json_string: JSON object of CC values, e.g. '{"74":80,"71":60}'
+ * Streaming API:
+ *   set_params(cc_json)              — update stored params (affects playing voices live)
+ *   trigger(midi_note, vel, hold, cc_json) — trigger note (also updates stored params)
+ *   render(n_samples)               — process all active voices with stored params
  *
- * render(n_samples) → Float32Array  (call after trigger, before next trigger)
+ * Offline API:
+ *   trigger_render(...)             — trigger + render full tail in one call
  */
 export class ClankersBass {
     free(): void;
     [Symbol.dispose](): void;
     constructor(seed: number);
     /**
-     * Render n_samples of audio (adds all active voices). Returns Float32Array.
+     * Render n_samples of audio using stored params. Returns mono Float32Array.
      */
     render(n_samples: number): Float32Array;
     /**
-     * Trigger a note. cc_json: '{"74":80,"71":60}' or '{}'.
+     * Update stored params — affects currently playing voices on the next render() call.
+     */
+    set_params(cc_json: string): void;
+    /**
+     * Trigger a note. Also updates stored params from cc_json.
      * hold_samples: note-on duration in samples (0 = use amp envelope only)
      */
     trigger(midi_note: number, velocity: number, hold_samples: number, cc_json: string): void;
     /**
      * Trigger + render full tail — isolated single voice, no shared state.
-     * Note: ClankerBoy uses MIDI 0-23 for bass roots. We transpose +24 semitones
-     * so the actual synthesis sits in the audible 50-200 Hz range.
      */
     trigger_render(midi_note: number, velocity: number, hold_samples: number, cc_json: string): Float32Array;
 }
@@ -41,11 +46,28 @@ export class ClankersBass {
  * ClankerBoy CC map (t:1):
  *   CC74 cutoff  CC71 resonance  CC20 wavefold  CC17 fm_depth
  *   CC18 fm_index  CC19 env_decay  CC16 volume
+ *
+ * Streaming API:
+ *   set_params(cc_json)    — update stored params (affects playing voices live)
+ *   trigger(midi_note, vel) — trigger using stored params
+ *   process(n_samples)     — render all active voices → mono Float32Array
  */
 export class ClankersBuchla {
     free(): void;
     [Symbol.dispose](): void;
     constructor();
+    /**
+     * Render n_samples of audio. Returns mono Float32Array.
+     */
+    process(n_samples: number): Float32Array;
+    /**
+     * Update stored params — affects playing voices on the next process() call.
+     */
+    set_params(cc_json: string): void;
+    /**
+     * Trigger a voice using stored params.
+     */
+    trigger(midi_note: number, velocity: number): void;
     /**
      * Trigger + render full tail — isolated single voice.
      */
@@ -53,37 +75,73 @@ export class ClankersBuchla {
 }
 
 /**
- * Voice IDs:  0=Kick  1=Snare  2=HiHat Closed  3=HiHat Open
- *             4=Tom L  5=Tom M  6=Tom H
+ * Three-profile synth drum machine (808 / 909 / 606).
  *
- * Trigger params (p0..p2):
- *   Kick:   p0=pitch(0-1)  p1=sweep_time(0-1)  p2=decay(0-1)
- *   Snare:  p0=pitch(0-1)  p1=decay(0-1)        p2=resonance(0-1)
- *   HiHat:  p0=decay(0-1)  p1=cutoff(0-1)       p2=resonance(0-1)
- *   Tom:    p0=pitch(0-1)  p1=decay(0-1)         p2=unused
+ * Voice IDs  0-6 — character depends on selected profile:
+ *   808 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-H  CLAP
+ *   909 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-M  TOM-H
+ *   606 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-H  CYMBAL
+ *
+ * Global controls (all live — take effect within one audio block):
+ *   set_profile(id)        0=808  1=909  2=606
+ *   set_pitch(semitones)   −12..+12
+ *   set_decay(mult)        0.1..8.0  (scales all amp-decay times)
+ *   set_filter(hz)         80..20000 (one-pole LP on output bus)
  */
 export class ClankersDrums {
     free(): void;
     [Symbol.dispose](): void;
     constructor(seed: number);
     /**
-     * Trigger a hit and immediately render its full tail.
-     * Uses an isolated voice — no shared engine state contamination.
+     * Render n_samples. Returns mono Float32Array.
      */
-    trigger_render(voice_id: number, velocity: number, p0: number, p1: number, p2: number): Float32Array;
+    process(n_samples: number): Float32Array;
+    /**
+     * Global decay multiplier (0.1..8.0). Updates active voices immediately.
+     */
+    set_decay(mult: number): void;
+    /**
+     * Global output lowpass cutoff in Hz (80..20000). Live.
+     */
+    set_filter(hz: number): void;
+    /**
+     * Global pitch shift in semitones (−12..+12).
+     */
+    set_pitch(semitones: number): void;
+    /**
+     * Select drum machine profile.  id: 0=808  1=909  2=606
+     */
+    set_profile(id: number): void;
+    /**
+     * Trigger a voice.  voice_id: 0-6.
+     */
+    trigger(voice_id: number, velocity: number): void;
 }
 
 /**
  * HybridSynth pads — Moog ladder + ADSR + chorus + reverb (8 polyphonic voices).
  *
- * trigger_render(midi_note, velocity, hold_samples, cc_json) → stereo Float32Array
- * hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
- * Returns interleaved stereo [L0, R0, L1, R1, ...]
+ * Streaming API:
+ *   set_params(cc_json)              — update stored params live
+ *   trigger(midi_note, vel, hold)    — trigger using stored params
+ *   process_stereo(n_samples)        — render → interleaved stereo Float32Array
  */
 export class ClankersPads {
     free(): void;
     [Symbol.dispose](): void;
     constructor();
+    /**
+     * Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+     */
+    process_stereo(n_samples: number): Float32Array;
+    /**
+     * Update stored params — affects playing voices live on next process_stereo() call.
+     */
+    set_params(cc_json: string): void;
+    /**
+     * Trigger a note using stored params.
+     */
+    trigger(midi_note: number, velocity: number, hold_samples: number): void;
     trigger_render(midi_note: number, velocity: number, hold_samples: number, cc_json: string): Float32Array;
 }
 
@@ -91,23 +149,34 @@ export class ClankersPads {
  * Rhodes electric piano — FM tine model (Operator / Lounge Lizard style).
  *
  * ClankerBoy t:3 CC map:
- *   CC74  Brightness  (peak FM index 0.5–8)
- *   CC72  Decay       (amp decay 0.5–6 s at C4)
- *   CC20  Tine ratio  (modulator harmonic ratio 0.9–2.0)
- *   CC73  Bark time   (mod-index decay fraction, lower = longer bark)
- *   CC26  Tremolo rate  (0–9 Hz)
- *   CC27  Tremolo depth (0–0.8)
- *   CC29  Chorus rate   (0.1–5 Hz)
- *   CC30  Chorus mix    (0–0.85)
- *   CC10  Pan           (0=L, 64=C, 127=R)
+ *   CC74  Brightness  CC72  Decay  CC20  Tine ratio  CC73  Bark time
+ *   CC26  Tremolo rate  CC27  Tremolo depth
+ *   CC29  Chorus rate   CC30  Chorus mix   CC10  Pan
+ *
+ * Streaming API:
+ *   set_params(cc_json)               — update stored params live
+ *   trigger(midi_note, vel, hold)     — trigger using stored params
+ *   process_stereo(n_samples)         — render → interleaved stereo Float32Array
  */
 export class ClankersRhodes {
     free(): void;
     [Symbol.dispose](): void;
     constructor();
     /**
+     * Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+     */
+    process_stereo(n_samples: number): Float32Array;
+    /**
+     * Update stored params — affects playing voices live on the next process_stereo() call.
+     */
+    set_params(cc_json: string): void;
+    /**
+     * Trigger a note using stored params.
+     * hold_samples: note-on duration in samples.
+     */
+    trigger(midi_note: number, velocity: number, hold_samples: number): void;
+    /**
      * Trigger + render full tail — stereo interleaved Float32Array.
-     * hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
      */
     trigger_render(midi_note: number, velocity: number, hold_samples: number, cc_json: string): Float32Array;
 }
@@ -123,15 +192,30 @@ export interface InitOutput {
     readonly __wbg_clankersrhodes_free: (a: number, b: number) => void;
     readonly clankersbass_new: (a: number) => number;
     readonly clankersbass_render: (a: number, b: number) => any;
+    readonly clankersbass_set_params: (a: number, b: number, c: number) => void;
     readonly clankersbass_trigger: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly clankersbass_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
     readonly clankersbuchla_new: () => number;
+    readonly clankersbuchla_process: (a: number, b: number) => any;
+    readonly clankersbuchla_set_params: (a: number, b: number, c: number) => void;
+    readonly clankersbuchla_trigger: (a: number, b: number, c: number) => void;
     readonly clankersbuchla_trigger_render: (a: number, b: number, c: number, d: number, e: number) => any;
     readonly clankersdrums_new: (a: number) => number;
-    readonly clankersdrums_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
+    readonly clankersdrums_process: (a: number, b: number) => any;
+    readonly clankersdrums_set_decay: (a: number, b: number) => void;
+    readonly clankersdrums_set_filter: (a: number, b: number) => void;
+    readonly clankersdrums_set_pitch: (a: number, b: number) => void;
+    readonly clankersdrums_set_profile: (a: number, b: number) => void;
+    readonly clankersdrums_trigger: (a: number, b: number, c: number) => void;
     readonly clankerspads_new: () => number;
+    readonly clankerspads_process_stereo: (a: number, b: number) => any;
+    readonly clankerspads_set_params: (a: number, b: number, c: number) => void;
+    readonly clankerspads_trigger: (a: number, b: number, c: number, d: number) => void;
     readonly clankerspads_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
     readonly clankersrhodes_new: () => number;
+    readonly clankersrhodes_process_stereo: (a: number, b: number) => any;
+    readonly clankersrhodes_set_params: (a: number, b: number, c: number) => void;
+    readonly clankersrhodes_trigger: (a: number, b: number, c: number, d: number) => void;
     readonly clankersrhodes_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

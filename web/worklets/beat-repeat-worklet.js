@@ -110,8 +110,9 @@ class BeatRepeatProcessor extends AudioWorkletProcessor {
         if (outR !== outL) outR[i] = wetR * this._wet;
 
       } else {
-        outL[i] = dryL;
-        if (outR !== outL) outR[i] = dryR;
+        // Passthrough: output silence — dry already reaches master via instrGain→master
+        outL[i] = 0;
+        if (outR !== outL) outR[i] = 0;
       }
     }
     return true;

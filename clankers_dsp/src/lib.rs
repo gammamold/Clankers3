@@ -25,14 +25,18 @@ use wasm_bindgen::prelude::*;
 
 // ── Drums ─────────────────────────────────────────────────────────────────────
 
-/// Voice IDs:  0=Kick  1=Snare  2=HiHat Closed  3=HiHat Open
-///             4=Tom L  5=Tom M  6=Tom H
+/// Three-profile synth drum machine (808 / 909 / 606).
 ///
-/// Trigger params (p0..p2):
-///   Kick:   p0=pitch(0-1)  p1=sweep_time(0-1)  p2=decay(0-1)
-///   Snare:  p0=pitch(0-1)  p1=decay(0-1)        p2=resonance(0-1)
-///   HiHat:  p0=decay(0-1)  p1=cutoff(0-1)       p2=resonance(0-1)
-///   Tom:    p0=pitch(0-1)  p1=decay(0-1)         p2=unused
+/// Voice IDs  0-6 — character depends on selected profile:
+///   808 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-H  CLAP
+///   909 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-M  TOM-H
+///   606 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-H  CYMBAL
+///
+/// Global controls (all live — take effect within one audio block):
+///   set_profile(id)        0=808  1=909  2=606
+///   set_pitch(semitones)   −12..+12
+///   set_decay(mult)        0.1..8.0  (scales all amp-decay times)
+///   set_filter(hz)         80..20000 (one-pole LP on output bus)
 #[wasm_bindgen]
 pub struct ClankersDrums {
     engine: DrumsEngine,
@@ -45,22 +49,29 @@ impl ClankersDrums {
         ClankersDrums { engine: DrumsEngine::new(seed) }
     }
 
-    /// Trigger a hit and immediately render its full tail.
-    /// Uses an isolated voice — no shared engine state contamination.
-    pub fn trigger_render(&mut self, voice_id: u8, velocity: f32, p0: f32, p1: f32, p2: f32) -> Float32Array {
-        let vel = velocity.clamp(0.0, 1.0);
-        let rng = &mut self.engine.rng;
-        let voice = match voice_id {
-            0 => drums::synth_kick(vel, p0, p1, p2, rng),
-            1 => drums::synth_snare(vel, p0, p1, p2, rng),
-            2 => drums::synth_hihat(vel, false, p0, p1, p2, rng),
-            3 => drums::synth_hihat(vel, true,  p0, p1, p2, rng),
-            4 => drums::synth_tom(vel, 41, p0, p1),
-            5 => drums::synth_tom(vel, 43, p0, p1),
-            6 => drums::synth_tom(vel, 45, p0, p1),
-            _ => return Float32Array::new_with_length(0),
-        };
-        Float32Array::from(voice.into_buf().as_slice())
+    /// Select drum machine profile.  id: 0=808  1=909  2=606
+    pub fn set_profile(&mut self, id: u8) { self.engine.set_profile(id); }
+
+    /// Global pitch shift in semitones (−12..+12).
+    pub fn set_pitch(&mut self, semitones: f32) { self.engine.set_pitch(semitones); }
+
+    /// Global decay multiplier (0.1..8.0). Updates active voices immediately.
+    pub fn set_decay(&mut self, mult: f32) { self.engine.set_decay(mult); }
+
+    /// Global output lowpass cutoff in Hz (80..20000). Live.
+    pub fn set_filter(&mut self, hz: f32) { self.engine.set_filter(hz); }
+
+    /// Trigger a voice.  voice_id: 0-6.
+    pub fn trigger(&mut self, voice_id: u8, velocity: f32) {
+        self.engine.trigger(voice_id, velocity);
+    }
+
+    /// Render n_samples. Returns mono Float32Array.
+    pub fn process(&mut self, n_samples: u32) -> Float32Array {
+        let n = n_samples as usize;
+        let mut buf = vec![0.0f32; n];
+        self.engine.process(&mut buf);
+        Float32Array::from(buf.as_slice())
     }
 }
 
@@ -73,48 +84,52 @@ impl ClankersDrums {
 ///   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
 ///   CC5  glide_time
 ///
-/// trigger(midi_note, velocity_0_1, cc_json_string)
-///   cc_json_string: JSON object of CC values, e.g. '{"74":80,"71":60}'
+/// Streaming API:
+///   set_params(cc_json)              — update stored params (affects playing voices live)
+///   trigger(midi_note, vel, hold, cc_json) — trigger note (also updates stored params)
+///   render(n_samples)               — process all active voices with stored params
 ///
-/// render(n_samples) → Float32Array  (call after trigger, before next trigger)
+/// Offline API:
+///   trigger_render(...)             — trigger + render full tail in one call
 #[wasm_bindgen]
 pub struct ClankersBass {
     engine: BassEngine,
+    params: BassParams,
 }
 
 #[wasm_bindgen]
 impl ClankersBass {
     #[wasm_bindgen(constructor)]
     pub fn new(seed: u32) -> ClankersBass {
-        ClankersBass { engine: BassEngine::new(seed) }
+        ClankersBass { engine: BassEngine::new(seed), params: BassParams::default() }
     }
 
-    /// Trigger a note. cc_json: '{"74":80,"71":60}' or '{}'.
+    /// Update stored params — affects currently playing voices on the next render() call.
+    pub fn set_params(&mut self, cc_json: &str) {
+        self.params = parse_bass_params(cc_json);
+    }
+
+    /// Trigger a note. Also updates stored params from cc_json.
     /// hold_samples: note-on duration in samples (0 = use amp envelope only)
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: u32, cc_json: &str) {
-        let p = parse_bass_params(cc_json);
-        self.engine.trigger(midi_note, velocity, hold_samples as usize, &p);
+        self.params = parse_bass_params(cc_json);
+        self.engine.trigger(midi_note, velocity, hold_samples as usize, &self.params);
     }
 
-    /// Render n_samples of audio (adds all active voices). Returns Float32Array.
+    /// Render n_samples of audio using stored params. Returns mono Float32Array.
     pub fn render(&mut self, n_samples: u32) -> Float32Array {
         let n = n_samples as usize;
         let mut buf = vec![0.0f32; n];
-        // Use default params for render (params were captured at trigger time)
-        let p = BassParams::default();
-        self.engine.process(&mut buf, &p);
+        self.engine.process(&mut buf, &self.params);
         Float32Array::from(buf.as_slice())
     }
 
     /// Trigger + render full tail — isolated single voice, no shared state.
-    /// Note: ClankerBoy uses MIDI 0-23 for bass roots. We transpose +24 semitones
-    /// so the actual synthesis sits in the audible 50-200 Hz range.
     pub fn trigger_render(&mut self, midi_note: u8, velocity: f32, hold_samples: u32, cc_json: &str) -> Float32Array {
         let p = parse_bass_params(cc_json);
 
-        // Fresh voice each call — prevents cross-contamination when chords render
         let mut voice = bass::BassVoice::new(0xba55);
-        let transposed = midi_note.saturating_add(48); // +4 octaves into audible range
+        let transposed = midi_note.saturating_add(48);
         voice.trigger(transposed, velocity, hold_samples as usize, &p);
 
         let max = 44100 * 4;
@@ -135,7 +150,6 @@ impl ClankersBass {
 fn parse_bass_params(cc_json: &str) -> BassParams {
     let mut p = BassParams::default();
 
-    // Minimal JSON key:value parser (no external crate needed)
     for (key, val) in parse_cc_map(cc_json) {
         let n = val / 127.0;
         match key {
@@ -146,7 +160,7 @@ fn parse_bass_params(cc_json: &str) -> BassParams {
             79 => p.amp_sustain    = n,
             72 => p.amp_release    = 0.01  + n * 1.99,
             23 => p.flt_decay      = 0.01  + n * 0.99,
-            18 => p.detune_cents   = n * 40.0,            // 0–40 cents (unipolar thickening)
+            18 => p.detune_cents   = n * 40.0,
             5  => p.glide_time     = n * 0.5,
             _  => {}
         }
@@ -161,16 +175,40 @@ fn parse_bass_params(cc_json: &str) -> BassParams {
 /// ClankerBoy CC map (t:1):
 ///   CC74 cutoff  CC71 resonance  CC20 wavefold  CC17 fm_depth
 ///   CC18 fm_index  CC19 env_decay  CC16 volume
+///
+/// Streaming API:
+///   set_params(cc_json)    — update stored params (affects playing voices live)
+///   trigger(midi_note, vel) — trigger using stored params
+///   process(n_samples)     — render all active voices → mono Float32Array
 #[wasm_bindgen]
 pub struct ClankersBuchla {
     engine: BuchlaEngine,
+    params: BuchlaParams,
 }
 
 #[wasm_bindgen]
 impl ClankersBuchla {
     #[wasm_bindgen(constructor)]
     pub fn new() -> ClankersBuchla {
-        ClankersBuchla { engine: BuchlaEngine::new() }
+        ClankersBuchla { engine: BuchlaEngine::new(), params: BuchlaParams::default() }
+    }
+
+    /// Update stored params — affects playing voices on the next process() call.
+    pub fn set_params(&mut self, cc_json: &str) {
+        self.params = parse_buchla_params(cc_json);
+    }
+
+    /// Trigger a voice using stored params.
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32) {
+        self.engine.trigger(midi_note, velocity, &self.params);
+    }
+
+    /// Render n_samples of audio. Returns mono Float32Array.
+    pub fn process(&mut self, n_samples: u32) -> Float32Array {
+        let n = n_samples as usize;
+        let mut buf = vec![0.0f32; n];
+        self.engine.process(&mut buf, &self.params);
+        Float32Array::from(buf.as_slice())
     }
 
     /// Trigger + render full tail — isolated single voice.
@@ -198,29 +236,50 @@ impl ClankersBuchla {
 /// Rhodes electric piano — FM tine model (Operator / Lounge Lizard style).
 ///
 /// ClankerBoy t:3 CC map:
-///   CC74  Brightness  (peak FM index 0.5–8)
-///   CC72  Decay       (amp decay 0.5–6 s at C4)
-///   CC20  Tine ratio  (modulator harmonic ratio 0.9–2.0)
-///   CC73  Bark time   (mod-index decay 20ms–600ms, independent of amp decay)
-///   CC26  Tremolo rate  (0–9 Hz)
-///   CC27  Tremolo depth (0–0.8)
-///   CC29  Chorus rate   (0.1–5 Hz)
-///   CC30  Chorus mix    (0–0.85)
-///   CC10  Pan           (0=L, 64=C, 127=R)
+///   CC74  Brightness  CC72  Decay  CC20  Tine ratio  CC73  Bark time
+///   CC26  Tremolo rate  CC27  Tremolo depth
+///   CC29  Chorus rate   CC30  Chorus mix   CC10  Pan
+///
+/// Streaming API:
+///   set_params(cc_json)               — update stored params live
+///   trigger(midi_note, vel, hold)     — trigger using stored params
+///   process_stereo(n_samples)         — render → interleaved stereo Float32Array
 #[wasm_bindgen]
 pub struct ClankersRhodes {
     engine: RhodesEngine,
+    params: RhodesParams,
 }
 
 #[wasm_bindgen]
 impl ClankersRhodes {
     #[wasm_bindgen(constructor)]
     pub fn new() -> ClankersRhodes {
-        ClankersRhodes { engine: RhodesEngine::new() }
+        ClankersRhodes { engine: RhodesEngine::new(), params: RhodesParams::default() }
+    }
+
+    /// Update stored params — affects playing voices live on the next process_stereo() call.
+    pub fn set_params(&mut self, cc_json: &str) {
+        self.params = parse_rhodes_params(cc_json);
+    }
+
+    /// Trigger a note using stored params.
+    /// hold_samples: note-on duration in samples.
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: u32) {
+        self.engine.trigger(midi_note, velocity, hold_samples as usize, &self.params);
+    }
+
+    /// Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+    pub fn process_stereo(&mut self, n_samples: u32) -> Float32Array {
+        let n = n_samples as usize;
+        let mut buf_l = vec![0.0f32; n];
+        let mut buf_r = vec![0.0f32; n];
+        self.engine.process(&mut buf_l, &mut buf_r, &self.params);
+        let mut out = vec![0.0f32; n * 2];
+        for i in 0..n { out[i * 2] = buf_l[i]; out[i * 2 + 1] = buf_r[i]; }
+        Float32Array::from(out.as_slice())
     }
 
     /// Trigger + render full tail — stereo interleaved Float32Array.
-    /// hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
     pub fn trigger_render(
         &mut self,
         midi_note:    u8,
@@ -231,7 +290,6 @@ impl ClankersRhodes {
         let p    = parse_rhodes_params(cc_json);
         let hold = hold_samples as usize;
 
-        // Estimate total length: hold + full amp decay tail (6× decay time is safe)
         let amp_decay_s  = p.amp_decay * (1.0 - (midi_note as f32 - 60.0) * p.key_scale / 48.0).clamp(0.25, 2.5);
         let tail_samples = (amp_decay_s * 6.0 * 44100.0) as usize;
         let total        = hold + tail_samples;
@@ -243,13 +301,11 @@ impl ClankersRhodes {
         voice.trigger(midi_note, velocity, hold, &p);
         voice.process(&mut buf_l, &mut buf_r, &p);
 
-        // Trim trailing silence
         let end = buf_l.iter().zip(buf_r.iter())
             .rposition(|(&l, &r)| l.abs() > 1e-5 || r.abs() > 1e-5)
             .map(|i| (i + 441).min(total))
             .unwrap_or(1024);
 
-        // Interleave stereo
         let mut interleaved = vec![0.0f32; end * 2];
         for i in 0..end {
             interleaved[i * 2]     = buf_l[i];
@@ -265,14 +321,12 @@ fn parse_rhodes_params(cc_json: &str) -> RhodesParams {
     for (key, val) in parse_cc_map(cc_json) {
         let n = val / 127.0;
         match key {
-            74 => p.brightness    = 0.5 + n.sqrt() * 4.35,  // sqrt curve: 0.5–4.85; CC42≈3.0 (default)
-            72 => p.amp_decay     = 0.5 + n * 5.5,          // 0.5–6 s
-            // CC20 snaps to musical ratios only — avoids inharmonic beating
-            // 0-42 = 1.0 (unison), 43-84 = 1.5 (fifth), 85-127 = 2.0 (octave)
+            74 => p.brightness    = 0.5 + n.sqrt() * 4.35,
+            72 => p.amp_decay     = 0.5 + n * 5.5,
             20 => p.harm_ratio    = if val < 43.0 { 1.0 } else if val < 85.0 { 1.5 } else { 2.0 },
-            73 => p.mod_decay     = 0.02 + n * 0.58,          // 20ms–600ms absolute bark time
+            73 => p.mod_decay     = 0.02 + n * 0.58,
             55 => p.key_scale     = n,
-            26 => p.tremolo_rate  = n * 9.0,                 // 0–9 Hz
+            26 => p.tremolo_rate  = n * 9.0,
             27 => p.tremolo_depth = n * 0.8,
             29 => p.chorus_rate   = 0.1 + n * 4.9,
             30 => p.chorus_mix    = n * 0.85,
@@ -287,19 +341,42 @@ fn parse_rhodes_params(cc_json: &str) -> RhodesParams {
 
 /// HybridSynth pads — Moog ladder + ADSR + chorus + reverb (8 polyphonic voices).
 ///
-/// trigger_render(midi_note, velocity, hold_samples, cc_json) → stereo Float32Array
-/// hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
-/// Returns interleaved stereo [L0, R0, L1, R1, ...]
+/// Streaming API:
+///   set_params(cc_json)              — update stored params live
+///   trigger(midi_note, vel, hold)    — trigger using stored params
+///   process_stereo(n_samples)        — render → interleaved stereo Float32Array
 #[wasm_bindgen]
 pub struct ClankersPads {
     engine: PadsEngine,
+    params: PadsParams,
 }
 
 #[wasm_bindgen]
 impl ClankersPads {
     #[wasm_bindgen(constructor)]
     pub fn new() -> ClankersPads {
-        ClankersPads { engine: PadsEngine::new() }
+        ClankersPads { engine: PadsEngine::new(), params: PadsParams::default() }
+    }
+
+    /// Update stored params — affects playing voices live on next process_stereo() call.
+    pub fn set_params(&mut self, cc_json: &str) {
+        self.params = parse_pads_params(cc_json);
+    }
+
+    /// Trigger a note using stored params.
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: u32) {
+        self.engine.trigger(midi_note, velocity, hold_samples as usize, &self.params);
+    }
+
+    /// Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+    pub fn process_stereo(&mut self, n_samples: u32) -> Float32Array {
+        let n = n_samples as usize;
+        let mut buf_l = vec![0.0f32; n];
+        let mut buf_r = vec![0.0f32; n];
+        self.engine.process(&mut buf_l, &mut buf_r, &self.params);
+        let mut out = vec![0.0f32; n * 2];
+        for i in 0..n { out[i * 2] = buf_l[i]; out[i * 2 + 1] = buf_r[i]; }
+        Float32Array::from(out.as_slice())
     }
 
     pub fn trigger_render(
@@ -312,7 +389,6 @@ impl ClankersPads {
         let p    = parse_pads_params(cc_json);
         let hold = hold_samples as usize;
 
-        // Render: attack + hold + full release tail — isolated voice, no shared state
         let release_tail = (p.amp_release * 44100.0) as usize + 4410;
         let total        = hold + release_tail;
 
@@ -323,13 +399,11 @@ impl ClankersPads {
         voice.trigger(midi_note, velocity, hold, &p);
         voice.process(&mut buf_l, &mut buf_r, &p);
 
-        // Trim trailing silence
         let end = buf_l.iter().zip(buf_r.iter())
             .rposition(|(&l, &r)| l.abs() > 1e-5 || r.abs() > 1e-5)
             .map(|i| (i + 441).min(total))
             .unwrap_or(1024);
 
-        // Interleave stereo
         let mut interleaved = vec![0.0f32; end * 2];
         for i in 0..end {
             interleaved[i * 2]     = buf_l[i];
@@ -345,7 +419,7 @@ fn parse_pads_params(cc_json: &str) -> PadsParams {
     for (key, val) in parse_cc_map(cc_json) {
         let n = val / 127.0;
         match key {
-            74 => p.cutoff_hz    = 20.0 + n * 7980.0,   // 20–8000 Hz
+            74 => p.cutoff_hz    = 20.0 + n * 7980.0,
             71 => p.resonance    = n * 0.9,
             73 => p.amp_attack   = 0.05 + n * 3.95,
             75 => p.amp_decay    = 0.05 + n * 1.95,
@@ -368,11 +442,9 @@ fn parse_buchla_params(cc_json: &str) -> BuchlaParams {
         let n = val / 127.0;
         match key {
             74 => p.cutoff_norm = n,
-            71 => p.resonance   = n,          // LPG clamps to 0.85 internally
             20 => p.fold_amount = n,
-            17 => p.fm_depth    = n,
-            18 => p.fm_index    = n,
-            19 => p.decay_s     = 0.005 + n * 0.795,  // 5 ms .. 800 ms
+            19 => p.release_s   = 0.005 + n * 0.795,
+            21 => p.filter_mod  = n,
             16 => p.volume      = n,
             _  => {}
         }

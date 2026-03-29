@@ -15,7 +15,6 @@ import sys
 import json
 import copy
 import threading
-import requests
 import numpy as np
 from pathlib import Path
 from pydub import AudioSegment
@@ -24,7 +23,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config
-from chatroom.chatroom import Chatroom
+import llm_clients
+from chatroom.chatroom import Chatroom, _extract_sheet_json, _SHEET_FORMAT
 
 # ── Agent imports ─────────────────────────────────────────────────────────
 
@@ -79,11 +79,7 @@ DEFAULT_ARC = ["verse1", "instrumental", "verse2", "bridge", "verse3", "outro"]
 # All stem names that can appear in a run_session() result
 ALL_STEMS = ["sampler", "bass_sh101", "drums", "buchla", "hybrid", "voder"]
 
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-EVOLVE_MODEL   = "gpt-4o"   # stable model for evolve() -- independent of config.CHATGPT_MODEL
-
 # Canonical tension curve per section name.
-# Agents use this to scale density, velocity, fill probability, etc.
 _SECTION_TENSION: dict[str, float] = {
     "verse1":       0.30,
     "instrumental": 0.45,
@@ -95,88 +91,64 @@ _SECTION_TENSION: dict[str, float] = {
 
 # ── EVOLVE ────────────────────────────────────────────────────────────────
 
-_EVOLVE_SYSTEM = """You are the music evolution engine for The Clankers 3.
-You receive a Music Sheet JSON and a target section name.
-Return a mutated version that fits the new section's energy and arc.
-Preserve title and bpm (bpm is ALWAYS locked -- never change it).
-Key can modulate at bridge only.
-
-Section arc guidance:
-  verse1       -- full band enters, establish core groove, sampler + voder introduce themes
-  instrumental -- sampler goes inactive, instruments step forward, bass and drums develop
-  verse2       -- sampler returns, revisit theme with twist, fuller texture
-  bridge       -- hard contrast: strip back or flip density, harmonic surprise, key can shift
-  verse3       -- climax: all agents fully active, maximum density, voder most expressive
-  outro        -- dissolution, elements drop one by one, density falling, voder last to leave
-
-The band has ONE bass voice: bass_sh101 (Pro-One style). There is no bass303.
-Mutate: bars, mood, density, sampleHints, patterns, active agents.
-Do NOT change bpm -- it is locked for the entire track.
-Always rewrite globalNotes to reflect new inter-agent coordination for this section.
-
-CRITICAL -- always include these fields in the mutated sheet:
-  bars: target 16 bars per section for a developed, longer composition.
-    Outro may use 8 bars to resolve quickly. Bridge may use 8-12 bars for contrast.
-  tension (0.0-1.0): section energy driver. verse1≈0.3, instrumental≈0.45, verse2≈0.5,
-    bridge≈0.75, verse3≈0.85, outro≈0.2
-  harmonic_rhythm: "slow"|"medium"|"fast"|"mixed" -- rate of chord changes.
-    Match to tension: slow at low tension, fast/mixed at peak.
-  harmonic_map: array of {bar, root_degree, chord_name} for every bar in the section.
-    Bass and drums use this to lock onto chord changes structurally.
-    root_degree is the scale degree of the chord root (1=tonic, 4=subdominant, 5=dominant, etc.)
-  bass_sh101.swing: 0.0-0.5 -- add swing feel appropriate to the genre/mood.
-  harmony.synth.buchla / harmony.synth.hybrid: full ADSR envelope available --
-    attack_s, decay_s (0=skip), sustain (0.0-1.0), release_s.
-    sustain=1.0 + decay_s=0 = held texture pad; sustain=0.0 + short decay_s = pluck/transient.
-  globalNotes: MUST include specific beat-level locks between bass and kick,
-    register boundaries (bass below C3, pads above C4, etc.), and a 2-bar transition
-    tail instruction so sections blend smoothly into each other.
-
-Return ONLY valid JSON. No explanation."""
+_EVOLVE_SYSTEM = (
+    "You are the CONDUCTOR of The Clankers 3, evolving a live session to its next section.\n"
+    "You receive the previous section's ClankerBoy JSON sheet and a target section name.\n"
+    "Generate a new 8-bar (128 steps at d:0.25) ClankerBoy JSON sheet for the target section.\n\n"
+    "EVOLUTION RULES:\n"
+    "  - BPM is LOCKED — copy it exactly from the previous sheet, never change it.\n"
+    "  - Key is LOCKED — only allowed to shift at 'bridge'.\n"
+    "  - Preserve the core motifs and chord identity from the previous section.\n"
+    "    Transform them for the new energy level — don't invent a new song.\n"
+    "  - Target exactly 128 steps (8 bars × 16 steps/bar at d:0.25).\n\n"
+    "Section arc guidance:\n"
+    "  verse1:       energy 0.30-0.40 — establish core groove, introduce main motif\n"
+    "  instrumental: energy 0.40-0.50 — no vocals focus, instruments step forward, bass/buchla develop\n"
+    "  verse2:       energy 0.50-0.60 — motif returns with added density and upper extensions\n"
+    "  bridge:       energy 0.60-0.75 — harmonic departure, hard contrast, key may shift\n"
+    "  verse3:       energy 0.75-0.90 — climax, all instruments fully active, peak density\n"
+    "  outro:        energy 0.15-0.25 — dissolution, motif callbacks, thin the texture bar by bar\n\n"
+    + _SHEET_FORMAT
+    + "\nOutput [SESSION COMPLETE] then the complete JSON in a ```json block. Nothing else."
+)
 
 
-def evolve(sheet: dict, next_section: str, api_key: str | None = None) -> dict:
-    """Mutate a Music Sheet for the next section. BPM is locked."""
-    api_key = api_key or config.OPENAI_API_KEY
-    current = copy.deepcopy(sheet)
-    current["structure"] = next_section
+def evolve(sheet: dict, next_section: str) -> dict:
+    """Generate the next 128-step ClankerBoy loop for next_section using Claude. BPM is locked."""
+    client  = llm_clients.get_client(config.BAND["Claude"])
+    tension = _SECTION_TENSION.get(next_section, 0.5)
 
     prompt = (
-        f"Current sheet:\n{json.dumps(current, indent=2)}\n\n"
-        f"Target section: {next_section}\n\nReturn the mutated sheet JSON."
+        f"Previous section sheet:\n{json.dumps(sheet, indent=2)}\n\n"
+        f"Target section: {next_section.upper()}\n"
+        f"Target energy/tension: {tension}\n"
+        f"BPM={sheet.get('bpm', 120)} — locked.\n\n"
+        "Generate 8 bars (128 steps at d:0.25) of ClankerBoy JSON for this section. "
+        "Evolve the motifs, density, and orchestration to match the arc guidance above. "
+        "Output [SESSION COMPLETE] then the complete JSON in a ```json block."
     )
 
     try:
-        resp = requests.post(
-            OPENAI_API_URL,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            },
-            json={
-                "model": EVOLVE_MODEL,
-                "max_tokens": 1400,
-                "messages": [
-                    {"role": "system", "content": _EVOLVE_SYSTEM},
-                    {"role": "user",   "content": prompt},
-                ],
-            },
-            timeout=45,
+        response = client.send(
+            _EVOLVE_SYSTEM,
+            [{"role": "system", "content": prompt}],
         )
-        text = resp.json()["choices"][0]["message"]["content"].strip()
-        text = re.sub(r'^```(?:json)?\s*', '', text)
-        text = re.sub(r'\s*```$', '', text)
-        evolved = json.loads(text)
-        evolved["bpm"] = sheet["bpm"]   # enforce BPM lock
-        # Enforce canonical tension so all agents have a consistent energy signal
-        canonical_tension = _SECTION_TENSION.get(next_section)
-        if canonical_tension is not None:
-            evolved["tension"] = canonical_tension
-        print(f"  Evolved -> bpm={evolved.get('bpm')} tension={evolved.get('tension', '?')} | mood={evolved.get('mood', '')[:60]}")
-        return evolved
+        evolved = _extract_sheet_json(response)
+        if evolved:
+            evolved["bpm"]     = sheet["bpm"]   # enforce BPM lock
+            evolved["tension"] = tension
+            print(
+                f"  Evolved -> {next_section} | bpm={evolved['bpm']} "
+                f"tension={tension} | {len(evolved.get('steps', []))} steps"
+            )
+            return evolved
+        print(f"  [evolve] no JSON found in response -- keeping current sheet")
     except Exception as e:
         print(f"  [evolve error] {e} -- keeping current sheet")
-        return current
+
+    fallback = copy.deepcopy(sheet)
+    fallback["tension"] = tension
+    return fallback
 
 
 # ── SESSION RUNNER ────────────────────────────────────────────────────────

@@ -17,6 +17,12 @@
               color:#666; cursor:pointer; border-radius:2px; font-family:monospace; min-width:1.4rem;
               text-align:center; user-select:none; }
     .ms-btn:hover { border-color:#555; }
+    .drum-profile-row { display:flex; gap:.4rem; margin:.4rem 0 .6rem; }
+    .profile-btn { font-size:.65rem; font-family:monospace; letter-spacing:.06em;
+                   padding:.2rem .55rem; border:1px solid #444; background:#1a1a1a;
+                   color:#666; cursor:pointer; border-radius:2px; user-select:none; }
+    .profile-btn:hover  { border-color:#888; color:#aaa; }
+    .profile-btn.active { border-color:#f90; color:#f90; background:#1e1600; }
     .ms-btn.active-m { background:#a03020; color:#fff; border-color:#a03020; }
     .ms-btn.active-s { background:#20a040; color:#fff; border-color:#20a040; }
     .vol-wrap { display:inline-flex; align-items:center; gap:.25rem; margin-left:.3rem; }
@@ -39,6 +45,14 @@
     .bass  .pad  { border-top-color:#1a5050; }
     .buchla .pad { border-top-color:#604010; }
     .chords .pad { border-top-color:#1a3050; }
+
+    /* ── Buchla XY Pad ── */
+    .buchla-ctrl { display:flex; flex-direction:column; align-items:flex-start; gap:.3rem; }
+    .buchla-xy-wrap { position:relative; }
+    .buchla-xy { display:block; cursor:crosshair; touch-action:none;
+                 border:1px solid #444; border-radius:3px; }
+    .buchla-xy-axes { display:flex; justify-content:space-between;
+                      font-size:.58rem; color:#555; margin-top:3px; width:100%; box-sizing:border-box; }
 
     /* ── Knobs ── */
     .knob-row { display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-start; }
@@ -178,8 +192,12 @@
 
 <!-- ── Drums ───────────────────────────────────────────────────────────── -->
 <div class="inst">
-  <div class="inst-hdr">DRUMS MS-20 <span>[t:10]</span> <button class="ms-btn" data-type="drum" data-ms="m">M</button><button class="ms-btn" data-type="drum" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="drum" min="0" max="100" value="100"></span></div>
-  <div class="pads drums" id="drum-pads"></div>
+  <div class="inst-hdr">DRUMS <span>[t:10]</span> <button class="ms-btn" data-type="drum" data-ms="m">M</button><button class="ms-btn" data-type="drum" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="drum" min="0" max="100" value="100"></span></div>
+  <div class="drum-profile-row">
+    <button class="profile-btn active" data-profile="0">808</button>
+    <button class="profile-btn"        data-profile="1">909</button>
+    <button class="profile-btn"        data-profile="2">606</button>
+  </div>
   <div class="knob-row" id="drum-knobs"></div>
 </div>
 
@@ -194,7 +212,7 @@
 <div class="inst">
   <div class="inst-hdr">BUCHLA 259/292 <span>[t:1]</span> <button class="ms-btn" data-type="buchla" data-ms="m">M</button><button class="ms-btn" data-type="buchla" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0" max="100" value="100"></span></div>
   <div class="pads buchla" id="buchla-notes"></div>
-  <div class="knob-row" id="buchla-knobs"></div>
+  <div class="buchla-ctrl" id="buchla-knobs"></div>
 </div>
 
 <!-- ── Pads ────────────────────────────────────────────────────────────── -->
@@ -211,144 +229,64 @@
   <div class="knob-row" id="rhodes-knobs"></div>
 </div>
 
-<!-- ── FX separator ─────────────────────────────────────────────────────── -->
-<div class="grid-sep">FX RACK</div>
+<!-- ── Master FX ─────────────────────────────────────────────────────────── -->
+<div class="grid-sep">MASTER FX</div>
 
-<!-- DELAY -->
+    <!-- MASTER DELAY -->
     <div class="fx-slot">
       <div class="fx-slot-hdr">
-        DELAY <span>[0]</span>
-        <button class="fx-on" id="fx0-on">ON</button>
-        <span class="fx-label" style="margin-left:auto">RETURN</span>
-        <input type="range" class="fx-send-sl" id="fx0-ret" min="0" max="100" value="70" style="width:44px">
+        MASTER DELAY
+        <button class="fx-on" id="fx-delay-on">ON</button>
       </div>
       <div class="fx-row">
         <span class="fx-label">TIME</span>
-        <select class="fx-select" id="fx0-time">
+        <select class="fx-select" id="fx-delay-time">
           <option value="1/32">1/32</option><option value="1/16">1/16</option>
           <option value="1/8" selected>1/8</option><option value="1/8d">1/8.</option>
           <option value="1/4">1/4</option><option value="1/4d">1/4.</option>
-          <option value="1/2">1/2</option><option value="1">1 bar</option>
+          <option value="1/2">1/2</option>
         </select>
-        <span class="fx-label">FDBK</span><div id="fx0-fdbk-wrap"></div>
-        <span class="fx-label">WET</span><div id="fx0-wet-wrap"></div>
+        <span class="fx-label">FDBK</span><div id="fx-delay-fdbk-wrap"></div>
+        <span class="fx-label">WET</span><div id="fx-delay-wet-wrap"></div>
       </div>
       <div class="fx-row">
         <span class="fx-label">LFO</span>
-        <select class="fx-select" id="fx0-ltype">
+        <select class="fx-select" id="fx-delay-ltype">
           <option value="sine">SIN</option><option value="square">SQR</option>
           <option value="sawtooth">SAW</option><option value="triangle">TRI</option>
           <option value="chaos">CHAOS</option>
         </select>
-        <span class="fx-label">RATE</span><div id="fx0-lrate-wrap"></div>
-        <span class="fx-label">DEPTH</span><div id="fx0-ldepth-wrap"></div>
+        <span class="fx-label">RATE</span><div id="fx-delay-lrate-wrap"></div>
+        <span class="fx-label">DEPTH</span><div id="fx-delay-ldepth-wrap"></div>
       </div>
       <div class="fx-row">
         <span class="fx-label">FB</span>
-        <select class="fx-select" id="fx0-fshape">
+        <select class="fx-select" id="fx-delay-fshape">
           <option value="none">CLEAN</option><option value="soft">SOFT</option>
           <option value="hard">HARD</option><option value="fold">FOLD</option>
           <option value="bit">BIT</option>
         </select>
-        <span class="fx-label">HP</span><div id="fx0-hp-wrap"></div>
-        <span class="fx-label">LP</span><div id="fx0-lp-wrap"></div>
+        <span class="fx-label">HP</span><div id="fx-delay-hp-wrap"></div>
+        <span class="fx-label">LP</span><div id="fx-delay-lp-wrap"></div>
       </div>
-      <div class="fx-send-grid" id="fx0-sends">
-        <div class="fx-send-item"><label>DRUMS</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="drum"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>BASS</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="bass"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>BUCHLA</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="buchla" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>PADS</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="pads"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>RHODES</label><input type="range" class="fx-send-sl" data-slot="0" data-instr="rhodes" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-      </div>
-      <div class="fx-row">
-        <span class="fx-label">SC</span>
-        <select class="fx-select" id="fx0-sc">
-          <option value="">NONE</option>
-          <option value="drum">DRUM</option><option value="bass">BASS</option>
-          <option value="buchla">BUCHLA</option><option value="pads">PADS</option>
-          <option value="rhodes">RHODES</option>
-        </select>
-        <span class="fx-label">DUCK</span><div id="fx0-scdepth-wrap"></div>
-      </div>
-      <div class="fx-step-seq" id="fx0-steps"></div>
     </div>
 
-    <!-- WAVESHAPER -->
+    <!-- MASTER WAVESHAPER -->
     <div class="fx-slot">
       <div class="fx-slot-hdr">
-        WAVESHAPER <span>[1]</span>
-        <button class="fx-on" id="fx1-on">ON</button>
-        <span class="fx-label" style="margin-left:auto">RETURN</span>
-        <input type="range" class="fx-send-sl" id="fx1-ret" min="0" max="100" value="70" style="width:44px">
+        MASTER WAVESHAPER
+        <button class="fx-on" id="fx-shape-on">ON</button>
       </div>
       <div class="fx-row">
         <span class="fx-label">TYPE</span>
-        <select class="fx-select" id="fx1-type">
+        <select class="fx-select" id="fx-shape-type">
           <option value="soft">SOFT</option><option value="hard">HARD</option>
           <option value="fold">FOLD</option><option value="bit">BIT</option>
         </select>
-        <span class="fx-label">DRIVE</span><div id="fx1-drive-wrap"></div>
-        <span class="fx-label">TONE</span><div id="fx1-tone-wrap"></div>
-        <span class="fx-label">WET</span><div id="fx1-wet-wrap"></div>
+        <span class="fx-label">DRIVE</span><div id="fx-shape-drive-wrap"></div>
+        <span class="fx-label">TONE</span><div id="fx-shape-tone-wrap"></div>
+        <span class="fx-label">WET</span><div id="fx-shape-wet-wrap"></div>
       </div>
-      <div class="fx-send-grid" id="fx1-sends">
-        <div class="fx-send-item"><label>DRUMS</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="drum"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>BASS</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="bass"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>BUCHLA</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="buchla" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>PADS</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="pads"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>RHODES</label><input type="range" class="fx-send-sl" data-slot="1" data-instr="rhodes" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-      </div>
-      <div class="fx-row">
-        <span class="fx-label">SC</span>
-        <select class="fx-select" id="fx1-sc">
-          <option value="">NONE</option>
-          <option value="drum">DRUM</option><option value="bass">BASS</option>
-          <option value="buchla">BUCHLA</option><option value="pads">PADS</option>
-          <option value="rhodes">RHODES</option>
-        </select>
-        <span class="fx-label">PUMP</span><div id="fx1-scdepth-wrap"></div>
-      </div>
-      <div class="fx-step-seq" id="fx1-steps"></div>
-    </div>
-
-    <!-- BEAT REPEAT -->
-    <div class="fx-slot">
-      <div class="fx-slot-hdr">
-        BEAT REPEAT <span>[2]</span>
-        <button class="fx-arm" id="fx2-arm">ARM</button>
-        <button class="fx-gate" id="fx2-gate">GATE</button>
-        <span class="fx-label" style="margin-left:auto">RETURN</span>
-        <input type="range" class="fx-send-sl" id="fx2-ret" min="0" max="100" value="70" style="width:44px">
-      </div>
-      <div class="fx-row">
-        <span class="fx-label">SLICE</span>
-        <select class="fx-select" id="fx2-slice">
-          <option value="0.125">1/32</option><option value="0.25" selected>1/16</option>
-          <option value="0.5">1/8</option><option value="1">1/4</option>
-          <option value="2">1/2</option><option value="4">1 bar</option>
-        </select>
-        <span class="fx-label">RATE</span><div id="fx2-rate-wrap"></div>
-        <span class="fx-label">DECAY</span><div id="fx2-decay-wrap"></div>
-        <span class="fx-label">WET</span><div id="fx2-wet-wrap"></div>
-      </div>
-      <div class="fx-send-grid" id="fx2-sends">
-        <div class="fx-send-item"><label>DRUMS</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="drum"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>BASS</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="bass"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>BUCHLA</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="buchla" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>PADS</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="pads"   min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-        <div class="fx-send-item"><label>RHODES</label><input type="range" class="fx-send-sl" data-slot="2" data-instr="rhodes" min="0" max="100" value="0"><span class="fx-send-val">0</span></div>
-      </div>
-      <div class="fx-row">
-        <span class="fx-label">SC</span>
-        <select class="fx-select" id="fx2-sc">
-          <option value="">NONE</option>
-          <option value="drum">DRUM</option><option value="bass">BASS</option>
-          <option value="buchla">BUCHLA</option><option value="pads">PADS</option>
-          <option value="rhodes">RHODES</option>
-        </select>
-        <span class="fx-label">TRIG</span><div id="fx2-scdepth-wrap"></div>
-      </div>
-      <div class="fx-step-seq" id="fx2-steps"></div>
     </div>
 
 </div><!-- /inst-grid -->
@@ -371,42 +309,89 @@
   </div>
   <span class="label-sm">ClankerBoy JSON — edit &amp; press PLAY</span>
   <textarea id="sheet-json">{
-  "explanation": { "section": "verse", "style": "detroit techno", "key": "D minor", "energy": 0.75 },
-  "bpm": 126,
+  "explanation": {
+    "intent": "melancholy, introspective, late-night warmth — pad adds harmonic depth and atmosphere",
+    "style": "cool jazz",
+    "timbre": "warm, dark, dry rhodes leads; lush slow-attack reverb pad recessed behind; buchla woody plucks high",
+    "section": "verse1",
+    "energy": 0.35,
+    "key": "Bb natural minor",
+    "progression": "i Bbm7 → iv Ebm7 → VII AbMaj7 → III DbMaj7",
+    "rhythm": "kick on 1+3, snare on 2+4, HH sparse 8ths, walking bass roots+passing tones",
+    "orchestration": "rhodes two-hand voicing leads, pad shell chords (3rd+7th rootless) slow swell behind, buchla high arpeggiated fills, bass walks roots, drums minimal brush feel",
+    "pad_voicing": "bar1 Bbm7: [61,68] Db4+Ab4 | bar2 Ebm7: [66,61] Gb4+Db4 | bar3 AbMaj7: [67,72] G4+C5 | bar4 DbMaj7: [65,72] F4+C5"
+  },
+  "bpm": 92,
   "steps": [
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [42], "v": 60 }, { "t": 2, "n": [2], "v": 98, "cc": {"71":42,"74":48,"23":30,"73":8,"75":50,"79":80,"72":22,"18":10} }, { "t": 6, "n": [50,53,57,62], "v": 58, "dur": 8.0, "cc": {"74":45,"73":12,"72":55,"91":50,"88":60,"29":25,"30":45,"31":40} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 45 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 65 }, { "t": 1, "n": [62], "v": 82, "cc": {"74":72,"20":37,"17":8,"19":6,"71":28} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 48 }, { "t": 2, "n": [2], "v": 85, "cc": {"74":50,"23":26} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 108 }, { "t": 10, "n": [38], "v": 100 }, { "t": 10, "n": [42], "v": 62 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 42 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 68 }, { "t": 2, "n": [9], "v": 88, "cc": {"74":44,"23":22} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 50 }, { "t": 1, "n": [57], "v": 72, "cc": {"74":68,"20":35,"17":10,"19":8} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [42], "v": 58 }, { "t": 2, "n": [2], "v": 92, "cc": {"74":52,"23":28} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 44 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 66 }, { "t": 1, "n": [54], "v": 78, "cc": {"74":70,"20":40,"17":12,"19":5} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 105 }, { "t": 10, "n": [38], "v": 95 }, { "t": 10, "n": [42], "v": 70 }, { "t": 2, "n": [6], "v": 90, "cc": {"74":46,"23":24} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 40 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [46], "v": 78 }, { "t": 2, "n": [9], "v": 82, "cc": {"74":42,"23":20} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 52 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 108 }, { "t": 10, "n": [42], "v": 62 }, { "t": 2, "n": [2], "v": 95, "cc": {"74":48,"23":30} }, { "t": 6, "n": [53,57,60,65], "v": 55, "dur": 8.0, "cc": {"74":42,"73":10,"72":58,"91":55,"88":62} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 64 }, { "t": 1, "n": [60], "v": 85, "cc": {"74":75,"20":42,"17":15,"19":7,"71":25} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 50 }, { "t": 2, "n": [6], "v": 86, "cc": {"74":50,"23":25} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 110 }, { "t": 10, "n": [38], "v": 98 }, { "t": 10, "n": [42], "v": 60 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 44 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 66 }, { "t": 2, "n": [4], "v": 84, "cc": {"74":44,"23":22} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 48 }, { "t": 1, "n": [65], "v": 75, "cc": {"74":65,"20":32,"17":8,"19":10} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 106 }, { "t": 10, "n": [42], "v": 58 }, { "t": 2, "n": [2], "v": 90, "cc": {"74":50,"23":28} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 42 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 68 }, { "t": 1, "n": [58], "v": 80, "cc": {"74":72,"20":38,"17":10,"19":5} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 46 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [36], "v": 104 }, { "t": 10, "n": [38], "v": 92 }, { "t": 10, "n": [42], "v": 72 }, { "t": 2, "n": [9], "v": 88, "cc": {"74":46,"23":26} }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 38 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [46], "v": 82 }] },
-    { "d": 0.25, "tracks": [{ "t": 10, "n": [42], "v": 55 }, { "t": 2, "n": [4], "v": 80, "cc": {"74":42,"23":18} }] }
-  ]
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":92},{"t":2,"n":[10],"v":85,"cc":{"18":10,"23":30,"71":42,"72":22,"73":8,"74":48,"75":50,"79":80}},{"t":3,"n":[58,68],"v":68,"dur":3.5,"cc":{"72":90,"73":48,"74":52}},{"t":6,"n":[61,68],"v":58,"dur":7.5,"cc":{"29":28,"30":50,"72":95,"73":68,"74":32,"88":85,"91":88}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":62}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55},{"t":1,"n":[65],"v":82,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58},{"t":1,"n":[68],"v":76,"cc":{"10":22,"17":6,"19":6,"20":37,"71":26,"74":68}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":3,"n":[65,70],"v":72,"dur":2,"cc":{"72":85,"73":40,"74":55}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":88},{"t":2,"n":[10],"v":80,"cc":{"23":28,"74":45}},{"t":1,"n":[61],"v":80,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":72}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[65],"v":85,"cc":{"10":22,"17":7,"19":5,"20":37,"71":28,"74":74}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":82},{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":50},{"t":2,"n":[12],"v":75,"cc":{"23":25,"74":50}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[70],"v":78,"cc":{"10":24,"17":8,"19":6,"20":37,"71":26,"74":66}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":90},{"t":2,"n":[15],"v":86,"cc":{"23":32,"74":46}},{"t":3,"n":[63,70],"v":66,"dur":3.5,"cc":{"72":90,"73":46,"74":50}},{"t":6,"n":[66,61],"v":56,"dur":7.5,"cc":{"29":28,"30":50,"72":95,"73":66,"74":30,"88":85,"91":88}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":1,"n":[66],"v":80,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":76}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":3,"n":[66,73],"v":70,"dur":2,"cc":{"72":86,"73":42,"74":54}},{"t":1,"n":[70],"v":78,"cc":{"10":22,"17":7,"19":5,"20":37,"71":26,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":86},{"t":2,"n":[15],"v":78,"cc":{"23":28,"74":44}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56},{"t":1,"n":[63],"v":82,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":66}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":80},{"t":10,"n":[42],"v":52}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[66],"v":76,"cc":{"10":24,"17":7,"19":6,"20":37,"71":26,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":2,"n":[17],"v":74,"cc":{"23":26,"74":48}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[70],"v":80,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":94},{"t":2,"n":[20],"v":88,"cc":{"23":30,"74":50}},{"t":3,"n":[68,75],"v":64,"dur":3.5,"cc":{"72":92,"73":44,"74":48}},{"t":6,"n":[67,72],"v":54,"dur":7.5,"cc":{"29":26,"30":52,"72":95,"73":64,"74":28,"88":88,"91":90}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":62}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":54},{"t":1,"n":[68],"v":84,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":72}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56}]},
+    {"d":0.25,"tracks":[{"t":3,"n":[72,79],"v":68,"dur":2,"cc":{"72":88,"73":40,"74":52}},{"t":1,"n":[72],"v":76,"cc":{"10":22,"17":7,"19":6,"20":37,"71":26,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":88},{"t":2,"n":[20],"v":80,"cc":{"23":28,"74":46}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58},{"t":1,"n":[75],"v":80,"cc":{"10":18,"17":9,"19":5,"20":37,"71":30,"74":68}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":80},{"t":10,"n":[42],"v":54}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[68],"v":78,"cc":{"10":24,"17":8,"19":5,"20":37,"71":26,"74":66}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56}]},
+    {"d":0.25,"tracks":[{"t":2,"n":[22],"v":76,"cc":{"23":26,"74":48}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[72],"v":82,"cc":{"10":20,"17":7,"19":5,"20":37,"71":28,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":92},{"t":2,"n":[13],"v":84,"cc":{"23":29,"74":47}},{"t":3,"n":[61,68],"v":66,"dur":3,"cc":{"72":88,"73":44,"74":50}},{"t":6,"n":[65,72],"v":55,"dur":3,"cc":{"29":28,"30":50,"72":92,"73":65,"74":30,"88":85,"91":88}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":1,"n":[65],"v":82,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":76}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":3,"n":[65,72],"v":70,"dur":1.5,"cc":{"72":86,"73":42,"74":53}},{"t":1,"n":[68],"v":76,"cc":{"10":22,"17":7,"19":6,"20":37,"71":26,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":86},{"t":2,"n":[13],"v":76,"cc":{"23":25,"74":44}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56},{"t":1,"n":[61],"v":80,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":66}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78},{"t":10,"n":[42],"v":52}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[65],"v":78,"cc":{"10":24,"17":8,"19":5,"20":37,"71":26,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":2,"n":[10],"v":72,"cc":{"23":24,"74":46}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[68],"v":75,"cc":{"10":22,"17":7,"19":6,"20":37,"71":24,"74":66}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[]}
+  ],
+  "tension": 0.3
 }</textarea>
 </div>
 
@@ -436,6 +421,10 @@
   <h2>BAND CHAT <span id="session-badge"></span></h2>
   <div class="input-row">
     <input id="brief-input" type="text" placeholder="Describe your track (dark techno, 130 bpm…)" />
+    <span style="display:flex;gap:.3rem;flex-shrink:0;">
+      <button id="btn-session-solo" class="mode-btn mode-active" title="Single LLM pass — fast">SOLO</button>
+      <button id="btn-session-band" class="mode-btn" title="Full 3-member debate — slower, richer">BAND</button>
+    </span>
     <button id="btn-new-session">START SESSION</button>
   </div>
   <div id="chat-messages"><span class="msg-sys">Start a session to talk to the band.</span></div>
@@ -459,10 +448,8 @@
 <div id="log">Click a pad or press PLAY to start.</div>
 
 <script type="module">
-import init, { ClankersDrums, ClankersBass, ClankersBuchla, ClankersPads, ClankersRhodes }
-  from './wasm/clankers_dsp.js?v=17';
-import { Sequencer } from './sequencer.js?v=17';
-import { FxRack, makeCurve, divToSec } from './fx.js';
+import { Sequencer } from './sequencer.js?v=18';
+import { MasterFx, makeCurve, divToSec } from './fx.js';
 
 // ─── Knob class ────────────────────────────────────────────────────────────
 class Knob {
@@ -551,103 +538,115 @@ function makeKnobGroup(container, groupLabel, knobDefs) {
 }
 
 // ─── Audio state ───────────────────────────────────────────────────────────
-let ctx    = null;
-let engine = null;   // ClankersDrums
-let bass   = null;   // ClankersBass
-let buchla = null;   // ClankersBuchla
-let pads   = null;   // ClankersPads
-let rhodes = null;   // ClankersRhodes
-let rack   = null;   // FxRack
+let ctx        = null;
+let _readyPromise = null; // singleton init promise — prevents concurrent ensureReady races
+let drumsNode  = null;   // AudioWorkletNode — drums
+let bassNode   = null;   // AudioWorkletNode — bass
+let buchlaNode = null;   // AudioWorkletNode — buchla
+let padsNode   = null;   // AudioWorkletNode — pads
+let rhodesNode = null;   // AudioWorkletNode — rhodes
+let rack       = null;   // MasterFx
+
+function waitForReady(node) {
+  return new Promise((resolve, reject) => {
+    node.port.addEventListener('message', function handler(e) {
+      if (e.data.type === 'ready') {
+        node.port.removeEventListener('message', handler);
+        resolve();
+      } else if (e.data.type === 'error') {
+        node.port.removeEventListener('message', handler);
+        reject(new Error(e.data.message));
+      }
+    });
+    node.port.start();
+  });
+}
 
 async function ensureReady() {
-  if (engine) {
+  if (drumsNode) {
     if (ctx.state === 'suspended') await ctx.resume();
     return;
   }
+  if (_readyPromise) return _readyPromise;
+  _readyPromise = _doInit();
+  return _readyPromise;
+}
+
+async function _doInit() {
   ctx = new AudioContext({ sampleRate: 44100 });
   log('AudioContext @ ' + ctx.sampleRate + ' Hz');
-  await init();
+
+  // Compile WASM once on main thread, share compiled module with all worklets
+  const wasmBytes  = await fetch('/wasm/clankers_dsp_bg.wasm').then(r => r.arrayBuffer());
+  const wasmModule = await WebAssembly.compile(wasmBytes);
+
+  await ctx.audioWorklet.addModule('/worklets/drums-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/bass-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/buchla-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/pads-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/rhodes-worklet.js');
+
   const seed = (Math.random() * 0xffffffff) >>> 0;
-  engine = new ClankersDrums(seed);
-  bass   = new ClankersBass(seed ^ 0xdeadbeef);
-  buchla = new ClankersBuchla();
-  pads   = new ClankersPads();
-  rhodes = new ClankersRhodes();
-  rack   = new FxRack(ctx);
+  drumsNode  = new AudioWorkletNode(ctx, 'drums-worklet',  { processorOptions: { wasmModule, seed }, outputChannelCount: [1] });
+  bassNode   = new AudioWorkletNode(ctx, 'bass-worklet',   { processorOptions: { wasmModule, seed: seed ^ 0xdeadbeef } });
+  buchlaNode = new AudioWorkletNode(ctx, 'buchla-worklet', { processorOptions: { wasmModule } });
+  padsNode   = new AudioWorkletNode(ctx, 'pads-worklet',   { processorOptions: { wasmModule }, outputChannelCount: [2] });
+  rhodesNode = new AudioWorkletNode(ctx, 'rhodes-worklet', { processorOptions: { wasmModule }, outputChannelCount: [2] });
+
+  await Promise.all([
+    waitForReady(drumsNode),
+    waitForReady(bassNode),
+    waitForReady(buchlaNode),
+    waitForReady(padsNode),
+    waitForReady(rhodesNode),
+  ]);
+
+  rack = new MasterFx(ctx);
   initFxUI();
-  log('WASM engines ready — click any pad!');
-  window._engine = engine; window._bass = bass; window._buchla = buchla;
-  window._pads = pads; window._rhodes = rhodes; window._ctx = ctx; window._rack = rack;
-}
-
-function playMono(samples) {
-  if (!samples || !samples.length) return;
-  const ab  = ctx.createBuffer(1, samples.length, 44100);
-  ab.copyToChannel(samples, 0);
-  const src = ctx.createBufferSource();
-  src.buffer = ab;
-  src.connect(ctx.destination);
-  src.start();
-}
-
-function playStereoInterleaved(interleaved) {
-  if (!interleaved || interleaved.length < 2) return;
-  const frames = Math.floor(interleaved.length / 2);
-  const ab  = ctx.createBuffer(2, frames, 44100);
-  const l = new Float32Array(frames), r = new Float32Array(frames);
-  for (let i = 0; i < frames; i++) { l[i] = interleaved[i*2]; r[i] = interleaved[i*2+1]; }
-  ab.copyToChannel(l, 0); ab.copyToChannel(r, 1);
-  const src = ctx.createBufferSource();
-  src.buffer = ab; src.connect(ctx.destination); src.start();
+  log('Worklets ready — click any pad!');
+  window._ctx = ctx; window._rack = rack;
+  window._drumsNode = drumsNode; window._bassNode = bassNode;
+  window._buchlaNode = buchlaNode; window._padsNode = padsNode; window._rhodesNode = rhodesNode;
 }
 
 // ─── DRUMS ─────────────────────────────────────────────────────────────────
-const DRUM_PADS = [
-  { label: 'KICK',   id: 0 }, { label: 'SNARE',  id: 1 },
-  { label: 'HH CL', id: 2 }, { label: 'HH OP',  id: 3 },
-  { label: 'TOM L', id: 4 }, { label: 'TOM M',   id: 5 }, { label: 'TOM H', id: 6 },
-];
 
-const drumPadGrid = document.getElementById('drum-pads');
-DRUM_PADS.forEach(({ label, id }) => {
-  const btn = document.createElement('button');
-  btn.className = 'pad'; btn.textContent = label;
-  btn.addEventListener('click', () => triggerDrum(id));
-  drumPadGrid.appendChild(btn);
-});
-
+// Global drum knobs
 const drumKnobContainer = document.getElementById('drum-knobs');
-const dk = {
-  ...makeKnobGroup(drumKnobContainer, 'KICK', [
-    { id: 'k-pitch', label: 'PITCH', min: 0, max: 1, value: 0.45 },
-    { id: 'k-sweep', label: 'SWEEP', min: 0, max: 1, value: 0.30 },
-    { id: 'k-decay', label: 'DECAY', min: 0, max: 1, value: 0.15 },
-  ]),
-  ...makeKnobGroup(drumKnobContainer, 'SNARE', [
-    { id: 's-pitch', label: 'PITCH', min: 0, max: 1, value: 0.40 },
-    { id: 's-decay', label: 'DECAY', min: 0, max: 1, value: 0.50 },
-  ]),
-  ...makeKnobGroup(drumKnobContainer, 'HH', [
-    { id: 'h-decay',  label: 'DECAY',  min: 0, max: 1, value: 0.30 },
-    { id: 'h-cutoff', label: 'CUTOFF', min: 0, max: 1, value: 0.60 },
-  ]),
-};
-window._dk = dk;
+const drumGlobalKnobs = makeKnobGroup(drumKnobContainer, '', [
+  { id: 'd-pitch',  label: 'PITCH',  min: -12, max: 12,    value: 0,     step: 0.5  },
+  { id: 'd-filter', label: 'FILTER', min: 0,   max: 127,   value: 127,   step: 1    },
+  { id: 'd-decay',  label: 'DECAY',  min: 0,   max: 127,   value: 63,    step: 1    },
+]);
 
-function triggerDrum(id) {
-  ensureReady().then(() => {
-    let p0, p1, p2;
-    switch (id) {
-      case 0: p0=dk['k-pitch'].val; p1=dk['k-sweep'].val; p2=dk['k-decay'].val; break;
-      case 1: p0=dk['s-pitch'].val; p1=dk['s-decay'].val; p2=0.2; break;
-      case 2: p0=dk['h-decay'].val; p1=dk['h-cutoff'].val; p2=0.1; break;
-      case 3: p0=dk['h-decay'].val*1.5; p1=dk['h-cutoff'].val*0.8; p2=0.1; break;
-      default: p0=0.5; p1=0.5; p2=0.5;
-    }
-    playMono(engine.trigger_render(id, 0.85, p0, p1, p2));
-    log(`drum v=${id} p0=${p0.toFixed(2)} p1=${p1.toFixed(2)} p2=${p2.toFixed(2)}`);
-  });
+function sendDrumsParams() {
+  if (!drumsNode) return;
+  const pitch  = drumGlobalKnobs['d-pitch'].val;
+  const filt   = drumGlobalKnobs['d-filter'].val;
+  const decay  = drumGlobalKnobs['d-decay'].val;
+  // Log-scale filter: 80 * (18000/80)^(v/127)  →  80..18000 Hz
+  const hz     = 80 * Math.pow(225, filt / 127);
+  // Log-scale decay: 0.1 * 40^(v/127)  →  0.1..4.0 multiplier
+  const mult   = 0.1 * Math.pow(40, decay / 127);
+  drumsNode.port.postMessage({ type: 'setPitch',  semitones: pitch });
+  drumsNode.port.postMessage({ type: 'setFilter', hz });
+  drumsNode.port.postMessage({ type: 'setDecay',  mult });
 }
+
+for (const k of Object.values(drumGlobalKnobs)) k.onChange = sendDrumsParams;
+
+// Profile selector
+document.querySelectorAll('.profile-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const profileId = +btn.dataset.profile;
+    ensureReady().then(() => {
+      drumsNode.port.postMessage({ type: 'setProfile', profileId });
+      log(`drums → profile ${['808','909','606'][profileId]}`);
+    });
+  });
+});
 
 // ─── BASS ──────────────────────────────────────────────────────────────────
 const BASS_NOTES = [
@@ -678,11 +677,13 @@ function triggerBass(midi) {
   ensureReady().then(() => {
     const bpm = +document.getElementById('seq-bpm').value;
     const holdSamples = Math.round(1.5 * (60 / bpm) * 44100);
-    const cc = JSON.stringify({
+    const ccJson = JSON.stringify({
       71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
       73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
     });
-    playMono(bass.trigger_render(midi + bassOctKnob.val * 12, 0.85, holdSamples, cc));
+    bassNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                midiNote: midi + bassOctKnob.val * 12,
+                                velocity: 0.85, holdSamples, ccJson });
     log(`bass midi=${midi} cc74=${bk['b-cutoff'].val}`);
   });
 }
@@ -702,24 +703,110 @@ BUCHLA_NOTES.forEach(({ label, midi }) => {
   buchlaGrid.appendChild(btn);
 });
 
-const buchlaKnobContainer = document.getElementById('buchla-knobs');
-const uk = makeKnobGroup(buchlaKnobContainer, 'BUCHLA', [
-  { id: 'u-cutoff', label: 'CUTOFF', min: 0, max: 127, value: 72, step: 1 },
-  { id: 'u-fold',   label: 'FOLD',   min: 0, max: 127, value: 37, step: 1 },
-  { id: 'u-fm',     label: 'FM',     min: 0, max: 127, value: 8,  step: 1 },
-  { id: 'u-decay',  label: 'DECAY',  min: 0, max: 127, value: 5,  step: 1 },
-  { id: 'u-res',    label: 'RES',    min: 0, max: 127, value: 28, step: 1 },
-]);
+// ─── Buchla XY pad (4-param: X→FOLD+LPF, Y→F.MOD+RELEASE) ─────────────────
+const _buchlaContainer = document.getElementById('buchla-knobs');
+
+// State — all 4 params driven by one XY position
+const uk = {
+  'u-fold':    { val: 37 },   // CC20 — X axis
+  'u-cutoff':  { val: 56 },   // CC74 — X axis (linked)
+  'u-fmod':    { val: 0  },   // CC21 — Y axis
+  'u-release': { val: 29 },   // CC19 — Y axis (linked)
+};
+
+// Canvas
+const _xyWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
+const _xyCv   = Object.assign(document.createElement('canvas'), {
+  className: 'buchla-xy', width: 190, height: 190,
+});
+const _xyAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
+_xyAxes.innerHTML = '<span>← dark · bright →</span><span>FOLD · F.MOD · RELEASE · LPF</span>';
+_xyWrap.append(_xyCv, _xyAxes);
+_buchlaContainer.appendChild(_xyWrap);
+
+const _xyCtx = _xyCv.getContext('2d');
+
+function _drawXY() {
+  const W = _xyCv.width, H = _xyCv.height;
+  const nx = uk['u-fold'].val / 127;          // 0..1
+  const ny = uk['u-fmod'].val / 127;          // 0..1
+  const px = nx * W;
+  const py = (1 - ny) * H;
+
+  _xyCtx.clearRect(0, 0, W, H);
+
+  // Background gradient: dark-bottom-left → bright-top-right
+  const grad = _xyCtx.createLinearGradient(0, H, W, 0);
+  grad.addColorStop(0,   '#0d0d0d');
+  grad.addColorStop(0.5, '#141a14');
+  grad.addColorStop(1,   '#1a2010');
+  _xyCtx.fillStyle = grad;
+  _xyCtx.fillRect(0, 0, W, H);
+
+  // Grid
+  _xyCtx.strokeStyle = '#252525';
+  _xyCtx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    _xyCtx.beginPath(); _xyCtx.moveTo(W * i / 4, 0); _xyCtx.lineTo(W * i / 4, H); _xyCtx.stroke();
+    _xyCtx.beginPath(); _xyCtx.moveTo(0, H * i / 4); _xyCtx.lineTo(W, H * i / 4); _xyCtx.stroke();
+  }
+
+  // Crosshair
+  _xyCtx.strokeStyle = 'rgba(255,153,0,0.25)';
+  _xyCtx.lineWidth = 1;
+  _xyCtx.beginPath(); _xyCtx.moveTo(px, 0); _xyCtx.lineTo(px, H); _xyCtx.stroke();
+  _xyCtx.beginPath(); _xyCtx.moveTo(0, py); _xyCtx.lineTo(W, py); _xyCtx.stroke();
+
+  // Dot
+  _xyCtx.beginPath();
+  _xyCtx.arc(px, py, 5, 0, Math.PI * 2);
+  _xyCtx.fillStyle = '#f90';
+  _xyCtx.fill();
+
+  // Value readout inside canvas
+  _xyCtx.font = '9px monospace';
+  _xyCtx.fillStyle = '#555';
+  _xyCtx.fillText(`FOLD ${uk['u-fold'].val}  LPF ${uk['u-cutoff'].val}`, 6, H - 16);
+  _xyCtx.fillText(`FMOD ${uk['u-fmod'].val}  REL ${uk['u-release'].val}`, 6, H - 5);
+}
+_drawXY();
+
+function _xyUpdate(e) {
+  const r  = _xyCv.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  const nx = Math.max(0, Math.min(1, cx / r.width));
+  const ny = Math.max(0, Math.min(1, 1 - cy / r.height));
+
+  // X axis → FOLD + LPF
+  uk['u-fold'].val   = Math.round(nx * 127);
+  uk['u-cutoff'].val = Math.round(nx * 127);
+  // Y axis → F.MOD + RELEASE
+  uk['u-fmod'].val    = Math.round(ny * 127);
+  uk['u-release'].val = Math.round(ny * 127);
+
+  _drawXY();
+  sendBuchlaParams();
+}
+let _xyDrag = false;
+_xyCv.addEventListener('mousedown',  e => { _xyDrag = true;  _xyUpdate(e); });
+_xyCv.addEventListener('mousemove',  e => { if (_xyDrag) _xyUpdate(e); });
+_xyCv.addEventListener('mouseup',    () => _xyDrag = false);
+_xyCv.addEventListener('mouseleave', () => _xyDrag = false);
+_xyCv.addEventListener('touchstart', e => { e.preventDefault(); _xyUpdate(e); }, { passive: false });
+_xyCv.addEventListener('touchmove',  e => { e.preventDefault(); _xyUpdate(e); }, { passive: false });
+
+function buchlaCC() {
+  return { 74: uk['u-cutoff'].val, 20: uk['u-fold'].val,
+           21: uk['u-fmod'].val,   19: uk['u-release'].val };
+}
 
 function triggerBuchla(midi) {
   ensureReady().then(() => {
-    const cc = JSON.stringify({
-      74: uk['u-cutoff'].val, 20: uk['u-fold'].val,
-      17: uk['u-fm'].val,     19: uk['u-decay'].val,
-      71: uk['u-res'].val,    10: 20,
-    });
-    playMono(buchla.trigger_render(midi, 0.85, cc));
-    log(`buchla midi=${midi} fold=${uk['u-fold'].val} fm=${uk['u-fm'].val}`);
+    const ccJson = JSON.stringify(buchlaCC());
+    buchlaNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                  midiNote: midi, velocity: 0.85, ccJson });
+    log(`buchla midi=${midi} fold=${uk['u-fold'].val} lpf=${uk['u-cutoff'].val} fmod=${uk['u-fmod'].val} rel=${uk['u-release'].val}`);
   });
 }
 
@@ -754,12 +841,14 @@ function triggerChord(notes) {
   ensureReady().then(() => {
     const bpm = +document.getElementById('seq-bpm').value;
     const holdSamples = Math.round(2 * (60 / bpm) * 44100);
-    const cc = JSON.stringify({
+    const ccJson = JSON.stringify({
       74: pk['p-cutoff'].val, 73: pk['p-atk'].val, 72: pk['p-rel'].val,
       91: pk['p-rev'].val,    88: 80, 29: 30, 30: pk['p-cho'].val, 31: pk['p-cho'].val,
     });
+    padsNode.port.postMessage({ type: 'setParams', ccJson });
     for (const note of notes) {
-      playStereoInterleaved(pads.trigger_render(note, 0.75, holdSamples, cc));
+      padsNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                  midiNote: note, velocity: 0.75, holdSamples });
     }
     log(`pads [${notes.join(',')}] hold=${holdSamples}`);
   });
@@ -800,36 +889,39 @@ function triggerRhodes(midi) {
   ensureReady().then(() => {
     const bpm = +document.getElementById('seq-bpm').value;
     const holdSamples = Math.round(2 * (60 / bpm) * 44100);
-    const cc = JSON.stringify({
+    const ccJson = JSON.stringify({
       74: rk['r-bright'].val, 72: rk['r-decay'].val,
       73: rk['r-bark'].val,   20: rk['r-ratio'].val,
       26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
       30: rk['r-chorus'].val,
     });
-    playStereoInterleaved(rhodes.trigger_render(midi, 0.78, holdSamples, cc));
+    rhodesNode.port.postMessage({ type: 'setParams', ccJson });
+    rhodesNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                  midiNote: midi, velocity: 0.78, holdSamples });
     log(`rhodes midi=${midi} bright=${rk['r-bright'].val} decay=${rk['r-decay'].val}`);
   });
 }
 
-const rerenderRhodes = debounce(() => {
-  if (!seq || !seq.isPlaying) return;
-  seq.rerender('rhodes', {
-    ccJson: JSON.stringify({
-      74: rk['r-bright'].val, 72: rk['r-decay'].val,
-      73: rk['r-bark'].val,   20: rk['r-ratio'].val,
-      26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
-      30: rk['r-chorus'].val,
-    }),
-  });
-}, 100);
+function sendRhodesParams() {
+  if (!rhodesNode) return;
+  rhodesNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify({
+    74: rk['r-bright'].val, 72: rk['r-decay'].val,
+    73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+    26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
+    30: rk['r-chorus'].val,
+  })});
+}
 
-for (const k of Object.values(rk)) k.onChange = rerenderRhodes;
+for (const k of Object.values(rk)) k.onChange = sendRhodesParams;
 
 // ─── Sequencer ─────────────────────────────────────────────────────────────
 let seq = null;
 
 function getSeq() {
-  if (!seq) seq = new Sequencer(ctx, { drums: engine, bass, buchla, pads, rhodes });
+  if (!seq) {
+    seq = new Sequencer(ctx, { drums: drumsNode, bass: bassNode,
+                               buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode });
+  }
   return seq;
 }
 
@@ -865,7 +957,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     }
     document.getElementById('btn-play').disabled = true;
     document.getElementById('btn-stop').disabled = false;
-    if (rack) rack.attach(s._instrGains, s._masterGain);
+    if (rack) rack.attach(s._masterGain, ctx.destination);
     startViz();
   } catch (e) {
     log('Seq error: ' + e);
@@ -886,65 +978,37 @@ document.getElementById('seq-bpm').addEventListener('input', function () {
   if (seq && seq.isPlaying) seq._bpm = +this.value;
 });
 
-// ─── Live knob → re-render wiring ──────────────────────────────────────────
-// Debounce to avoid re-rendering on every pixel of mouse drag
-function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+// ─── Live knob → worklet param wiring ─────────────────────────────────────
+// Direct postMessage — no debounce needed, takes effect within ~3ms audio block.
 
-const rerenderDrums = debounce(() => {
-  if (!seq || !seq.isPlaying) return;
-  seq.rerender('drum', ev => {
-    switch (ev.voiceId) {
-      case 0: return { p0: dk['k-pitch'].val, p1: dk['k-sweep'].val, p2: dk['k-decay'].val };
-      case 1: return { p0: dk['s-pitch'].val, p1: dk['s-decay'].val };
-      case 2: return { p0: dk['h-decay'].val, p1: dk['h-cutoff'].val };
-      case 3: return { p0: dk['h-decay'].val * 1.5, p1: dk['h-cutoff'].val * 0.8 };
-      default: return {};
-    }
-  });
-}, 80);
+function sendBassParams() {
+  if (!bassNode) return;
+  bassNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify({
+    71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
+    73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
+  })});
+}
 
-const rerenderBass = debounce(() => {
-  if (!seq || !seq.isPlaying) return;
-  const octShift = bassOctKnob.val * 12;
-  seq.rerender('bass', ev => ({
-    midiNote: Math.max(0, Math.min(127, ev.midiNote + octShift)),
-    ccJson: JSON.stringify({
-      71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
-      73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
-    }),
-  }));
-}, 80);
+function sendBuchlaParams() {
+  if (!buchlaNode) return;
+  buchlaNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify(buchlaCC()) });
+}
 
-const rerenderBuchla = debounce(() => {
-  if (!seq || !seq.isPlaying) return;
-  seq.rerender('buchla', {
-    ccJson: JSON.stringify({
-      74: uk['u-cutoff'].val, 20: uk['u-fold'].val,
-      17: uk['u-fm'].val,     19: uk['u-decay'].val,
-      71: uk['u-res'].val,    10: 20,
-    })
-  });
-}, 80);
+function sendPadsParams() {
+  if (!padsNode) return;
+  padsNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify({
+    74: pk['p-cutoff'].val, 73: pk['p-atk'].val, 72: pk['p-rel'].val,
+    91: pk['p-rev'].val,    88: 80, 29: 30, 30: pk['p-cho'].val, 31: pk['p-cho'].val,
+  })});
+}
 
-const rerenderPads = debounce(() => {
-  if (!seq || !seq.isPlaying) return;
-  seq.rerender('pads', {
-    ccJson: JSON.stringify({
-      74: pk['p-cutoff'].val, 73: pk['p-atk'].val, 72: pk['p-rel'].val,
-      91: pk['p-rev'].val,    88: 80, 29: 30, 30: pk['p-cho'].val, 31: pk['p-cho'].val,
-    })
-  });
-}, 120);
-
-// Wire drum knobs
-for (const k of Object.values(dk)) k.onChange = rerenderDrums;
+// Drum global knobs are wired via sendDrumsParams() above
 // Wire bass knobs
-for (const k of Object.values(bk)) k.onChange = rerenderBass;
-bassOctKnob.onChange = rerenderBass;
-// Wire buchla knobs
-for (const k of Object.values(uk)) k.onChange = rerenderBuchla;
+for (const k of Object.values(bk)) k.onChange = sendBassParams;
+bassOctKnob.onChange = sendBassParams;
+// Buchla XY wired via sendBuchlaParams() called from _xyUpdate above
 // Wire pads knobs
-for (const k of Object.values(pk)) k.onChange = rerenderPads;
+for (const k of Object.values(pk)) k.onChange = sendPadsParams;
 
 // ─── Mute / Solo ──────────────────────────────────────────────────────────
 document.querySelectorAll('.ms-btn').forEach(btn => {
@@ -1137,14 +1201,13 @@ function bakeToJson() {
 
   const octShift = bassOctKnob.val * 12;
   const bassCC   = { 71: bk['b-res'].val,   74: bk['b-cutoff'].val, 23: bk['b-fdec'].val };
-  const buchlaCC = { 74: uk['u-cutoff'].val, 20: uk['u-fold'].val,   17: uk['u-fm'].val,
-                     19: uk['u-decay'].val,  71: uk['u-res'].val };
+  const bCC = buchlaCC();
   const padsCC   = { 74: pk['p-cutoff'].val, 73: pk['p-atk'].val,    72: pk['p-rel'].val,
                      91: pk['p-rev'].val,    30: pk['p-cho'].val,     31: pk['p-cho'].val };
   const rhodesCC = { 74: rk['r-bright'].val, 72: rk['r-decay'].val,
                      73: rk['r-bark'].val,   20: rk['r-ratio'].val,
                      26: rk['r-trate'].val,  27: rk['r-tdepth'].val, 30: rk['r-chorus'].val };
-  const ccByType = { 1: buchlaCC, 2: bassCC, 3: rhodesCC, 6: padsCC };
+  const ccByType = { 1: bCC, 2: bassCC, 3: rhodesCC, 6: padsCC };
 
   // Drum knobs are 0-1 (direct p0/p1/p2); JSON CCs are 0-127 — multiply to convert.
   // drumNoteToParams: kick=CC74(pitch)/CC23(sweep)/CC75(decay),
@@ -1255,15 +1318,28 @@ function sheetToSequencer(sheet, { autoStore = true, autoPlay = false } = {}) {
   }
 }
 
+// SOLO / BAND toggle
+let sessionSolo = true;
+document.getElementById('btn-session-solo').addEventListener('click', () => {
+  sessionSolo = true;
+  document.getElementById('btn-session-solo').classList.add('mode-active');
+  document.getElementById('btn-session-band').classList.remove('mode-active');
+});
+document.getElementById('btn-session-band').addEventListener('click', () => {
+  sessionSolo = false;
+  document.getElementById('btn-session-band').classList.add('mode-active');
+  document.getElementById('btn-session-solo').classList.remove('mode-active');
+});
+
 document.getElementById('btn-new-session').addEventListener('click', async () => {
   const brief = document.getElementById('brief-input').value.trim();
   if (!brief) { chatAppend('Enter a track brief first.', 'msg-sys'); return; }
-  chatAppend('Starting session…', 'msg-sys');
+  chatAppend(sessionSolo ? 'Starting session…' : 'Band is debating (this takes a moment)…', 'msg-sys');
   document.getElementById('btn-new-session').disabled = true;
   try {
     const res  = await fetch(`${API}/session/new`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief, section: 'verse1', solo: true }),
+      body: JSON.stringify({ brief, section: 'verse1', solo: sessionSolo }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -1273,6 +1349,10 @@ document.getElementById('btn-new-session').addEventListener('click', async () =>
     document.getElementById('evolve-row').style.display = '';
     // Switch to song mode so new sections auto-fill the arrangement
     if (!songMode) document.getElementById('btn-mode-song')?.click();
+    // Show band debate transcript (multi-LLM mode)
+    if (data.messages && data.messages.length) {
+      for (const m of data.messages) chatAppend(`${m.role}: ${m.content}`, 'msg-band');
+    }
     chatAppend('Session started. The band is ready.', 'msg-sys');
     sheetToSequencer(data.sheet, { autoStore: true, autoPlay: false });
   } catch (e) {
@@ -1298,7 +1378,10 @@ async function sendChat() {
     chatAppend(`${data.companion}: ${data.reply}`, 'msg-band');
     sheetToSequencer(data.sheet);
   } catch (e) {
-    chatAppend('Error: ' + e, 'msg-sys');
+    const msg = String(e).includes('404')
+      ? 'Session expired (server restarted) — please start a new session.'
+      : 'Error: ' + e;
+    chatAppend(msg, 'msg-sys');
   } finally {
     chatSend.disabled = false; chatInput.focus();
   }
@@ -1339,7 +1422,10 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
     const idx = arcOrder.indexOf(section);
     if (idx !== -1 && idx + 1 < arcOrder.length) sel.value = arcOrder[idx + 1];
   } catch (e) {
-    chatAppend('Evolve error: ' + e, 'msg-sys');
+    const msg = String(e).includes('404')
+      ? 'Session expired (server restarted) — please start a new session.'
+      : 'Evolve error: ' + e;
+    chatAppend(msg, 'msg-sys');
   } finally {
     btn.disabled = false;
     btn.textContent = 'EVOLVE →';
@@ -1370,207 +1456,98 @@ function bpmDelaySeconds(division) {
 }
 
 // FX UI state — module-level so applyFxParams can reach them
-let _fxOn  = [false, false, false];
-let _fxK   = {};   // keyed by name, holds Knob refs
+let _fxOn  = [false, false];  // [delay, shaper]
+let _fxK   = {};              // keyed by name, holds Knob refs
 
 /** Apply a FX params object (from JSON "fx" key) to both audio and UI */
 function applyFxParams(fx) {
   if (!rack || !fx) return;
   const bpm = +document.getElementById('seq-bpm').value;
-  rack.setParams(fx, bpm);   // audio
-
-  // ── UI sync ──────────────────────────────────────────────────────────────
-  function syncSends(slot, sends) {
-    if (!sends) return;
-    document.querySelectorAll(`.fx-send-sl[data-slot="${slot}"]`).forEach(sl => {
-      const v = sends[sl.dataset.instr];
-      if (v != null) {
-        sl.value = Math.round(v * 100);
-        sl.nextElementSibling.textContent = sl.value;
-        sl.closest('.fx-send-item').classList.toggle('active', +sl.value > 0);
-      }
-    });
-  }
+  rack.setParams(fx, bpm);
 
   const d = fx.delay;
   if (d) {
-    if (d.on    != null) { _fxOn[0] = !!d.on; const btn = document.getElementById('fx0-on'); btn.classList.toggle('active', _fxOn[0]); }
-    if (d.ret   != null) document.getElementById('fx0-ret').value = Math.round(d.ret * 100);
-    if (d.time)          document.getElementById('fx0-time').value = d.time;
-    if (d.lfo)           document.getElementById('fx0-ltype').value = d.lfo;
-    if (d.fb_shape)      document.getElementById('fx0-fshape').value = d.fb_shape;
-    if (d.sc    != null) document.getElementById('fx0-sc').value = d.sc ?? '';
+    if (d.on       != null) { _fxOn[0] = !!d.on; document.getElementById('fx-delay-on')?.classList.toggle('active', _fxOn[0]); }
+    if (d.time)              document.getElementById('fx-delay-time').value = d.time;
+    if (d.lfo)               document.getElementById('fx-delay-ltype').value = d.lfo;
+    if (d.fb_shape)          document.getElementById('fx-delay-fshape').value = d.fb_shape;
     if (d.feedback  != null) _fxK.d_fdbk?.setVal(d.feedback);
     if (d.wet       != null) _fxK.d_wet?.setVal(d.wet);
     if (d.lfo_rate  != null) _fxK.d_lrate?.setVal(d.lfo_rate);
     if (d.lfo_depth != null) _fxK.d_ldepth?.setVal(d.lfo_depth);
     if (d.hp        != null) _fxK.d_hp?.setVal(d.hp);
     if (d.lp        != null) _fxK.d_lp?.setVal(d.lp);
-    if (d.sc_depth  != null) _fxK.d_scdepth?.setVal(d.sc_depth);
-    syncSends(0, d.sends);
+    // Enforce audio wet matches on-state (rack.setParams sets wet unconditionally)
+    rack.delay().setWet(_fxOn[0] ? (_fxK.d_wet?.val ?? 0) : 0);
   }
 
   const w = fx.waveshaper;
   if (w) {
-    if (w.on    != null) { _fxOn[1] = !!w.on; const btn = document.getElementById('fx1-on'); btn.classList.toggle('active', _fxOn[1]); }
-    if (w.ret   != null) document.getElementById('fx1-ret').value = Math.round(w.ret * 100);
-    if (w.type)          document.getElementById('fx1-type').value = w.type;
-    if (w.sc    != null) document.getElementById('fx1-sc').value = w.sc ?? '';
-    if (w.drive     != null) _fxK.w_drive?.setVal(w.drive);
-    if (w.tone      != null) _fxK.w_tone?.setVal(w.tone);
-    if (w.wet       != null) _fxK.w_wet?.setVal(w.wet);
-    if (w.sc_depth  != null) _fxK.w_scdepth?.setVal(w.sc_depth);
-    syncSends(1, w.sends);
-  }
-
-  const r = fx.beatrepeat;
-  if (r) {
-    if (r.ret != null) { const el = document.getElementById('fx2-ret'); if (el) el.value = Math.round(r.ret * 100); }
-    if (r.slice) {
-      const beatMap = { '1/32': '0.125', '1/16': '0.25', '1/8': '0.5', '1/4': '1' };
-      document.getElementById('fx2-slice').value = beatMap[r.slice] ?? '0.25';
-    }
-    if (r.sc != null) document.getElementById('fx2-sc').value = r.sc ?? '';
-    if (r.rate      != null) _fxK.r_rate?.setVal(r.rate);
-    if (r.decay     != null) _fxK.r_decay?.setVal(r.decay);
-    if (r.wet       != null) _fxK.r_wet?.setVal(r.wet);
-    if (r.sc_depth  != null) _fxK.r_scdepth?.setVal(r.sc_depth);
-    syncSends(2, r.sends);
+    if (w.on    != null) { _fxOn[1] = !!w.on; document.getElementById('fx-shape-on')?.classList.toggle('active', _fxOn[1]); }
+    if (w.type)          document.getElementById('fx-shape-type').value = w.type;
+    if (w.drive != null) _fxK.w_drive?.setVal(w.drive);
+    if (w.tone  != null) _fxK.w_tone?.setVal(w.tone);
+    if (w.wet   != null) _fxK.w_wet?.setVal(w.wet);
+    // Enforce audio wet matches on-state (rack.setParams sets wet unconditionally)
+    rack.shaper().setWet(_fxOn[1] ? (_fxK.w_wet?.val ?? 0) : 0);
   }
 }
 
 function initFxUI() {
-  // ── DELAY (slot 0) ──────────────────────────────────────────────────────
-  const delay = rack.unit(0);
+  const delay = rack.delay();
+  const shape = rack.shaper();
 
-  const fdbkKnob  = _fxK.d_fdbk   = new Knob(document.getElementById('fx0-fdbk-wrap'),
-    { label:'', min:0, max:0.97, value:0.45, step:0.01 });
-  const wetKnob0  = _fxK.d_wet    = new Knob(document.getElementById('fx0-wet-wrap'),
-    { label:'', min:0, max:1,    value:0.5,  step:0.01 });
-  const lrateKnob = _fxK.d_lrate  = new Knob(document.getElementById('fx0-lrate-wrap'),
-    { label:'', min:0.01, max:40, value:0.3,  step:0.01 });
-  const ldepthKnob= _fxK.d_ldepth = new Knob(document.getElementById('fx0-ldepth-wrap'),
-    { label:'', min:0,    max:0.05, value:0.002, step:0.001 });
-  const hpKnob    = _fxK.d_hp     = new Knob(document.getElementById('fx0-hp-wrap'),
-    { label:'', min:20,   max:2000, value:80,   step:1 });
-  const lpKnob    = _fxK.d_lp     = new Knob(document.getElementById('fx0-lp-wrap'),
-    { label:'', min:200,  max:18000, value:6000, step:10 });
-  const scDepth0  = _fxK.d_scdepth= new Knob(document.getElementById('fx0-scdepth-wrap'),
-    { label:'', min:0, max:1, value:0.8, step:0.01 });
+  // ── MASTER DELAY ─────────────────────────────────────────────────────────
+  const fdbkKnob   = _fxK.d_fdbk   = new Knob(document.getElementById('fx-delay-fdbk-wrap'),   { label:'', min:0, max:0.97, value:0.45, step:0.01 });
+  const wetKnob0   = _fxK.d_wet    = new Knob(document.getElementById('fx-delay-wet-wrap'),    { label:'', min:0, max:1, value:0.3, step:0.01 });
+  const lrateKnob  = _fxK.d_lrate  = new Knob(document.getElementById('fx-delay-lrate-wrap'),  { label:'', min:0.01, max:40, value:0.3, step:0.01 });
+  const ldepthKnob = _fxK.d_ldepth = new Knob(document.getElementById('fx-delay-ldepth-wrap'), { label:'', min:0, max:0.05, value:0.002, step:0.001 });
+  const hpKnob     = _fxK.d_hp     = new Knob(document.getElementById('fx-delay-hp-wrap'),     { label:'', min:20, max:2000, value:80, step:1 });
+  const lpKnob     = _fxK.d_lp     = new Knob(document.getElementById('fx-delay-lp-wrap'),     { label:'', min:200, max:18000, value:6000, step:10 });
 
-  fdbkKnob.onChange  = v => delay.setFeedback(v);
-  wetKnob0.onChange  = v => delay.setWet(v);
-  lrateKnob.onChange = v => delay.setLfoRate(v);
-  ldepthKnob.onChange= v => delay.setLfoDepth(v);
-  hpKnob.onChange    = v => delay.setFbHp(v);
-  lpKnob.onChange    = v => delay.setFbLp(v);
-  scDepth0.onChange  = v => rack.setSidechainDepth(0, v);
+  fdbkKnob.onChange   = v => delay.setFeedback(v);
+  wetKnob0.onChange   = v => { if (_fxOn[0]) delay.setWet(v); };
+  lrateKnob.onChange  = v => delay.setLfoRate(v);
+  ldepthKnob.onChange = v => delay.setLfoDepth(v);
+  hpKnob.onChange     = v => delay.setFbHp(v);
+  lpKnob.onChange     = v => delay.setFbLp(v);
 
-  document.getElementById('fx0-time').addEventListener('change', function() {
+  document.getElementById('fx-delay-time').addEventListener('change', function() {
     delay.setDelayTime(bpmDelaySeconds(this.value));
   });
-  document.getElementById('fx0-ltype').addEventListener('change', function() {
+  document.getElementById('fx-delay-ltype').addEventListener('change', function() {
     delay.setLfoType(this.value);
   });
-  document.getElementById('fx0-fshape').addEventListener('change', function() {
+  document.getElementById('fx-delay-fshape').addEventListener('change', function() {
     delay.setFbShape(this.value, 0.5);
   });
-  document.getElementById('fx0-sc').addEventListener('change', function() {
-    rack.setSidechain(0, this.value || null);
-  });
-  document.getElementById('fx0-ret').addEventListener('input', function() {
-    if (_fxOn[0]) rack.setReturn(0, this.value / 100);
-    else rack._retBase[0] = this.value / 100;
-  });
-
-  document.getElementById('fx0-on').addEventListener('click', function() {
+  document.getElementById('fx-delay-on').addEventListener('click', function() {
     _fxOn[0] = !_fxOn[0];
     this.classList.toggle('active', _fxOn[0]);
-    rack.setOn(0, _fxOn[0]);
+    delay.setWet(_fxOn[0] ? _fxK.d_wet.val : 0);
   });
 
-  // ── WAVESHAPER (slot 1) ─────────────────────────────────────────────────
-  const shape = rack.unit(1);
+  // ── MASTER WAVESHAPER ────────────────────────────────────────────────────
+  const driveKnob = _fxK.w_drive = new Knob(document.getElementById('fx-shape-drive-wrap'), { label:'', min:0, max:1, value:0.3, step:0.01 });
+  const toneKnob  = _fxK.w_tone  = new Knob(document.getElementById('fx-shape-tone-wrap'),  { label:'', min:200, max:18000, value:6000, step:10 });
+  const wetKnob1  = _fxK.w_wet   = new Knob(document.getElementById('fx-shape-wet-wrap'),   { label:'', min:0, max:1, value:0.3, step:0.01 });
 
-  const driveKnob = _fxK.w_drive   = new Knob(document.getElementById('fx1-drive-wrap'),
-    { label:'', min:0, max:1, value:0.3, step:0.01 });
-  const toneKnob  = _fxK.w_tone    = new Knob(document.getElementById('fx1-tone-wrap'),
-    { label:'', min:200, max:18000, value:6000, step:10 });
-  const wetKnob1  = _fxK.w_wet     = new Knob(document.getElementById('fx1-wet-wrap'),
-    { label:'', min:0, max:1, value:0.5, step:0.01 });
-  const scDepth1  = _fxK.w_scdepth = new Knob(document.getElementById('fx1-scdepth-wrap'),
-    { label:'', min:0, max:1, value:0.7, step:0.01 });
-
-  driveKnob.onChange = v => { shape.setDrive(v); shape.setCurve(document.getElementById('fx1-type').value, v); };
+  driveKnob.onChange = v => { shape.setDrive(v); shape.setCurve(document.getElementById('fx-shape-type').value, v); };
   toneKnob.onChange  = v => shape.setTone(v);
-  wetKnob1.onChange  = v => shape.setWet(v);
-  scDepth1.onChange  = v => rack.setSidechainDepth(1, v);
+  wetKnob1.onChange  = v => { if (_fxOn[1]) shape.setWet(v); };
 
-  document.getElementById('fx1-type').addEventListener('change', function() {
+  document.getElementById('fx-shape-type').addEventListener('change', function() {
     shape.setCurve(this.value, driveKnob.val);
   });
-  document.getElementById('fx1-sc').addEventListener('change', function() {
-    rack.setSidechain(1, this.value || null);
-  });
-  document.getElementById('fx1-ret').addEventListener('input', function() {
-    if (_fxOn[1]) rack.setReturn(1, this.value / 100);
-    else rack._retBase[1] = this.value / 100;
-  });
-
-  document.getElementById('fx1-on').addEventListener('click', function() {
+  document.getElementById('fx-shape-on').addEventListener('click', function() {
     _fxOn[1] = !_fxOn[1];
     this.classList.toggle('active', _fxOn[1]);
-    rack.setOn(1, _fxOn[1]);
+    shape.setWet(_fxOn[1] ? _fxK.w_wet.val : 0);
   });
 
-  // ── BEAT REPEAT (slot 2) ────────────────────────────────────────────────
-  const repeat = rack.unit(2);
-  // Beat Repeat return is always active (ARM/GATE replace ON/OFF)
-  rack._on[2] = true;
-  rack._returns[2].gain.value = rack._retBase[2];
-
-  document.getElementById('fx2-ret').addEventListener('input', function() {
-    rack.setReturn(2, this.value / 100);
-  });
-
-  const rateKnob2  = _fxK.r_rate   = new Knob(document.getElementById('fx2-rate-wrap'),
-    { label:'', min:0.125, max:4, value:1, step:0.125 });
-  const decayKnob2 = _fxK.r_decay  = new Knob(document.getElementById('fx2-decay-wrap'),
-    { label:'', min:0, max:0.999, value:0.75, step:0.01 });
-  const wetKnob2   = _fxK.r_wet    = new Knob(document.getElementById('fx2-wet-wrap'),
-    { label:'', min:0, max:1, value:0.85, step:0.01 });
-  const scDepth2   = _fxK.r_scdepth= new Knob(document.getElementById('fx2-scdepth-wrap'),
-    { label:'', min:0, max:1, value:0.6, step:0.01 });
-
-  rateKnob2.onChange  = v => repeat.setRate(v);
-  decayKnob2.onChange = v => repeat.setDecay(v);
-  wetKnob2.onChange   = v => repeat.setWet(v);
-  scDepth2.onChange   = v => rack.setSidechainDepth(2, v);
-
-  const armBtn  = document.getElementById('fx2-arm');
-  const gateBtn = document.getElementById('fx2-gate');
-
-  repeat.onStatusChange = (state) => {
-    armBtn.classList.toggle('active', state === 'repeat');
-    armBtn.textContent = state === 'repeat' ? 'LOOP' : 'ARM';
-  };
-
-  armBtn.addEventListener('click', () => {
-    const bpm   = +document.getElementById('seq-bpm').value;
-    const slice = +document.getElementById('fx2-slice').value;
-    repeat.arm(bpm, slice);
-  });
-  gateBtn.addEventListener('click', () => repeat.gate());
-
-  document.getElementById('fx2-sc').addEventListener('change', function() {
-    rack.setSidechain(2, this.value || null);
-    repeat._scArmed = !!this.value;
-  });
-
-  // Update delay time when BPM changes
+  // BPM → delay time sync
   document.getElementById('seq-bpm').addEventListener('input', () => {
-    const div = document.getElementById('fx0-time').value;
-    delay.setDelayTime(bpmDelaySeconds(div));
+    delay.setDelayTime(bpmDelaySeconds(document.getElementById('fx-delay-time').value));
   });
 }
 
@@ -1586,43 +1563,6 @@ let vizPips      = [];
 let vizRaf       = null;
 let vizLastSheet = null;   // detect sheet changes
 
-// ── FX Step Sequencer ───────────────────────────────────────────────────────
-const FX_STEPS = 16;
-// fxStepState[slot][step] = true means FX active on that step
-const fxStepState = [
-  Array(FX_STEPS).fill(true),   // Delay — all on by default
-  Array(FX_STEPS).fill(true),   // Waveshaper — all on by default
-  Array(FX_STEPS).fill(false),  // Beat Repeat — all off (manual paint)
-];
-let fxStepBtns = [[], [], []];  // DOM button refs
-let lastFxStep = -1;
-
-function buildFxStepGrids() {
-  for (let slot = 0; slot < 3; slot++) {
-    const container = document.getElementById(`fx${slot}-steps`);
-    if (!container) continue;
-    container.innerHTML = '';
-    for (let step = 0; step < FX_STEPS; step++) {
-      // Beat dividers at every 4 steps
-      if (step > 0 && step % 4 === 0) {
-        const div = document.createElement('div');
-        div.className = 'fx-step-divider';
-        container.appendChild(div);
-      }
-      const btn = document.createElement('div');
-      btn.className = 'fx-step-btn' + (fxStepState[slot][step] ? ' on' : '');
-      btn.dataset.slot = slot;
-      btn.dataset.step = step;
-      btn.addEventListener('click', () => {
-        fxStepState[slot][step] = !fxStepState[slot][step];
-        btn.classList.toggle('on', fxStepState[slot][step]);
-      });
-      container.appendChild(btn);
-      fxStepBtns[slot][step] = btn;
-    }
-  }
-}
-buildFxStepGrids();
 
 function buildVizPips(seq) {
   vizStepsEl.innerHTML = '';
@@ -1675,41 +1615,7 @@ function vizTick() {
     vizPips[i].classList.toggle('viz-active', i === stepIdx);
   }
 
-  // ── FX Step Sequencer ────────────────────────────────────────────────────
-  if (rack) {
-    const loopBeats = seq.loopBeats || 4;
-    const fxStep    = Math.floor((beat / loopBeats) * FX_STEPS) % FX_STEPS;
-
-    if (fxStep !== lastFxStep) {
-      const bpm = seq.bpm ?? 128;
-
-      for (let slot = 0; slot < 3; slot++) {
-        const active = fxStepState[slot][fxStep];
-
-        // Update pip highlight
-        for (let s = 0; s < FX_STEPS; s++) {
-          fxStepBtns[slot][s]?.classList.toggle('play', s === fxStep);
-        }
-
-        if (slot === 2) {
-          // Beat Repeat: arm on rising edge (off → on)
-          const wasActive = fxStepState[slot][lastFxStep] ?? false;
-          if (active && !wasActive) {
-            const sliceBeats = +document.getElementById('fx2-slice').value;
-            rack.unit(2).arm(bpm, sliceBeats);
-          } else if (!active && wasActive) {
-            rack.unit(2).gate();
-          }
-        } else {
-          // Delay / Waveshaper: gate return level
-          if (_fxOn[slot]) {
-            rack.setReturn(slot, active ? rack._retBase[slot] : 0);
-          }
-        }
-      }
-      lastFxStep = fxStep;
-    }
-  }
+  // rack.tick() runs in the rAF loop below
 }
 
 function startViz() {
@@ -1721,10 +1627,6 @@ function stopViz() {
   vizEl.style.display = 'none';
   if (vizRaf) { cancelAnimationFrame(vizRaf); vizRaf = null; }
   vizPips.forEach(p => p.classList.remove('viz-active'));
-  // Clear FX step playhead highlights
-  for (let slot = 0; slot < 3; slot++)
-    fxStepBtns[slot].forEach(b => b?.classList.remove('play'));
-  lastFxStep = -1;
 }
 
 </script>

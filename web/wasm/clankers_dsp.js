@@ -8,10 +8,13 @@
  *   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
  *   CC5  glide_time
  *
- * trigger(midi_note, velocity_0_1, cc_json_string)
- *   cc_json_string: JSON object of CC values, e.g. '{"74":80,"71":60}'
+ * Streaming API:
+ *   set_params(cc_json)              — update stored params (affects playing voices live)
+ *   trigger(midi_note, vel, hold, cc_json) — trigger note (also updates stored params)
+ *   render(n_samples)               — process all active voices with stored params
  *
- * render(n_samples) → Float32Array  (call after trigger, before next trigger)
+ * Offline API:
+ *   trigger_render(...)             — trigger + render full tail in one call
  */
 export class ClankersBass {
     __destroy_into_raw() {
@@ -34,7 +37,7 @@ export class ClankersBass {
         return this;
     }
     /**
-     * Render n_samples of audio (adds all active voices). Returns Float32Array.
+     * Render n_samples of audio using stored params. Returns mono Float32Array.
      * @param {number} n_samples
      * @returns {Float32Array}
      */
@@ -43,7 +46,16 @@ export class ClankersBass {
         return ret;
     }
     /**
-     * Trigger a note. cc_json: '{"74":80,"71":60}' or '{}'.
+     * Update stored params — affects currently playing voices on the next render() call.
+     * @param {string} cc_json
+     */
+    set_params(cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankersbass_set_params(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Trigger a note. Also updates stored params from cc_json.
      * hold_samples: note-on duration in samples (0 = use amp envelope only)
      * @param {number} midi_note
      * @param {number} velocity
@@ -57,8 +69,6 @@ export class ClankersBass {
     }
     /**
      * Trigger + render full tail — isolated single voice, no shared state.
-     * Note: ClankerBoy uses MIDI 0-23 for bass roots. We transpose +24 semitones
-     * so the actual synthesis sits in the audible 50-200 Hz range.
      * @param {number} midi_note
      * @param {number} velocity
      * @param {number} hold_samples
@@ -80,6 +90,11 @@ if (Symbol.dispose) ClankersBass.prototype[Symbol.dispose] = ClankersBass.protot
  * ClankerBoy CC map (t:1):
  *   CC74 cutoff  CC71 resonance  CC20 wavefold  CC17 fm_depth
  *   CC18 fm_index  CC19 env_decay  CC16 volume
+ *
+ * Streaming API:
+ *   set_params(cc_json)    — update stored params (affects playing voices live)
+ *   trigger(midi_note, vel) — trigger using stored params
+ *   process(n_samples)     — render all active voices → mono Float32Array
  */
 export class ClankersBuchla {
     __destroy_into_raw() {
@@ -99,6 +114,32 @@ export class ClankersBuchla {
         return this;
     }
     /**
+     * Render n_samples of audio. Returns mono Float32Array.
+     * @param {number} n_samples
+     * @returns {Float32Array}
+     */
+    process(n_samples) {
+        const ret = wasm.clankersbuchla_process(this.__wbg_ptr, n_samples);
+        return ret;
+    }
+    /**
+     * Update stored params — affects playing voices on the next process() call.
+     * @param {string} cc_json
+     */
+    set_params(cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankersbuchla_set_params(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Trigger a voice using stored params.
+     * @param {number} midi_note
+     * @param {number} velocity
+     */
+    trigger(midi_note, velocity) {
+        wasm.clankersbuchla_trigger(this.__wbg_ptr, midi_note, velocity);
+    }
+    /**
      * Trigger + render full tail — isolated single voice.
      * @param {number} midi_note
      * @param {number} velocity
@@ -115,14 +156,18 @@ export class ClankersBuchla {
 if (Symbol.dispose) ClankersBuchla.prototype[Symbol.dispose] = ClankersBuchla.prototype.free;
 
 /**
- * Voice IDs:  0=Kick  1=Snare  2=HiHat Closed  3=HiHat Open
- *             4=Tom L  5=Tom M  6=Tom H
+ * Three-profile synth drum machine (808 / 909 / 606).
  *
- * Trigger params (p0..p2):
- *   Kick:   p0=pitch(0-1)  p1=sweep_time(0-1)  p2=decay(0-1)
- *   Snare:  p0=pitch(0-1)  p1=decay(0-1)        p2=resonance(0-1)
- *   HiHat:  p0=decay(0-1)  p1=cutoff(0-1)       p2=resonance(0-1)
- *   Tom:    p0=pitch(0-1)  p1=decay(0-1)         p2=unused
+ * Voice IDs  0-6 — character depends on selected profile:
+ *   808 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-H  CLAP
+ *   909 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-M  TOM-H
+ *   606 →  KICK  SNARE  HH-CL  HH-OP  TOM-L  TOM-H  CYMBAL
+ *
+ * Global controls (all live — take effect within one audio block):
+ *   set_profile(id)        0=808  1=909  2=606
+ *   set_pitch(semitones)   −12..+12
+ *   set_decay(mult)        0.1..8.0  (scales all amp-decay times)
+ *   set_filter(hz)         80..20000 (one-pole LP on output bus)
  */
 export class ClankersDrums {
     __destroy_into_raw() {
@@ -145,18 +190,49 @@ export class ClankersDrums {
         return this;
     }
     /**
-     * Trigger a hit and immediately render its full tail.
-     * Uses an isolated voice — no shared engine state contamination.
-     * @param {number} voice_id
-     * @param {number} velocity
-     * @param {number} p0
-     * @param {number} p1
-     * @param {number} p2
+     * Render n_samples. Returns mono Float32Array.
+     * @param {number} n_samples
      * @returns {Float32Array}
      */
-    trigger_render(voice_id, velocity, p0, p1, p2) {
-        const ret = wasm.clankersdrums_trigger_render(this.__wbg_ptr, voice_id, velocity, p0, p1, p2);
+    process(n_samples) {
+        const ret = wasm.clankersdrums_process(this.__wbg_ptr, n_samples);
         return ret;
+    }
+    /**
+     * Global decay multiplier (0.1..8.0). Updates active voices immediately.
+     * @param {number} mult
+     */
+    set_decay(mult) {
+        wasm.clankersdrums_set_decay(this.__wbg_ptr, mult);
+    }
+    /**
+     * Global output lowpass cutoff in Hz (80..20000). Live.
+     * @param {number} hz
+     */
+    set_filter(hz) {
+        wasm.clankersdrums_set_filter(this.__wbg_ptr, hz);
+    }
+    /**
+     * Global pitch shift in semitones (−12..+12).
+     * @param {number} semitones
+     */
+    set_pitch(semitones) {
+        wasm.clankersdrums_set_pitch(this.__wbg_ptr, semitones);
+    }
+    /**
+     * Select drum machine profile.  id: 0=808  1=909  2=606
+     * @param {number} id
+     */
+    set_profile(id) {
+        wasm.clankersdrums_set_profile(this.__wbg_ptr, id);
+    }
+    /**
+     * Trigger a voice.  voice_id: 0-6.
+     * @param {number} voice_id
+     * @param {number} velocity
+     */
+    trigger(voice_id, velocity) {
+        wasm.clankersdrums_trigger(this.__wbg_ptr, voice_id, velocity);
     }
 }
 if (Symbol.dispose) ClankersDrums.prototype[Symbol.dispose] = ClankersDrums.prototype.free;
@@ -164,9 +240,10 @@ if (Symbol.dispose) ClankersDrums.prototype[Symbol.dispose] = ClankersDrums.prot
 /**
  * HybridSynth pads — Moog ladder + ADSR + chorus + reverb (8 polyphonic voices).
  *
- * trigger_render(midi_note, velocity, hold_samples, cc_json) → stereo Float32Array
- * hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
- * Returns interleaved stereo [L0, R0, L1, R1, ...]
+ * Streaming API:
+ *   set_params(cc_json)              — update stored params live
+ *   trigger(midi_note, vel, hold)    — trigger using stored params
+ *   process_stereo(n_samples)        — render → interleaved stereo Float32Array
  */
 export class ClankersPads {
     __destroy_into_raw() {
@@ -184,6 +261,33 @@ export class ClankersPads {
         this.__wbg_ptr = ret >>> 0;
         ClankersPadsFinalization.register(this, this.__wbg_ptr, this);
         return this;
+    }
+    /**
+     * Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+     * @param {number} n_samples
+     * @returns {Float32Array}
+     */
+    process_stereo(n_samples) {
+        const ret = wasm.clankerspads_process_stereo(this.__wbg_ptr, n_samples);
+        return ret;
+    }
+    /**
+     * Update stored params — affects playing voices live on next process_stereo() call.
+     * @param {string} cc_json
+     */
+    set_params(cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankerspads_set_params(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Trigger a note using stored params.
+     * @param {number} midi_note
+     * @param {number} velocity
+     * @param {number} hold_samples
+     */
+    trigger(midi_note, velocity, hold_samples) {
+        wasm.clankerspads_trigger(this.__wbg_ptr, midi_note, velocity, hold_samples);
     }
     /**
      * @param {number} midi_note
@@ -205,15 +309,14 @@ if (Symbol.dispose) ClankersPads.prototype[Symbol.dispose] = ClankersPads.protot
  * Rhodes electric piano — FM tine model (Operator / Lounge Lizard style).
  *
  * ClankerBoy t:3 CC map:
- *   CC74  Brightness  (peak FM index 0.5–8)
- *   CC72  Decay       (amp decay 0.5–6 s at C4)
- *   CC20  Tine ratio  (modulator harmonic ratio 0.9–2.0)
- *   CC73  Bark time   (mod-index decay fraction, lower = longer bark)
- *   CC26  Tremolo rate  (0–9 Hz)
- *   CC27  Tremolo depth (0–0.8)
- *   CC29  Chorus rate   (0.1–5 Hz)
- *   CC30  Chorus mix    (0–0.85)
- *   CC10  Pan           (0=L, 64=C, 127=R)
+ *   CC74  Brightness  CC72  Decay  CC20  Tine ratio  CC73  Bark time
+ *   CC26  Tremolo rate  CC27  Tremolo depth
+ *   CC29  Chorus rate   CC30  Chorus mix   CC10  Pan
+ *
+ * Streaming API:
+ *   set_params(cc_json)               — update stored params live
+ *   trigger(midi_note, vel, hold)     — trigger using stored params
+ *   process_stereo(n_samples)         — render → interleaved stereo Float32Array
  */
 export class ClankersRhodes {
     __destroy_into_raw() {
@@ -233,8 +336,35 @@ export class ClankersRhodes {
         return this;
     }
     /**
+     * Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+     * @param {number} n_samples
+     * @returns {Float32Array}
+     */
+    process_stereo(n_samples) {
+        const ret = wasm.clankersrhodes_process_stereo(this.__wbg_ptr, n_samples);
+        return ret;
+    }
+    /**
+     * Update stored params — affects playing voices live on the next process_stereo() call.
+     * @param {string} cc_json
+     */
+    set_params(cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankersrhodes_set_params(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Trigger a note using stored params.
+     * hold_samples: note-on duration in samples.
+     * @param {number} midi_note
+     * @param {number} velocity
+     * @param {number} hold_samples
+     */
+    trigger(midi_note, velocity, hold_samples) {
+        wasm.clankersrhodes_trigger(this.__wbg_ptr, midi_note, velocity, hold_samples);
+    }
+    /**
      * Trigger + render full tail — stereo interleaved Float32Array.
-     * hold_samples: note-on duration in samples (beat * 60/bpm * 44100)
      * @param {number} midi_note
      * @param {number} velocity
      * @param {number} hold_samples
@@ -258,10 +388,6 @@ function __wbg_get_imports() {
         },
         __wbg_new_from_slice_ff2c15e8e05ffdfc: function(arg0, arg1) {
             const ret = new Float32Array(getArrayF32FromWasm0(arg0, arg1));
-            return ret;
-        },
-        __wbg_new_with_length_81c1c31d4432cb9f: function(arg0) {
-            const ret = new Float32Array(arg0 >>> 0);
             return ret;
         },
         __wbindgen_init_externref_table: function() {
@@ -357,6 +483,43 @@ function passStringToWasm0(arg, malloc, realloc) {
 
     WASM_VECTOR_LEN = offset;
     return ptr;
+}
+
+// ── AudioWorkletGlobalScope polyfills ─────────────────────────────────────────
+if (typeof TextDecoder === 'undefined') {
+    globalThis.TextDecoder = class TextDecoder {
+        constructor(_e, _o) {}
+        decode(buf) {
+            if (!buf || buf.byteLength === 0) return '';
+            const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf.buffer ?? buf);
+            let s = '', i = 0;
+            while (i < b.length) {
+                const c = b[i++];
+                if (c < 0x80) { s += String.fromCharCode(c); }
+                else if ((c & 0xE0) === 0xC0) { s += String.fromCharCode(((c&0x1F)<<6)|(b[i++]&0x3F)); }
+                else if ((c & 0xF0) === 0xE0) { s += String.fromCharCode(((c&0x0F)<<12)|((b[i++]&0x3F)<<6)|(b[i++]&0x3F)); }
+                else { const p=((c&7)<<18)|((b[i++]&0x3F)<<12)|((b[i++]&0x3F)<<6)|(b[i++]&0x3F); const u=p-0x10000; s+=String.fromCharCode(0xD800+(u>>10),0xDC00+(u&0x3FF)); }
+            }
+            return s;
+        }
+    };
+}
+if (typeof TextEncoder === 'undefined') {
+    globalThis.TextEncoder = class TextEncoder {
+        encode(s) {
+            const o=[];
+            for (let i=0;i<s.length;i++) {
+                let c=s.charCodeAt(i);
+                if(c>=0xD800&&c<=0xDBFF) c=0x10000+((c-0xD800)<<10)+(s.charCodeAt(++i)-0xDC00);
+                if(c<0x80) o.push(c);
+                else if(c<0x800) o.push(0xC0|(c>>6),0x80|(c&0x3F));
+                else if(c<0x10000) o.push(0xE0|(c>>12),0x80|((c>>6)&0x3F),0x80|(c&0x3F));
+                else o.push(0xF0|(c>>18),0x80|((c>>12)&0x3F),0x80|((c>>6)&0x3F),0x80|(c&0x3F));
+            }
+            return new Uint8Array(o);
+        }
+        encodeInto(s,v){const b=this.encode(s);v.set(b);return{read:s.length,written:b.length};}
+    };
 }
 
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });

@@ -1,14 +1,9 @@
-/// Buchla 259/292 voice — percussive LPG pluck with FM + wavefolding
-/// Ported from Buchlasystem/Source/DSP/BuchlaVoice.cpp
+/// Buchla 259/292 voice — simple triangle-wave pluck with wavefolding + LPF
 ///
 /// ClankerBoy CC map (t:1):
-///   CC74  LPG cutoff norm   (0-127 → 0-1)     sweet spot: 56 (0.44)
-///   CC71  LPG resonance     (0-127 → 0-0.85)
+///   CC74  LPF cutoff norm   (0-127 → 0-1)     sweet spot: 56 (0.44)
 ///   CC20  Wavefold amount   (0-127 → 0-1)      sweet spot: 37 (0.29)
-///   CC17  FM depth          (0-127 → 0-1)
-///   CC18  FM index          (0-127 → 0-1)
-///   CC19  Env decay         (0-127 → 5-800 ms)
-///   CC16  Osc volume        (0-127 → 0-1)
+///   CC19  Release time      (0-127 → 5-800 ms)
 
 use crate::lpg::Lpg;
 use crate::oscillator::{Oscillator, Waveform};
@@ -19,66 +14,54 @@ const SR: f32 = 44100.0;
 
 #[derive(Clone, Copy)]
 pub struct BuchlaParams {
-    pub cutoff_norm: f32,   // CC74 / 127
-    pub resonance:   f32,   // CC71 / 127 * 0.85
+    pub cutoff_norm: f32,   // CC74 / 127  — base LPF ceiling
     pub fold_amount: f32,   // CC20 / 127
-    pub fm_depth:    f32,   // CC17 / 127
-    pub fm_index:    f32,   // CC18 / 127
-    pub decay_s:     f32,   // seconds
-    pub volume:      f32,   // CC16 / 127
+    pub release_s:   f32,   // seconds
+    pub filter_mod:  f32,   // CC21 / 127  — env sweeps cutoff toward 1.0
+    pub volume:      f32,
 }
 
 impl Default for BuchlaParams {
     fn default() -> Self {
         BuchlaParams {
             cutoff_norm: 0.44,
-            resonance:   0.22,
             fold_amount: 0.29,
-            fm_depth:    0.06,
-            fm_index:    0.08,
-            decay_s:     0.10,
+            release_s:   0.18,
+            filter_mod:  0.0,
             volume:      1.0,
         }
     }
 }
 
 pub struct BuchlaVoice {
-    osc_principal: Oscillator,
-    osc_mod:       Oscillator,
-    lpg:           Lpg,
-    vactrol:       Vactrol,
-    gate:          f32,
-    freq:          f32,
-    mod_ratio:     f32,
-    active:        bool,
+    osc:     Oscillator,
+    lpg:     Lpg,
+    vactrol: Vactrol,
+    gate:    f32,
+    freq:    f32,
+    active:  bool,
 }
 
 impl BuchlaVoice {
     pub fn new() -> Self {
         BuchlaVoice {
-            osc_principal: Oscillator::new(SR),
-            osc_mod:       Oscillator::new(SR),
-            lpg:           Lpg::new(SR),
-            vactrol:       Vactrol::new(SR),
-            gate:      0.0,
-            freq:      440.0,
-            mod_ratio: 1.0,
-            active:    false,
+            osc:     Oscillator::new(SR),
+            lpg:     Lpg::new(SR),
+            vactrol: Vactrol::new(SR),
+            gate:    0.0,
+            freq:    440.0,
+            active:  false,
         }
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, p: &BuchlaParams) {
         self.freq      = midi_to_hz(midi_note);
-        self.mod_ratio = 0.5 + p.fm_index * 7.5;
-        self.osc_principal.level = velocity * p.volume;
-        self.osc_mod.level       = 1.0; // FM depth applied via fm_hz, not osc level
+        self.osc.level = velocity * p.volume;
 
-        self.vactrol.set_times(0.001, p.decay_s);
-        // Fire at cutoff-dependent level: low cutoff = more closed LPG = darker pluck
-        // This ensures base_cutoff actually shapes the tone, not just the tail.
+        self.vactrol.set_times(0.001, p.release_s);
         let fire_level = 0.4 + p.cutoff_norm * 0.6; // 0.4..1.0
         self.vactrol.fire_at(fire_level);
-        self.gate   = 0.0;    // gate stays off; vactrol decays from fire_level
+        self.gate   = 0.0;
         self.active = true;
     }
 
@@ -86,32 +69,23 @@ impl BuchlaVoice {
         for s in out.iter_mut() {
             if !self.active { break; }
 
-            // Vactrol CV — AD transient: gate fires once then drops
-            let cv = self.vactrol.process(self.gate);
-            self.gate = 0.0; // drop gate after first sample → pure decay
+            let cv  = self.vactrol.process(self.gate);
+            self.gate = 0.0;
 
-            // Mod oscillator
-            let mod_freq = self.freq * self.mod_ratio;
-            let mod_out  = self.osc_mod.next(mod_freq, Waveform::Saw);
+            // Triangle oscillator → wavefolder → LPG
+            let osc_out = self.osc.next(self.freq, Waveform::Triangle);
+            let folded  = Wavefolder::process(osc_out, p.fold_amount);
 
-            // FM: deviation scales with carrier freq; fm_index only sets mod ratio (above)
-            let fm_hz          = p.fm_depth * self.freq;
-            let principal_freq = (self.freq + mod_out * fm_hz).max(20.0);
-
-            // Principal oscillator
-            let osc_out = self.osc_principal.next(principal_freq, Waveform::Saw);
-
-            // Wavefolder
-            let folded = Wavefolder::process(osc_out, p.fold_amount);
-
-            // LPG — cutoff and VCA both driven by vactrol cv
-            let filtered = self.lpg.process(folded, cv, p.cutoff_norm, p.resonance);
+            // Env-driven filter mod: CV sweeps cutoff toward 1.0 by filter_mod amount
+            let headroom  = 1.0 - p.cutoff_norm;
+            let eff_cutoff = (p.cutoff_norm + p.filter_mod * cv * headroom).clamp(0.0, 0.999);
+            let out_s   = self.lpg.process(folded, cv, eff_cutoff, 0.0);
 
             if self.vactrol.is_idle() {
                 self.active = false;
             }
 
-            *s += filtered;
+            *s += out_s;
         }
     }
 
