@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Clankers 3</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background:#111; color:#eee; font-family:monospace; padding:1.5rem; margin:0; display:flex; flex-direction:column; }
+    h1 { color:#f90; margin:0 0 1.2rem; font-size:1.3rem; letter-spacing:.1em; }
+
+    /* ── Instruments ── */
+    .inst-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:.6rem; margin-bottom:1rem; }
+    .inst { border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; min-width:0; }
+    .inst-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; margin-bottom:.5rem; display:flex; align-items:center; gap:.5rem; }
+    .inst-hdr span { color:#f90; }
+    .ms-btn { font-size:.6rem; padding:.1rem .35rem; border:1px solid #333; background:#1a1a1a;
+              color:#666; cursor:pointer; border-radius:2px; font-family:monospace; min-width:1.4rem;
+              text-align:center; user-select:none; }
+    .ms-btn:hover { border-color:#555; }
+    .drum-profile-row { display:flex; gap:.4rem; margin:.4rem 0 .6rem; }
+    .profile-btn { font-size:.65rem; font-family:monospace; letter-spacing:.06em;
+                   padding:.2rem .55rem; border:1px solid #444; background:#1a1a1a;
+                   color:#666; cursor:pointer; border-radius:2px; user-select:none; }
+    .profile-btn:hover  { border-color:#888; color:#aaa; }
+    .profile-btn.active { border-color:#f90; color:#f90; background:#1e1600; }
+    .ms-btn.active-m { background:#a03020; color:#fff; border-color:#a03020; }
+    .ms-btn.active-s { background:#20a040; color:#fff; border-color:#20a040; }
+    .vol-wrap { display:inline-flex; align-items:center; gap:.25rem; margin-left:.3rem; }
+    .vol-wrap label { font-size:.58rem; color:#444; }
+    .vol-slider { width:56px; height:3px; accent-color:#f90; cursor:pointer; vertical-align:middle; }
+
+    /* ── Pads ── */
+    .pads { display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:.5rem; }
+    .pad {
+      background:#1a1a1a; color:#ccc; border:1px solid #2e2e2e;
+      padding:.4rem .55rem; cursor:pointer; border-radius:3px;
+      font-family:monospace; font-size:.75rem; min-width:2.5rem; text-align:center;
+      user-select:none;
+    }
+    .pad:hover  { background:#252525; border-color:#444; }
+    .pad:active { background:#f90; color:#111; border-color:#f90; }
+
+    /* colour accents per instrument */
+    .drums .pad  { border-top-color:#8a3020; }
+    .bass  .pad  { border-top-color:#1a5050; }
+    .buchla .pad { border-top-color:#604010; }
+    .chords .pad { border-top-color:#1a3050; }
+
+    /* ── Buchla XY Pad ── */
+    .buchla-ctrl { display:flex; flex-direction:column; align-items:flex-start; gap:.3rem; }
+    .buchla-xy-wrap { position:relative; }
+    .buchla-xy { display:block; cursor:crosshair; touch-action:none;
+                 border:1px solid #444; border-radius:3px; }
+    .buchla-xy-axes { display:flex; justify-content:space-between;
+                      font-size:.58rem; color:#555; margin-top:3px; width:100%; box-sizing:border-box; }
+
+    /* ── Knobs ── */
+    .knob-row { display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-start; }
+    .knob-group { display:flex; gap:.4rem; align-items:flex-start; padding-right:.6rem;
+                  border-right:1px solid #1e1e1e; flex-wrap:wrap; min-width:0; }
+    .knob-group:last-child { border-right:none; }
+    .knob-group-label { font-size:.6rem; color:#444; writing-mode:vertical-rl;
+                        text-orientation:mixed; padding-right:.2rem; align-self:center; }
+    .knob-wrap { display:flex; flex-direction:column; align-items:center; width:52px; }
+    .knob-canvas { cursor:ns-resize; touch-action:none; }
+    .knob-val { font-size:.62rem; color:#f90; text-align:center; line-height:1.2; }
+    .knob-lab { font-size:.58rem; color:#555; text-align:center; }
+
+    /* ── Step Visualizer ── */
+    #step-viz { margin-bottom:.5rem; display:none; }
+    #viz-pos { font-size:.68rem; color:#555; margin-bottom:.3rem; letter-spacing:.06em; }
+    #viz-pos span { color:#f90; }
+    #viz-steps { display:flex; flex-wrap:wrap; gap:2px; }
+    .viz-step {
+      width:10px; height:10px; border-radius:1px;
+      background:#1a1a1a; border:1px solid #222;
+      transition: background 60ms, border-color 60ms;
+    }
+    .viz-step.bar-start { margin-left:6px; }
+    .viz-step.viz-active { background:#f90; border-color:#f90; }
+    .viz-step.viz-has-event { border-color:#604010; }
+    .viz-step.viz-active.viz-has-event { background:#f90; border-color:#f90; }
+
+    /* ── Sequencer ── */
+    .seq-section { margin-bottom:1rem; order:3; }
+    .seq-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
+    #seq-controls { display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; margin-bottom:.5rem; }
+    #bpm-val { color:#f90; min-width:2.5rem; display:inline-block; }
+    textarea {
+      background:#0e0e0e; color:#888; border:1px solid #1e1e1e;
+      width:100%; max-width:700px; height:10rem;
+      font-family:monospace; font-size:.7rem; padding:.4rem; resize:vertical;
+    }
+    textarea:focus { outline:none; border-color:#333; color:#aaa; }
+    .label-sm { font-size:.65rem; color:#444; display:block; margin-bottom:.2rem; }
+
+    button {
+      background:#1a1a1a; color:#ccc; border:1px solid #2e2e2e;
+      padding:.45rem .7rem; cursor:pointer; border-radius:3px;
+      font-family:monospace; font-size:.78rem;
+    }
+    button:hover { background:#252525; border-color:#444; }
+    button:disabled { opacity:.4; cursor:default; }
+    .play-btn  { background:#0e1e0e; border-color:#1e4e1e; color:#5d5; }
+    .play-btn:hover { background:#152515; border-color:#2e6e2e; }
+    .stop-btn  { background:#1e0e0e; border-color:#4e1e1e; color:#d55; }
+    .stop-btn:hover { background:#251515; border-color:#6e2e2e; }
+    .bake-btn  { background:#1a1200; border-color:#4a3800; color:#f90; }
+    .bake-btn:hover { background:#221800; border-color:#6a5000; }
+
+    /* ── Chat ── */
+    .chat-section { max-width:700px; order:5; }
+    .chat-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
+    #chat-messages { background:#0a0a0a; border:1px solid #1a1a1a; padding:.5rem;
+                     height:9rem; overflow-y:auto; font-size:.72rem; margin-bottom:.4rem; }
+    .msg-user { color:#f90; margin:.15rem 0; }
+    .msg-band { color:#6af; margin:.15rem 0; }
+    .msg-sys  { color:#444; margin:.15rem 0; font-style:italic; }
+    .input-row { display:flex; gap:.4rem; margin-bottom:.4rem; }
+    .input-row input { flex:1; background:#0e0e0e; color:#ccc; border:1px solid #1e1e1e;
+                       padding:.4rem .5rem; font-family:monospace; font-size:.75rem; }
+    .input-row input:focus { outline:none; border-color:#333; }
+    #btn-new-session { background:#0e0e1e; border-color:#1e1e4e; }
+    #session-badge   { color:#444; font-size:.68rem; }
+
+    /* ── Log ── */
+    #log { margin-top:1rem; font-size:.65rem; color:#333; white-space:pre;
+           max-height:6rem; overflow-y:auto; order:6; }
+
+    /* ── FX Rack ── */
+    .fx-slot { border:1px solid #1e1e1e; border-radius:4px; padding:.5rem .7rem; min-width:0; }
+    .grid-sep { grid-column:1/-1; font-size:.68rem; color:#444; letter-spacing:.1em;
+                padding:.4rem 0 .1rem; border-top:1px solid #1a1a1a; margin-top:.1rem; }
+    .fx-slot-hdr { font-size:.7rem; color:#555; letter-spacing:.07em; display:flex;
+                   align-items:center; gap:.4rem; margin-bottom:.45rem; flex-wrap:wrap; }
+    .fx-slot-hdr span { color:#f90; }
+    .fx-row { display:flex; gap:.3rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem; }
+    .fx-label { font-size:.58rem; color:#444; min-width:2rem; }
+    .fx-select { background:#111; color:#888; border:1px solid #222; font-family:monospace;
+                 font-size:.65rem; padding:.1rem .25rem; border-radius:2px; cursor:pointer; }
+    .fx-select:focus { outline:none; border-color:#333; }
+    .fx-on  { font-size:.6rem; padding:.1rem .35rem; border:1px solid #1e3e1e; background:#0a1a0a;
+              color:#383; cursor:pointer; border-radius:2px; font-family:monospace; }
+    .fx-on.active { background:#1a4a1a; border-color:#2e6e2e; color:#5d5; }
+    .fx-arm  { font-size:.6rem; padding:.1rem .35rem; border:1px solid #1e2e3e; background:#0a0e1a;
+               color:#45a; cursor:pointer; border-radius:2px; font-family:monospace; }
+    .fx-arm.armed  { background:#100e2a; border-color:#45a; color:#88f; }
+    .fx-arm.active { background:#1a0e0a; border-color:#a64; color:#f90; }
+    .fx-gate { font-size:.6rem; padding:.1rem .35rem; border:1px solid #3e1e1e; background:#1a0a0a;
+               color:#844; cursor:pointer; border-radius:2px; font-family:monospace; }
+    .fx-send-grid { display:flex; flex-direction:column; gap:.2rem; margin:.25rem 0; }
+    .fx-send-item { display:flex; align-items:center; gap:.4rem; }
+    .fx-send-item label { font-size:.6rem; color:#555; width:3.2rem; letter-spacing:.04em; }
+    .fx-send-sl { flex:1; min-width:60px; max-width:100px; height:3px; accent-color:#f90; cursor:pointer; }
+    .fx-send-val { font-size:.58rem; color:#444; width:1.8rem; text-align:right; }
+    .fx-send-item.active label { color:#f90; }
+    .fx-send-item.active .fx-send-val { color:#f90; }
+
+    /* ── FX Step Grid ── */
+    .fx-step-seq { display:flex; gap:2px; margin:.45rem 0 .1rem; flex-wrap:nowrap; }
+    .fx-step-btn { width:13px; height:13px; background:#111; border:1px solid #1e1e1e;
+                   cursor:pointer; border-radius:2px; flex-shrink:0; transition:background .05s; }
+    .fx-step-btn.on   { background:#603000; border-color:#a05000; }
+    .fx-step-btn.play { border-color:#fff !important; }
+    .fx-step-btn.on.play { background:#f90; border-color:#ffb040; }
+    .fx-step-divider { width:1px; background:#2a2a2a; align-self:stretch; margin:0 1px; flex-shrink:0; }
+
+    /* ── Song Mode ── */
+    .song-section { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; order:4; }
+    .song-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
+    .song-hdr span { color:#f90; }
+    .pat-bank { display:flex; flex-wrap:wrap; gap:.35rem; }
+    .pat-btn { min-width:4rem; font-size:.68rem; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pat-btn.has-pat { border-color:#604010; color:#c87020; }
+    .pat-btn.active-pat { background:#1a1200; border-color:#f90; color:#f90; }
+    .pat-btn.has-pat.active-pat { color:#f90; }
+    .arr-grid { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.4rem; }
+    .arr-slot { width:2.6rem; height:2.2rem; background:#111; border:1px solid #1a1a1a; cursor:pointer;
+                border-radius:3px; display:flex; align-items:center; justify-content:center;
+                font-size:.65rem; color:#444; font-family:monospace; user-select:none; }
+    .arr-slot:hover { border-color:#333; color:#666; }
+    .arr-slot.has-pat { background:#110d00; border-color:#604010; color:#c87020; }
+    .arr-slot.arr-playing { border-color:#f90 !important; color:#f90 !important; box-shadow:0 0 5px #f903; }
+    .mode-btn { font-size:.65rem; padding:.2rem .5rem; }
+    .mode-active { background:#1a1200; border-color:#f90; color:#f90; }
+  </style>
+</head>
+<body>
+<h1>CLANKERS 3</h1>
+
+<div class="inst-grid">
+
+<!-- ── Drums ───────────────────────────────────────────────────────────── -->
+<div class="inst">
+  <div class="inst-hdr">DRUMS <span>[t:10]</span> <button class="ms-btn" data-type="drum" data-ms="m">M</button><button class="ms-btn" data-type="drum" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="drum" min="0" max="100" value="100"></span></div>
+  <div class="drum-profile-row">
+    <button class="profile-btn active" data-profile="0">808</button>
+    <button class="profile-btn"        data-profile="1">909</button>
+    <button class="profile-btn"        data-profile="2">606</button>
+  </div>
+  <div class="knob-row" id="drum-knobs"></div>
+</div>
+
+<!-- ── Bass ────────────────────────────────────────────────────────────── -->
+<div class="inst">
+  <div class="inst-hdr">BASS PRO-ONE <span>[t:2]</span> <button class="ms-btn" data-type="bass" data-ms="m">M</button><button class="ms-btn" data-type="bass" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100" value="100"></span></div>
+  <div class="pads bass" id="bass-notes"></div>
+  <div class="knob-row" id="bass-knobs"></div>
+</div>
+
+<!-- ── Buchla ───────────────────────────────────────────────────────────── -->
+<div class="inst">
+  <div class="inst-hdr">BUCHLA 259/292 <span>[t:1]</span> <button class="ms-btn" data-type="buchla" data-ms="m">M</button><button class="ms-btn" data-type="buchla" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0" max="100" value="100"></span></div>
+  <div class="pads buchla" id="buchla-notes"></div>
+  <div class="buchla-ctrl" id="buchla-knobs"></div>
+</div>
+
+<!-- ── Pads ────────────────────────────────────────────────────────────── -->
+<div class="inst">
+  <div class="inst-hdr">HYBRID PADS <span>[t:6]</span> <button class="ms-btn" data-type="pads" data-ms="m">M</button><button class="ms-btn" data-type="pads" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="pads" min="0" max="100" value="100"></span></div>
+  <div class="pads chords" id="chord-pads"></div>
+  <div class="knob-row" id="pads-knobs"></div>
+</div>
+
+<!-- ── Rhodes ────────────────────────────────────────────────────────────── -->
+<div class="inst">
+  <div class="inst-hdr">RHODES EP <span>[t:3]</span> <button class="ms-btn" data-type="rhodes" data-ms="m">M</button><button class="ms-btn" data-type="rhodes" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="rhodes" min="0" max="100" value="100"></span></div>
+  <div class="pads chords" id="rhodes-pads"></div>
+  <div class="knob-row" id="rhodes-knobs"></div>
+</div>
+
+<!-- ── Master FX ─────────────────────────────────────────────────────────── -->
+<div class="grid-sep">MASTER FX</div>
+
+    <!-- MASTER DELAY -->
+    <div class="fx-slot">
+      <div class="fx-slot-hdr">
+        MASTER DELAY
+        <button class="fx-on" id="fx-delay-on">ON</button>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">TIME</span>
+        <select class="fx-select" id="fx-delay-time">
+          <option value="1/32">1/32</option><option value="1/16">1/16</option>
+          <option value="1/8" selected>1/8</option><option value="1/8d">1/8.</option>
+          <option value="1/4">1/4</option><option value="1/4d">1/4.</option>
+          <option value="1/2">1/2</option>
+        </select>
+        <span class="fx-label">FDBK</span><div id="fx-delay-fdbk-wrap"></div>
+        <span class="fx-label">WET</span><div id="fx-delay-wet-wrap"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">LFO</span>
+        <select class="fx-select" id="fx-delay-ltype">
+          <option value="sine">SIN</option><option value="square">SQR</option>
+          <option value="sawtooth">SAW</option><option value="triangle">TRI</option>
+          <option value="chaos">CHAOS</option>
+        </select>
+        <span class="fx-label">RATE</span><div id="fx-delay-lrate-wrap"></div>
+        <span class="fx-label">DEPTH</span><div id="fx-delay-ldepth-wrap"></div>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">FB</span>
+        <select class="fx-select" id="fx-delay-fshape">
+          <option value="none">CLEAN</option><option value="soft">SOFT</option>
+          <option value="hard">HARD</option><option value="fold">FOLD</option>
+          <option value="bit">BIT</option>
+        </select>
+        <span class="fx-label">HP</span><div id="fx-delay-hp-wrap"></div>
+        <span class="fx-label">LP</span><div id="fx-delay-lp-wrap"></div>
+      </div>
+    </div>
+
+    <!-- MASTER WAVESHAPER -->
+    <div class="fx-slot">
+      <div class="fx-slot-hdr">
+        MASTER WAVESHAPER
+        <button class="fx-on" id="fx-shape-on">ON</button>
+      </div>
+      <div class="fx-row">
+        <span class="fx-label">TYPE</span>
+        <select class="fx-select" id="fx-shape-type">
+          <option value="soft">SOFT</option><option value="hard">HARD</option>
+          <option value="fold">FOLD</option><option value="bit">BIT</option>
+        </select>
+        <span class="fx-label">DRIVE</span><div id="fx-shape-drive-wrap"></div>
+        <span class="fx-label">TONE</span><div id="fx-shape-tone-wrap"></div>
+        <span class="fx-label">WET</span><div id="fx-shape-wet-wrap"></div>
+      </div>
+    </div>
+
+</div><!-- /inst-grid -->
+
+<!-- ── Sequencer ────────────────────────────────────────────────────────── -->
+<div class="seq-section">
+  <h2>STEP SEQUENCER</h2>
+  <div id="seq-controls">
+    <button class="play-btn" id="btn-play">▶ PLAY</button>
+    <button class="stop-btn" id="btn-stop" disabled>■ STOP</button>
+    <button class="bake-btn" id="btn-bake" title="Write current knob state into JSON">⬇ BAKE</button>
+    <label style="display:inline-flex;align-items:center;gap:.4rem;margin:0;font-size:.78rem;">
+      BPM <input type="range" id="seq-bpm" min="60" max="200" step="1" value="128" style="width:110px;">
+      <span id="bpm-val">128</span>
+    </label>
+  </div>
+  <div id="step-viz">
+    <div id="viz-pos">BAR <span id="viz-bar">—</span> · BEAT <span id="viz-beat">—</span></div>
+    <div id="viz-steps"></div>
+  </div>
+  <span class="label-sm">ClankerBoy JSON — edit &amp; press PLAY</span>
+  <textarea id="sheet-json">{
+  "explanation": {
+    "intent": "melancholy, introspective, late-night warmth — pad adds harmonic depth and atmosphere",
+    "style": "cool jazz",
+    "timbre": "warm, dark, dry rhodes leads; lush slow-attack reverb pad recessed behind; buchla woody plucks high",
+    "section": "verse1",
+    "energy": 0.35,
+    "key": "Bb natural minor",
+    "progression": "i Bbm7 → iv Ebm7 → VII AbMaj7 → III DbMaj7",
+    "rhythm": "kick on 1+3, snare on 2+4, HH sparse 8ths, walking bass roots+passing tones",
+    "orchestration": "rhodes two-hand voicing leads, pad shell chords (3rd+7th rootless) slow swell behind, buchla high arpeggiated fills, bass walks roots, drums minimal brush feel",
+    "pad_voicing": "bar1 Bbm7: [61,68] Db4+Ab4 | bar2 Ebm7: [66,61] Gb4+Db4 | bar3 AbMaj7: [67,72] G4+C5 | bar4 DbMaj7: [65,72] F4+C5"
+  },
+  "bpm": 92,
+  "steps": [
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":92},{"t":2,"n":[10],"v":85,"cc":{"18":10,"23":30,"71":42,"72":22,"73":8,"74":48,"75":50,"79":80}},{"t":3,"n":[58,68],"v":68,"dur":3.5,"cc":{"72":90,"73":48,"74":52}},{"t":6,"n":[61,68],"v":58,"dur":7.5,"cc":{"29":28,"30":50,"72":95,"73":68,"74":32,"88":85,"91":88}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":62}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55},{"t":1,"n":[65],"v":82,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58},{"t":1,"n":[68],"v":76,"cc":{"10":22,"17":6,"19":6,"20":37,"71":26,"74":68}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":3,"n":[65,70],"v":72,"dur":2,"cc":{"72":85,"73":40,"74":55}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":88},{"t":2,"n":[10],"v":80,"cc":{"23":28,"74":45}},{"t":1,"n":[61],"v":80,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":72}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[65],"v":85,"cc":{"10":22,"17":7,"19":5,"20":37,"71":28,"74":74}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":82},{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":50},{"t":2,"n":[12],"v":75,"cc":{"23":25,"74":50}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[70],"v":78,"cc":{"10":24,"17":8,"19":6,"20":37,"71":26,"74":66}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":90},{"t":2,"n":[15],"v":86,"cc":{"23":32,"74":46}},{"t":3,"n":[63,70],"v":66,"dur":3.5,"cc":{"72":90,"73":46,"74":50}},{"t":6,"n":[66,61],"v":56,"dur":7.5,"cc":{"29":28,"30":50,"72":95,"73":66,"74":30,"88":85,"91":88}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":1,"n":[66],"v":80,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":76}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":3,"n":[66,73],"v":70,"dur":2,"cc":{"72":86,"73":42,"74":54}},{"t":1,"n":[70],"v":78,"cc":{"10":22,"17":7,"19":5,"20":37,"71":26,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":86},{"t":2,"n":[15],"v":78,"cc":{"23":28,"74":44}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56},{"t":1,"n":[63],"v":82,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":66}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":80},{"t":10,"n":[42],"v":52}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[66],"v":76,"cc":{"10":24,"17":7,"19":6,"20":37,"71":26,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":2,"n":[17],"v":74,"cc":{"23":26,"74":48}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[70],"v":80,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":94},{"t":2,"n":[20],"v":88,"cc":{"23":30,"74":50}},{"t":3,"n":[68,75],"v":64,"dur":3.5,"cc":{"72":92,"73":44,"74":48}},{"t":6,"n":[67,72],"v":54,"dur":7.5,"cc":{"29":26,"30":52,"72":95,"73":64,"74":28,"88":88,"91":90}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":62}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":54},{"t":1,"n":[68],"v":84,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":72}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56}]},
+    {"d":0.25,"tracks":[{"t":3,"n":[72,79],"v":68,"dur":2,"cc":{"72":88,"73":40,"74":52}},{"t":1,"n":[72],"v":76,"cc":{"10":22,"17":7,"19":6,"20":37,"71":26,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":88},{"t":2,"n":[20],"v":80,"cc":{"23":28,"74":46}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58},{"t":1,"n":[75],"v":80,"cc":{"10":18,"17":9,"19":5,"20":37,"71":30,"74":68}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":80},{"t":10,"n":[42],"v":54}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[68],"v":78,"cc":{"10":24,"17":8,"19":5,"20":37,"71":26,"74":66}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56}]},
+    {"d":0.25,"tracks":[{"t":2,"n":[22],"v":76,"cc":{"23":26,"74":48}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[72],"v":82,"cc":{"10":20,"17":7,"19":5,"20":37,"71":28,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":92},{"t":2,"n":[13],"v":84,"cc":{"23":29,"74":47}},{"t":3,"n":[61,68],"v":66,"dur":3,"cc":{"72":88,"73":44,"74":50}},{"t":6,"n":[65,72],"v":55,"dur":3,"cc":{"29":28,"30":50,"72":92,"73":65,"74":30,"88":85,"91":88}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":1,"n":[65],"v":82,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":70}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":76}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":3,"n":[65,72],"v":70,"dur":1.5,"cc":{"72":86,"73":42,"74":53}},{"t":1,"n":[68],"v":76,"cc":{"10":22,"17":7,"19":6,"20":37,"71":26,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":86},{"t":2,"n":[13],"v":76,"cc":{"23":25,"74":44}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56},{"t":1,"n":[61],"v":80,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":66}}]},
+    {"d":0.25,"tracks":[]},
+    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78},{"t":10,"n":[42],"v":52}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[65],"v":78,"cc":{"10":24,"17":8,"19":5,"20":37,"71":26,"74":68}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
+    {"d":0.25,"tracks":[{"t":2,"n":[10],"v":72,"cc":{"23":24,"74":46}}]},
+    {"d":0.25,"tracks":[{"t":1,"n":[68],"v":75,"cc":{"10":22,"17":7,"19":6,"20":37,"71":24,"74":66}}]},
+    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
+    {"d":0.25,"tracks":[]}
+  ],
+  "tension": 0.3
+}</textarea>
+</div>
+
+<!-- ── Pattern Bank + Song Mode ──────────────────────────────────────────── -->
+<div class="song-section">
+  <div class="song-hdr">
+    PATTERNS <span id="pat-slot-label">P1</span>
+    <button id="btn-pat-store">← STORE</button>
+    <span style="margin-left:auto;display:flex;gap:.3rem;">
+      <button id="btn-mode-loop" class="mode-btn mode-active">LOOP</button>
+      <button id="btn-mode-song" class="mode-btn">SONG</button>
+    </span>
+  </div>
+  <div id="pat-bank" class="pat-bank"></div>
+  <div id="arr-section" style="display:none">
+    <div class="song-hdr" style="margin-top:.5rem">
+      ARRANGEMENT
+      <button id="btn-arr-clear" style="font-size:.62rem;padding:.15rem .4rem">CLEAR</button>
+      <button id="btn-arr-repeat" class="mode-btn" title="Loop whole song">↺</button>
+    </div>
+    <div id="arr-grid" class="arr-grid"></div>
+  </div>
+</div>
+
+<!-- ── Band Chat ──────────────────────────────────────────────────────────── -->
+<div class="chat-section">
+  <h2>BAND CHAT <span id="session-badge"></span></h2>
+  <div class="input-row">
+    <input id="brief-input" type="text" placeholder="Describe your track (dark techno, 130 bpm…)" />
+    <span style="display:flex;gap:.3rem;flex-shrink:0;">
+      <button id="btn-session-solo" class="mode-btn mode-active" title="Single LLM pass — fast">SOLO</button>
+      <button id="btn-session-band" class="mode-btn" title="Full 3-member debate — slower, richer">BAND</button>
+    </span>
+    <button id="btn-new-session">START SESSION</button>
+  </div>
+  <div id="chat-messages"><span class="msg-sys">Start a session to talk to the band.</span></div>
+  <div class="input-row" id="evolve-row" style="display:none">
+    <select id="evolve-section" style="background:#0e0e0e;color:#888;border:1px solid #1e1e1e;font-family:monospace;font-size:.72rem;padding:.3rem .4rem;">
+      <option value="instrumental">→ instrumental</option>
+      <option value="verse2">→ verse 2</option>
+      <option value="bridge">→ bridge</option>
+      <option value="verse3">→ verse 3</option>
+      <option value="outro">→ outro</option>
+    </select>
+    <button id="btn-evolve">EVOLVE →</button>
+    <button id="btn-autoplay" style="background:#0a1a0a;border-color:#1e3e1e;color:#383">▶ AUTO</button>
+  </div>
+  <div class="input-row">
+    <input id="chat-input" type="text" placeholder="Talk to the band…" disabled />
+    <button id="chat-send" disabled>SEND</button>
+  </div>
+</div>
+
+<div id="log">Click a pad or press PLAY to start.</div>
+
+<script type="module">
+import { Sequencer } from './sequencer.js?v=18';
+import { MasterFx, makeCurve, divToSec } from './fx.js';
+
+// ─── Knob class ────────────────────────────────────────────────────────────
+class Knob {
+  constructor(container, { label, min, max, value, step = 0.01 }) {
+    this.min = min; this.max = max; this._v = value; this.step = step;
+    const SIZE = 44;
+    this.cv  = Object.assign(document.createElement('canvas'),
+      { width: SIZE, height: SIZE, className: 'knob-canvas' });
+    this.vEl = Object.assign(document.createElement('div'), { className: 'knob-val' });
+    this.lEl = Object.assign(document.createElement('div'), { className: 'knob-lab',
+      textContent: label });
+    container.classList.add('knob-wrap');
+    container.append(this.cv, this.vEl, this.lEl);
+
+    this.onChange = null; // callback set externally
+    let py = 0, pv = 0;
+    const self = this;
+    this.cv.addEventListener('mousedown', e => {
+      py = e.clientY; pv = self._v;
+      e.preventDefault();
+      function onMove(e2) {
+        const range = max - min;
+        self._v = Math.max(min, Math.min(max, pv + (py - e2.clientY) / 100 * range));
+        self._draw();
+        if (self.onChange) self.onChange(self._v);
+      }
+      function onUp() {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      }
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+    this.cv.addEventListener('wheel', e => {
+      e.preventDefault();
+      const bump = step >= 1 ? step * 3 : step * 5;
+      this._v = Math.max(min, Math.min(max, this._v + (e.deltaY < 0 ? bump : -bump)));
+      this._draw();
+      if (this.onChange) this.onChange(this._v);
+    }, { passive: false });
+    // Double-click to reset
+    this.cv.addEventListener('dblclick', () => { this._v = value; this._draw(); if (this.onChange) this.onChange(this._v); });
+    this._draw();
+  }
+  _draw() {
+    const c = this.cv.getContext('2d'), cx = 22, cy = 22, r = 17;
+    const sa = Math.PI * 0.75, ea = Math.PI * 2.25;
+    const t  = (this._v - this.min) / (this.max - this.min);
+    const va = sa + t * (ea - sa);
+    c.clearRect(0, 0, 44, 44);
+    c.lineWidth = 3.5; c.lineCap = 'round';
+    c.beginPath(); c.arc(cx, cy, r, sa, ea);
+    c.strokeStyle = '#252525'; c.stroke();
+    c.beginPath(); c.arc(cx, cy, r, sa, va);
+    c.strokeStyle = '#f90'; c.stroke();
+    c.beginPath();
+    c.moveTo(cx + Math.cos(va) * 6, cy + Math.sin(va) * 6);
+    c.lineTo(cx + Math.cos(va) * (r - 1), cy + Math.sin(va) * (r - 1));
+    c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.stroke();
+    const isInt = this.step >= 1;
+    this.vEl.textContent = isInt ? Math.round(this._v) : this._v.toFixed(2);
+  }
+  get val() { return this.step >= 1 ? Math.round(this._v) : this._v; }
+  /** Programmatic set — updates display without firing onChange */
+  setVal(v) { this._v = Math.max(this.min, Math.min(this.max, v)); this._draw(); }
+}
+
+// ─── Knob group helper ─────────────────────────────────────────────────────
+function makeKnobGroup(container, groupLabel, knobDefs) {
+  const group = document.createElement('div');
+  group.className = 'knob-group';
+  if (groupLabel) {
+    const lbl = document.createElement('div');
+    lbl.className = 'knob-group-label';
+    lbl.textContent = groupLabel;
+    group.appendChild(lbl);
+  }
+  const knobs = {};
+  for (const def of knobDefs) {
+    const wrap = document.createElement('div');
+    group.appendChild(wrap);
+    knobs[def.id] = new Knob(wrap, def);
+  }
+  container.appendChild(group);
+  return knobs;
+}
+
+// ─── Audio state ───────────────────────────────────────────────────────────
+let ctx        = null;
+let _readyPromise = null; // singleton init promise — prevents concurrent ensureReady races
+let drumsNode  = null;   // AudioWorkletNode — drums
+let bassNode   = null;   // AudioWorkletNode — bass
+let buchlaNode = null;   // AudioWorkletNode — buchla
+let padsNode   = null;   // AudioWorkletNode — pads
+let rhodesNode = null;   // AudioWorkletNode — rhodes
+let rack       = null;   // MasterFx
+
+function waitForReady(node) {
+  return new Promise((resolve, reject) => {
+    node.port.addEventListener('message', function handler(e) {
+      if (e.data.type === 'ready') {
+        node.port.removeEventListener('message', handler);
+        resolve();
+      } else if (e.data.type === 'error') {
+        node.port.removeEventListener('message', handler);
+        reject(new Error(e.data.message));
+      }
+    });
+    node.port.start();
+  });
+}
+
+async function ensureReady() {
+  if (drumsNode) {
+    if (ctx.state === 'suspended') await ctx.resume();
+    return;
+  }
+  if (_readyPromise) return _readyPromise;
+  _readyPromise = _doInit();
+  return _readyPromise;
+}
+
+async function _doInit() {
+  ctx = new AudioContext({ sampleRate: 44100 });
+  log('AudioContext @ ' + ctx.sampleRate + ' Hz');
+
+  // Compile WASM once on main thread, share compiled module with all worklets
+  const wasmBytes  = await fetch('/wasm/clankers_dsp_bg.wasm').then(r => r.arrayBuffer());
+  const wasmModule = await WebAssembly.compile(wasmBytes);
+
+  await ctx.audioWorklet.addModule('/worklets/drums-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/bass-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/buchla-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/pads-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/rhodes-worklet.js');
+
+  const seed = (Math.random() * 0xffffffff) >>> 0;
+  drumsNode  = new AudioWorkletNode(ctx, 'drums-worklet',  { processorOptions: { wasmModule, seed }, outputChannelCount: [1] });
+  bassNode   = new AudioWorkletNode(ctx, 'bass-worklet',   { processorOptions: { wasmModule, seed: seed ^ 0xdeadbeef } });
+  buchlaNode = new AudioWorkletNode(ctx, 'buchla-worklet', { processorOptions: { wasmModule } });
+  padsNode   = new AudioWorkletNode(ctx, 'pads-worklet',   { processorOptions: { wasmModule }, outputChannelCount: [2] });
+  rhodesNode = new AudioWorkletNode(ctx, 'rhodes-worklet', { processorOptions: { wasmModule }, outputChannelCount: [2] });
+
+  await Promise.all([
+    waitForReady(drumsNode),
+    waitForReady(bassNode),
+    waitForReady(buchlaNode),
+    waitForReady(padsNode),
+    waitForReady(rhodesNode),
+  ]);
+
+  rack = new MasterFx(ctx);
+  initFxUI();
+  log('Worklets ready — click any pad!');
+  window._ctx = ctx; window._rack = rack;
+  window._drumsNode = drumsNode; window._bassNode = bassNode;
+  window._buchlaNode = buchlaNode; window._padsNode = padsNode; window._rhodesNode = rhodesNode;
+}
+
+// ─── DRUMS ─────────────────────────────────────────────────────────────────
+
+// Global drum knobs
+const drumKnobContainer = document.getElementById('drum-knobs');
+const drumGlobalKnobs = makeKnobGroup(drumKnobContainer, '', [
+  { id: 'd-pitch',  label: 'PITCH',  min: -12, max: 12,    value: 0,     step: 0.5  },
+  { id: 'd-filter', label: 'FILTER', min: 0,   max: 127,   value: 127,   step: 1    },
+  { id: 'd-decay',  label: 'DECAY',  min: 0,   max: 127,   value: 63,    step: 1    },
+]);
+
+function sendDrumsParams() {
+  if (!drumsNode) return;
+  const pitch  = drumGlobalKnobs['d-pitch'].val;
+  const filt   = drumGlobalKnobs['d-filter'].val;
+  const decay  = drumGlobalKnobs['d-decay'].val;
+  // Log-scale filter: 80 * (18000/80)^(v/127)  →  80..18000 Hz
+  const hz     = 80 * Math.pow(225, filt / 127);
+  // Log-scale decay: 0.1 * 40^(v/127)  →  0.1..4.0 multiplier
+  const mult   = 0.1 * Math.pow(40, decay / 127);
+  drumsNode.port.postMessage({ type: 'setPitch',  semitones: pitch });
+  drumsNode.port.postMessage({ type: 'setFilter', hz });
+  drumsNode.port.postMessage({ type: 'setDecay',  mult });
+}
+
+for (const k of Object.values(drumGlobalKnobs)) k.onChange = sendDrumsParams;
+
+// Profile selector
+document.querySelectorAll('.profile-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const profileId = +btn.dataset.profile;
+    ensureReady().then(() => {
+      drumsNode.port.postMessage({ type: 'setProfile', profileId });
+      log(`drums → profile ${['808','909','606'][profileId]}`);
+    });
+  });
+});
+
+// ─── BASS ──────────────────────────────────────────────────────────────────
+const BASS_NOTES = [
+  { label:'F#', midi:6 }, { label:'G',  midi:7 }, { label:'A',  midi:9 },
+  { label:'B',  midi:11}, { label:'C#', midi:13}, { label:'E',  midi:16},
+  { label:'F#\'',midi:18},{ label:'A\'',midi:21},
+];
+
+const bassGrid = document.getElementById('bass-notes');
+BASS_NOTES.forEach(({ label, midi }) => {
+  const btn = document.createElement('button');
+  btn.className = 'pad'; btn.textContent = label;
+  btn.addEventListener('click', () => triggerBass(midi));
+  bassGrid.appendChild(btn);
+});
+
+const bassKnobContainer = document.getElementById('bass-knobs');
+const bk = makeKnobGroup(bassKnobContainer, 'BASS', [
+  { id: 'b-cutoff', label: 'CUTOFF', min: 0, max: 127, value: 48, step: 1 },
+  { id: 'b-res',    label: 'RES',    min: 0, max: 127, value: 42, step: 1 },
+  { id: 'b-fdec',   label: 'F.DEC',  min: 0, max: 127, value: 30, step: 1 },
+]);
+const bassOctKnob = makeKnobGroup(bassKnobContainer, 'OCT', [
+  { id: 'b-oct', label: 'OCT', min: -2, max: 2, value: 0, step: 1 },
+])['b-oct'];
+
+function triggerBass(midi) {
+  ensureReady().then(() => {
+    const bpm = +document.getElementById('seq-bpm').value;
+    const holdSamples = Math.round(1.5 * (60 / bpm) * 44100);
+    const ccJson = JSON.stringify({
+      71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
+      73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
+    });
+    bassNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                midiNote: midi + bassOctKnob.val * 12,
+                                velocity: 0.85, holdSamples, ccJson });
+    log(`bass midi=${midi} cc74=${bk['b-cutoff'].val}`);
+  });
+}
+
+// ─── BUCHLA ────────────────────────────────────────────────────────────────
+const BUCHLA_NOTES = [
+  { label:'C3', midi:48 }, { label:'Eb3',midi:51 }, { label:'F#3',midi:54 },
+  { label:'A3', midi:57 }, { label:'C4', midi:60 }, { label:'Eb4',midi:63 },
+  { label:'F#4',midi:66 },
+];
+
+const buchlaGrid = document.getElementById('buchla-notes');
+BUCHLA_NOTES.forEach(({ label, midi }) => {
+  const btn = document.createElement('button');
+  btn.className = 'pad'; btn.textContent = label;
+  btn.addEventListener('click', () => triggerBuchla(midi));
+  buchlaGrid.appendChild(btn);
+});
+
+// ─── Buchla XY pad (4-param: X→FOLD+LPF, Y→F.MOD+RELEASE) ─────────────────
+const _buchlaContainer = document.getElementById('buchla-knobs');
+
+// State — all 4 params driven by one XY position
+const uk = {
+  'u-fold':    { val: 37 },   // CC20 — X axis
+  'u-cutoff':  { val: 56 },   // CC74 — X axis (linked)
+  'u-fmod':    { val: 0  },   // CC21 — Y axis
+  'u-release': { val: 29 },   // CC19 — Y axis (linked)
+};
+
+// Canvas
+const _xyWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
+const _xyCv   = Object.assign(document.createElement('canvas'), {
+  className: 'buchla-xy', width: 190, height: 190,
+});
+const _xyAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
+_xyAxes.innerHTML = '<span>← dark · bright →</span><span>FOLD · F.MOD · RELEASE · LPF</span>';
+_xyWrap.append(_xyCv, _xyAxes);
+_buchlaContainer.appendChild(_xyWrap);
+
+const _xyCtx = _xyCv.getContext('2d');
+
+function _drawXY() {
+  const W = _xyCv.width, H = _xyCv.height;
+  const nx = uk['u-fold'].val / 127;          // 0..1
+  const ny = uk['u-fmod'].val / 127;          // 0..1
+  const px = nx * W;
+  const py = (1 - ny) * H;
+
+  _xyCtx.clearRect(0, 0, W, H);
+
+  // Background gradient: dark-bottom-left → bright-top-right
+  const grad = _xyCtx.createLinearGradient(0, H, W, 0);
+  grad.addColorStop(0,   '#0d0d0d');
+  grad.addColorStop(0.5, '#141a14');
+  grad.addColorStop(1,   '#1a2010');
+  _xyCtx.fillStyle = grad;
+  _xyCtx.fillRect(0, 0, W, H);
+
+  // Grid
+  _xyCtx.strokeStyle = '#252525';
+  _xyCtx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    _xyCtx.beginPath(); _xyCtx.moveTo(W * i / 4, 0); _xyCtx.lineTo(W * i / 4, H); _xyCtx.stroke();
+    _xyCtx.beginPath(); _xyCtx.moveTo(0, H * i / 4); _xyCtx.lineTo(W, H * i / 4); _xyCtx.stroke();
+  }
+
+  // Crosshair
+  _xyCtx.strokeStyle = 'rgba(255,153,0,0.25)';
+  _xyCtx.lineWidth = 1;
+  _xyCtx.beginPath(); _xyCtx.moveTo(px, 0); _xyCtx.lineTo(px, H); _xyCtx.stroke();
+  _xyCtx.beginPath(); _xyCtx.moveTo(0, py); _xyCtx.lineTo(W, py); _xyCtx.stroke();
+
+  // Dot
+  _xyCtx.beginPath();
+  _xyCtx.arc(px, py, 5, 0, Math.PI * 2);
+  _xyCtx.fillStyle = '#f90';
+  _xyCtx.fill();
+
+  // Value readout inside canvas
+  _xyCtx.font = '9px monospace';
+  _xyCtx.fillStyle = '#555';
+  _xyCtx.fillText(`FOLD ${uk['u-fold'].val}  LPF ${uk['u-cutoff'].val}`, 6, H - 16);
+  _xyCtx.fillText(`FMOD ${uk['u-fmod'].val}  REL ${uk['u-release'].val}`, 6, H - 5);
+}
+_drawXY();
+
+function _xyUpdate(e) {
+  const r  = _xyCv.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  const nx = Math.max(0, Math.min(1, cx / r.width));
+  const ny = Math.max(0, Math.min(1, 1 - cy / r.height));
+
+  // X axis → FOLD + LPF
+  uk['u-fold'].val   = Math.round(nx * 127);
+  uk['u-cutoff'].val = Math.round(nx * 127);
+  // Y axis → F.MOD + RELEASE
+  uk['u-fmod'].val    = Math.round(ny * 127);
+  uk['u-release'].val = Math.round(ny * 127);
+
+  _drawXY();
+  sendBuchlaParams();
+}
+let _xyDrag = false;
+_xyCv.addEventListener('mousedown',  e => { _xyDrag = true;  _xyUpdate(e); });
+_xyCv.addEventListener('mousemove',  e => { if (_xyDrag) _xyUpdate(e); });
+_xyCv.addEventListener('mouseup',    () => _xyDrag = false);
+_xyCv.addEventListener('mouseleave', () => _xyDrag = false);
+_xyCv.addEventListener('touchstart', e => { e.preventDefault(); _xyUpdate(e); }, { passive: false });
+_xyCv.addEventListener('touchmove',  e => { e.preventDefault(); _xyUpdate(e); }, { passive: false });
+
+function buchlaCC() {
+  return { 74: uk['u-cutoff'].val, 20: uk['u-fold'].val,
+           21: uk['u-fmod'].val,   19: uk['u-release'].val };
+}
+
+function triggerBuchla(midi) {
+  ensureReady().then(() => {
+    const ccJson = JSON.stringify(buchlaCC());
+    buchlaNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                  midiNote: midi, velocity: 0.85, ccJson });
+    log(`buchla midi=${midi} fold=${uk['u-fold'].val} lpf=${uk['u-cutoff'].val} fmod=${uk['u-fmod'].val} rel=${uk['u-release'].val}`);
+  });
+}
+
+// ─── PADS ──────────────────────────────────────────────────────────────────
+const CHORD_PADS = [
+  { label:'Dm7',  notes:[50,53,57,60] },
+  { label:'Fm7',  notes:[53,56,60,63] },
+  { label:'Gm9',  notes:[55,58,62,65,69] },
+  { label:'Am7',  notes:[57,60,64,67] },
+  { label:'Bb7',  notes:[58,62,65,68] },
+  { label:'Cm9',  notes:[48,52,55,58,62] },
+];
+
+const chordGrid = document.getElementById('chord-pads');
+CHORD_PADS.forEach(({ label, notes }) => {
+  const btn = document.createElement('button');
+  btn.className = 'pad'; btn.textContent = label;
+  btn.addEventListener('click', () => triggerChord(notes));
+  chordGrid.appendChild(btn);
+});
+
+const padsKnobContainer = document.getElementById('pads-knobs');
+const pk = makeKnobGroup(padsKnobContainer, 'PADS', [
+  { id: 'p-cutoff', label: 'CUTOFF', min: 0, max: 127, value: 40, step: 1 },
+  { id: 'p-atk',    label: 'ATK',    min: 0, max: 127, value: 65, step: 1 },
+  { id: 'p-rel',    label: 'REL',    min: 0, max: 127, value: 92, step: 1 },
+  { id: 'p-rev',    label: 'REVERB', min: 0, max: 127, value: 88, step: 1 },
+  { id: 'p-cho',    label: 'CHORUS', min: 0, max: 127, value: 50, step: 1 },
+]);
+
+function triggerChord(notes) {
+  ensureReady().then(() => {
+    const bpm = +document.getElementById('seq-bpm').value;
+    const holdSamples = Math.round(2 * (60 / bpm) * 44100);
+    const ccJson = JSON.stringify({
+      74: pk['p-cutoff'].val, 73: pk['p-atk'].val, 72: pk['p-rel'].val,
+      91: pk['p-rev'].val,    88: 80, 29: 30, 30: pk['p-cho'].val, 31: pk['p-cho'].val,
+    });
+    padsNode.port.postMessage({ type: 'setParams', ccJson });
+    for (const note of notes) {
+      padsNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                  midiNote: note, velocity: 0.75, holdSamples });
+    }
+    log(`pads [${notes.join(',')}] hold=${holdSamples}`);
+  });
+}
+
+// ─── RHODES ────────────────────────────────────────────────────────────────
+const RHODES_PADS = [
+  { label:'C3',  midi:48 }, { label:'D3',  midi:50 }, { label:'E3',  midi:52 },
+  { label:'F3',  midi:53 }, { label:'G3',  midi:55 }, { label:'A3',  midi:57 },
+  { label:'Bb3', midi:58 }, { label:'C4',  midi:60 }, { label:'D4',  midi:62 },
+  { label:'E4',  midi:64 }, { label:'G4',  midi:67 }, { label:'Bb4', midi:70 },
+];
+
+const rhodesGrid = document.getElementById('rhodes-pads');
+RHODES_PADS.forEach(({ label, midi }) => {
+  const btn = document.createElement('button');
+  btn.className = 'pad'; btn.textContent = label;
+  btn.addEventListener('click', () => triggerRhodes(midi));
+  rhodesGrid.appendChild(btn);
+});
+
+const rhodesKnobContainer = document.getElementById('rhodes-knobs');
+const rk = {
+  ...makeKnobGroup(rhodesKnobContainer, 'TONE', [
+    { id: 'r-bright', label: 'BRIGHT', min: 0,   max: 127, value: 42,  step: 1 },  // → brightness 3.0
+    { id: 'r-decay',  label: 'DECAY',  min: 0,   max: 127, value: 46,  step: 1 },  // → amp_decay 2.5s
+    { id: 'r-bark',   label: 'BARK',   min: 0,   max: 127, value: 35,  step: 1 },  // → mod_decay 0.18s
+    { id: 'r-ratio',  label: 'RATIO',  min: 0,   max: 127, value: 8,   step: 1 },  // → harm_ratio 1.0
+  ]),
+  ...makeKnobGroup(rhodesKnobContainer, 'VIBE', [
+    { id: 'r-trate',  label: 'T.RATE', min: 0,   max: 127, value: 31,  step: 1 },  // → tremolo_rate 2.2Hz
+    { id: 'r-tdepth', label: 'T.DEPT', min: 0,   max: 127, value: 13,  step: 1 },  // → tremolo_depth 0.08
+    { id: 'r-chorus', label: 'CHORUS', min: 0,   max: 127, value: 18,  step: 1 },  // → chorus_mix 0.12
+  ]),
+};
+
+function triggerRhodes(midi) {
+  ensureReady().then(() => {
+    const bpm = +document.getElementById('seq-bpm').value;
+    const holdSamples = Math.round(2 * (60 / bpm) * 44100);
+    const ccJson = JSON.stringify({
+      74: rk['r-bright'].val, 72: rk['r-decay'].val,
+      73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+      26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
+      30: rk['r-chorus'].val,
+    });
+    rhodesNode.port.postMessage({ type: 'setParams', ccJson });
+    rhodesNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
+                                  midiNote: midi, velocity: 0.78, holdSamples });
+    log(`rhodes midi=${midi} bright=${rk['r-bright'].val} decay=${rk['r-decay'].val}`);
+  });
+}
+
+function sendRhodesParams() {
+  if (!rhodesNode) return;
+  rhodesNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify({
+    74: rk['r-bright'].val, 72: rk['r-decay'].val,
+    73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+    26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
+    30: rk['r-chorus'].val,
+  })});
+}
+
+for (const k of Object.values(rk)) k.onChange = sendRhodesParams;
+
+// ─── Sequencer ─────────────────────────────────────────────────────────────
+let seq = null;
+
+function getSeq() {
+  if (!seq) {
+    seq = new Sequencer(ctx, { drums: drumsNode, bass: bassNode,
+                               buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode });
+  }
+  return seq;
+}
+
+document.getElementById('btn-play').addEventListener('click', async () => {
+  try {
+    await ensureReady();
+    const bpm = +document.getElementById('seq-bpm').value;
+    const s   = getSeq();
+    let sheet;
+    if (songMode && songArrangement.length > 0) {
+      sheet = buildSongSheet();
+      sheet.bpm = bpm;
+      s.loop  = songRepeat;
+      s.onEnd = () => {
+        document.getElementById('btn-play').disabled = false;
+        document.getElementById('btn-stop').disabled = true;
+        stopArrIndicator();
+        stopViz();
+        log('[seq] ■ song ended');
+      };
+      s.stop(); s.load(sheet); s.start();
+      if (sheet.fx) applyFxParams(sheet.fx);
+      startArrIndicator();
+      log(`[seq] ▶ SONG ${bpm} BPM — ${songArrangement.length} patterns — ${sheet.steps.length} steps`);
+    } else {
+      sheet = JSON.parse(document.getElementById('sheet-json').value);
+      sheet.bpm = bpm;
+      s.loop  = true;
+      s.onEnd = null;
+      s.stop(); s.load(sheet); s.start();
+      if (sheet.fx) applyFxParams(sheet.fx);
+      log(`[seq] ▶ ${sheet.bpm} BPM — ${(sheet.steps ?? []).length} steps`);
+    }
+    document.getElementById('btn-play').disabled = true;
+    document.getElementById('btn-stop').disabled = false;
+    if (rack) rack.attach(s._masterGain, ctx.destination);
+    startViz();
+  } catch (e) {
+    log('Seq error: ' + e);
+  }
+});
+
+document.getElementById('btn-stop').addEventListener('click', () => {
+  if (seq) seq.stop();
+  stopArrIndicator();
+  stopViz();
+  document.getElementById('btn-play').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  log('[seq] ■ stopped');
+});
+
+document.getElementById('seq-bpm').addEventListener('input', function () {
+  document.getElementById('bpm-val').textContent = this.value;
+  if (seq && seq.isPlaying) seq._bpm = +this.value;
+});
+
+// ─── Live knob → worklet param wiring ─────────────────────────────────────
+// Direct postMessage — no debounce needed, takes effect within ~3ms audio block.
+
+function sendBassParams() {
+  if (!bassNode) return;
+  bassNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify({
+    71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
+    73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
+  })});
+}
+
+function sendBuchlaParams() {
+  if (!buchlaNode) return;
+  buchlaNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify(buchlaCC()) });
+}
+
+function sendPadsParams() {
+  if (!padsNode) return;
+  padsNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify({
+    74: pk['p-cutoff'].val, 73: pk['p-atk'].val, 72: pk['p-rel'].val,
+    91: pk['p-rev'].val,    88: 80, 29: 30, 30: pk['p-cho'].val, 31: pk['p-cho'].val,
+  })});
+}
+
+// Drum global knobs are wired via sendDrumsParams() above
+// Wire bass knobs
+for (const k of Object.values(bk)) k.onChange = sendBassParams;
+bassOctKnob.onChange = sendBassParams;
+// Buchla XY wired via sendBuchlaParams() called from _xyUpdate above
+// Wire pads knobs
+for (const k of Object.values(pk)) k.onChange = sendPadsParams;
+
+// ─── Mute / Solo ──────────────────────────────────────────────────────────
+document.querySelectorAll('.ms-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!seq) return;
+    const type = btn.dataset.type;
+    const ms   = btn.dataset.ms;
+    if (ms === 'm') {
+      const on = seq.toggleMute(type);
+      btn.classList.toggle('active-m', on);
+      // Clear solo button for same instrument
+      const sBtn = document.querySelector(`.ms-btn[data-type="${type}"][data-ms="s"]`);
+      if (sBtn) sBtn.classList.remove('active-s');
+    } else {
+      const on = seq.toggleSolo(type);
+      btn.classList.toggle('active-s', on);
+      // Clear mute button for same instrument
+      const mBtn = document.querySelector(`.ms-btn[data-type="${type}"][data-ms="m"]`);
+      if (mBtn) mBtn.classList.remove('active-m');
+    }
+    // Update all solo buttons visual state (solo is exclusive-feeling)
+    const soloState = seq.getSoloState();
+    document.querySelectorAll('.ms-btn[data-ms="s"]').forEach(s => {
+      s.classList.toggle('active-s', soloState[s.dataset.type]);
+    });
+  });
+});
+
+// ─── Pattern Bank + Song Mode ──────────────────────────────────────────────
+const PAT_COUNT = 8;
+const ARR_COUNT = 16;
+const patternBank = new Array(PAT_COUNT).fill(null); // { sheet, label }
+let activeSlot     = 0;
+let songArrangement = [];   // ordered list of bank indices
+let songMode       = false;
+let songRepeat     = false;
+let arrStepOffsets = [];    // cumulative step index per arrangement position
+let arrPlayTimer   = null;
+
+// Build pattern slot buttons
+const patBankEl = document.getElementById('pat-bank');
+const patBtns   = [];
+for (let i = 0; i < PAT_COUNT; i++) {
+  const btn = document.createElement('button');
+  btn.className    = 'pat-btn';
+  btn.dataset.slot = i;
+  btn.textContent  = `P${i + 1}`;
+  btn.addEventListener('click', () => selectSlot(i));
+  patBankEl.appendChild(btn);
+  patBtns.push(btn);
+}
+
+// selectSlot(0) called later, after arrSlots is initialised
+
+function selectSlot(i) {
+  activeSlot = i;
+  document.getElementById('pat-slot-label').textContent = `P${i + 1}`;
+  patBtns.forEach((b, idx) => b.classList.toggle('active-pat', idx === i));
+  if (patternBank[i]) {
+    document.getElementById('sheet-json').value = JSON.stringify(patternBank[i].sheet, null, 2);
+    const bpm = patternBank[i].sheet.bpm;
+    if (bpm) { document.getElementById('seq-bpm').value = bpm; document.getElementById('bpm-val').textContent = bpm; }
+    log(`P${i + 1} loaded`);
+  }
+  updateArrGrid();
+}
+
+// STORE current textarea into active slot
+document.getElementById('btn-pat-store').addEventListener('click', () => {
+  let sheet;
+  try { sheet = JSON.parse(document.getElementById('sheet-json').value); }
+  catch (e) { log('Store failed — invalid JSON'); return; }
+  // Capture current FX state into the sheet
+  if (rack) sheet.fx = rack.getParams();
+  const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
+  patternBank[activeSlot] = { sheet, label };
+  patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
+  patBtns[activeSlot].classList.add('has-pat');
+  updateArrGrid();
+  log(`Stored → P${activeSlot + 1} "${label}"`);
+});
+
+// Mode toggle
+const btnModeLoop = document.getElementById('btn-mode-loop');
+const btnModeSong = document.getElementById('btn-mode-song');
+const arrSection  = document.getElementById('arr-section');
+function setMode(mode) {
+  songMode = mode === 'song';
+  btnModeLoop.classList.toggle('mode-active', !songMode);
+  btnModeSong.classList.toggle('mode-active',  songMode);
+  arrSection.style.display = songMode ? '' : 'none';
+}
+btnModeLoop.addEventListener('click', () => setMode('loop'));
+btnModeSong.addEventListener('click', () => setMode('song'));
+
+// Song repeat toggle
+const btnArrRepeat = document.getElementById('btn-arr-repeat');
+btnArrRepeat.addEventListener('click', () => {
+  songRepeat = !songRepeat;
+  btnArrRepeat.classList.toggle('mode-active', songRepeat);
+});
+
+// Arrangement grid
+const arrGrid  = document.getElementById('arr-grid');
+const arrSlots = [];
+for (let i = 0; i < ARR_COUNT; i++) {
+  const slot = document.createElement('div');
+  slot.className   = 'arr-slot';
+  slot.dataset.pos = i;
+  slot.addEventListener('click', () => {
+    if (i < songArrangement.length) {
+      songArrangement.splice(i, 1);       // remove slot
+    } else if (i === songArrangement.length && patternBank[activeSlot]) {
+      songArrangement.push(activeSlot);   // append active pattern
+    }
+    updateArrGrid();
+  });
+  arrGrid.appendChild(slot);
+  arrSlots.push(slot);
+}
+
+function updateArrGrid() {
+  for (let i = 0; i < ARR_COUNT; i++) {
+    const slot = arrSlots[i];
+    if (i < songArrangement.length) {
+      const si = songArrangement[i];
+      slot.textContent = `P${si + 1}`;
+      slot.title       = patternBank[si]?.label ?? '';
+      slot.classList.add('has-pat');
+    } else {
+      const canAdd = i === songArrangement.length && patternBank[activeSlot];
+      slot.textContent = canAdd ? '+' : '—';
+      slot.classList.remove('has-pat', 'arr-playing');
+    }
+  }
+}
+
+document.getElementById('btn-arr-clear').addEventListener('click', () => {
+  songArrangement = [];
+  updateArrGrid();
+});
+
+selectSlot(0); // arrSlots now initialised — safe to call
+
+// Build concatenated song sheet from arrangement
+function buildSongSheet() {
+  const steps = [];
+  arrStepOffsets = [];
+  let bpm = null;
+  for (const si of songArrangement) {
+    const pat = patternBank[si];
+    if (!pat) continue;
+    arrStepOffsets.push(steps.length);
+    bpm = bpm ?? pat.sheet.bpm;
+    steps.push(...pat.sheet.steps);
+  }
+  return { bpm: bpm ?? 120, steps };
+}
+
+// Highlight current arrangement position while song plays
+function startArrIndicator() {
+  stopArrIndicator();
+  arrPlayTimer = setInterval(() => {
+    if (!seq?.isPlaying || !songMode) return;
+    const idx = seq._stepIdx;
+    let playing = arrStepOffsets.length - 1;
+    for (let i = 0; i < arrStepOffsets.length - 1; i++) {
+      if (idx < arrStepOffsets[i + 1]) { playing = i; break; }
+    }
+    arrSlots.forEach((s, i) => s.classList.toggle('arr-playing', i === playing && i < songArrangement.length));
+  }, 80);
+}
+function stopArrIndicator() {
+  if (arrPlayTimer) { clearInterval(arrPlayTimer); arrPlayTimer = null; }
+  arrSlots.forEach(s => s.classList.remove('arr-playing'));
+}
+
+// ─── Volume sliders ────────────────────────────────────────────────────────
+document.querySelectorAll('.vol-slider').forEach(slider => {
+  slider.addEventListener('input', () => {
+    if (seq) seq.setVolume(slider.dataset.type, slider.value / 100);
+  });
+});
+
+// ─── Bake knobs → JSON ────────────────────────────────────────────────────
+function bakeToJson() {
+  let sheet;
+  try { sheet = JSON.parse(document.getElementById('sheet-json').value); }
+  catch (e) { log('Bake failed — invalid JSON: ' + e.message); return; }
+
+  const octShift = bassOctKnob.val * 12;
+  const bassCC   = { 71: bk['b-res'].val,   74: bk['b-cutoff'].val, 23: bk['b-fdec'].val };
+  const bCC = buchlaCC();
+  const padsCC   = { 74: pk['p-cutoff'].val, 73: pk['p-atk'].val,    72: pk['p-rel'].val,
+                     91: pk['p-rev'].val,    30: pk['p-cho'].val,     31: pk['p-cho'].val };
+  const rhodesCC = { 74: rk['r-bright'].val, 72: rk['r-decay'].val,
+                     73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+                     26: rk['r-trate'].val,  27: rk['r-tdepth'].val, 30: rk['r-chorus'].val };
+  const ccByType = { 1: bCC, 2: bassCC, 3: rhodesCC, 6: padsCC };
+
+  // Drum knobs are 0-1 (direct p0/p1/p2); JSON CCs are 0-127 — multiply to convert.
+  // drumNoteToParams: kick=CC74(pitch)/CC23(sweep)/CC75(decay),
+  //                  snare=CC74(pitch)/CC75(decay), hh=CC74(decay)
+  const k127 = v => Math.round(v * 127);
+  const kickCC  = { 74: k127(dk['k-pitch'].val), 23: k127(dk['k-sweep'].val), 75: k127(dk['k-decay'].val) };
+  const snareCC = { 74: k127(dk['s-pitch'].val), 75: k127(dk['s-decay'].val) };
+  const hhCC    = { 74: k127(dk['h-decay'].val) };
+  const HH_NOTES = new Set([42, 46, 49, 50, 51, 52, 53, 54, 55, 56, 57]);
+
+  for (const step of sheet.steps ?? []) {
+    for (const track of step.tracks ?? []) {
+      if (track.t === 10) {
+        const drumCC = {};
+        for (const note of track.n ?? []) {
+          if (note === 36)                       Object.assign(drumCC, kickCC);
+          else if (note === 38 || note === 40)   Object.assign(drumCC, snareCC);
+          else if (HH_NOTES.has(note))           Object.assign(drumCC, hhCC);
+        }
+        if (Object.keys(drumCC).length) track.cc = { ...track.cc, ...drumCC };
+        continue;
+      }
+      if (track.t === 2 && octShift !== 0) {
+        track.n = (track.n ?? []).map(n => Math.max(0, Math.min(127, n + octShift)));
+      }
+      const overlay = ccByType[track.t];
+      if (!overlay) continue;
+      track.cc = { ...track.cc, ...overlay };
+    }
+  }
+
+  // Reset octave knob — notes are now embedded in JSON
+  if (octShift !== 0) {
+    bassOctKnob._v = 0;
+    bassOctKnob._draw();
+  }
+
+  document.getElementById('sheet-json').value = JSON.stringify(sheet, null, 2);
+  log('⬇ knobs baked into JSON');
+}
+
+document.getElementById('btn-bake').addEventListener('click', bakeToJson);
+
+// ─── Band Chat ─────────────────────────────────────────────────────────────
+const API = 'http://localhost:8000';
+let sessionId = null;
+
+const chatMsgs = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const chatSend  = document.getElementById('chat-send');
+
+function chatAppend(text, cls) {
+  const d = document.createElement('div');
+  d.className = cls; d.textContent = text;
+  chatMsgs.appendChild(d);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+function sheetToSequencer(sheet, { autoStore = true, autoPlay = false } = {}) {
+  try {
+    const steps = sheet.steps;
+    if (!steps || !steps.length) return;
+    const bpm = sheet.bpm ?? 120;
+
+    // Load into textarea + BPM slider
+    document.getElementById('sheet-json').value = JSON.stringify(sheet, null, 2);
+    document.getElementById('seq-bpm').value = bpm;
+    document.getElementById('bpm-val').textContent = bpm;
+
+    // Apply FX params if sheet carries them
+    if (sheet.fx && rack) applyFxParams(sheet.fx);
+
+    // Auto-store to current active slot
+    if (autoStore) {
+      const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
+      const stored = Object.assign({}, sheet);
+      if (rack) stored.fx = rack.getParams();
+      patternBank[activeSlot] = { sheet: stored, label };
+      patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
+      patBtns[activeSlot].classList.add('has-pat');
+      updateArrGrid();
+      log(`Band → P${activeSlot + 1} "${label}"`);
+
+      // Auto-append to arrangement if in song mode
+      if (songMode) {
+        const firstEmpty = arrSlots.findIndex(s => !s.dataset.pat);
+        if (firstEmpty !== -1) {
+          arrSlots[firstEmpty].dataset.pat = activeSlot;
+          arrSlots[firstEmpty].textContent  = `P${activeSlot + 1}`;
+          arrSlots[firstEmpty].classList.add('has-pat');
+          updateArrGrid();
+        }
+      }
+
+      // Advance to next free slot for the next section
+      const nextFree = patternBank.findIndex((p, i) => i > activeSlot && !p);
+      if (nextFree !== -1) selectSlot(nextFree);
+    }
+
+    const ex = sheet.explanation;
+    const info = ex ? [ex.style, ex.key, ex.section].filter(Boolean).join(' · ') : '';
+    chatAppend(`♩ ${info || 'sheet'} — ${steps.length} steps @ ${bpm} BPM → P${activeSlot > 0 ? activeSlot : 1}`, 'msg-sys');
+
+    // Optionally fire playback
+    if (autoPlay) document.getElementById('btn-play')?.click();
+  } catch (e) {
+    chatAppend('[sheet parse error: ' + e + ']', 'msg-sys');
+  }
+}
+
+// SOLO / BAND toggle
+let sessionSolo = true;
+document.getElementById('btn-session-solo').addEventListener('click', () => {
+  sessionSolo = true;
+  document.getElementById('btn-session-solo').classList.add('mode-active');
+  document.getElementById('btn-session-band').classList.remove('mode-active');
+});
+document.getElementById('btn-session-band').addEventListener('click', () => {
+  sessionSolo = false;
+  document.getElementById('btn-session-band').classList.add('mode-active');
+  document.getElementById('btn-session-solo').classList.remove('mode-active');
+});
+
+document.getElementById('btn-new-session').addEventListener('click', async () => {
+  const brief = document.getElementById('brief-input').value.trim();
+  if (!brief) { chatAppend('Enter a track brief first.', 'msg-sys'); return; }
+  chatAppend(sessionSolo ? 'Starting session…' : 'Band is debating (this takes a moment)…', 'msg-sys');
+  document.getElementById('btn-new-session').disabled = true;
+  try {
+    const res  = await fetch(`${API}/session/new`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brief, section: 'verse1', solo: sessionSolo }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    sessionId = data.session_id;
+    document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
+    chatInput.disabled = false; chatSend.disabled = false;
+    document.getElementById('evolve-row').style.display = '';
+    // Switch to song mode so new sections auto-fill the arrangement
+    if (!songMode) document.getElementById('btn-mode-song')?.click();
+    // Show band debate transcript (multi-LLM mode)
+    if (data.messages && data.messages.length) {
+      for (const m of data.messages) chatAppend(`${m.role}: ${m.content}`, 'msg-band');
+    }
+    chatAppend('Session started. The band is ready.', 'msg-sys');
+    sheetToSequencer(data.sheet, { autoStore: true, autoPlay: false });
+  } catch (e) {
+    chatAppend('Error: ' + e + ' — is the API running? (uvicorn api.main:app --port 8000)', 'msg-sys');
+  } finally {
+    document.getElementById('btn-new-session').disabled = false;
+  }
+});
+
+async function sendChat() {
+  const msg = chatInput.value.trim();
+  if (!msg || !sessionId) return;
+  chatInput.value = '';
+  chatAppend('You: ' + msg, 'msg-user');
+  chatSend.disabled = true;
+  try {
+    const res  = await fetch(`${API}/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, message: msg }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    chatAppend(`${data.companion}: ${data.reply}`, 'msg-band');
+    sheetToSequencer(data.sheet);
+  } catch (e) {
+    const msg = String(e).includes('404')
+      ? 'Session expired (server restarted) — please start a new session.'
+      : 'Error: ' + e;
+    chatAppend(msg, 'msg-sys');
+  } finally {
+    chatSend.disabled = false; chatInput.focus();
+  }
+}
+
+chatSend.addEventListener('click', sendChat);
+chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+// ── EVOLVE: ask the band to mutate for the next section ──────────────────
+let autoPlayOnEvolve = false;
+document.getElementById('btn-autoplay').addEventListener('click', function() {
+  autoPlayOnEvolve = !autoPlayOnEvolve;
+  this.style.background = autoPlayOnEvolve ? '#1a4a1a' : '#0a1a0a';
+  this.style.borderColor = autoPlayOnEvolve ? '#2e6e2e' : '#1e3e1e';
+  this.style.color = autoPlayOnEvolve ? '#5d5' : '#383';
+});
+
+document.getElementById('btn-evolve').addEventListener('click', async () => {
+  if (!sessionId) return;
+  const section = document.getElementById('evolve-section').value;
+  const btn = document.getElementById('btn-evolve');
+  btn.disabled = true;
+  btn.textContent = 'thinking…';
+  chatAppend(`Conductor: evolving to ${section}…`, 'msg-sys');
+  try {
+    const res = await fetch(`${API}/sheet/evolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, section }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.reply) chatAppend(`Conductor: ${data.reply}`, 'msg-band');
+    sheetToSequencer(data.sheet, { autoStore: true, autoPlay: autoPlayOnEvolve });
+    // Advance section selector to next in arc
+    const arcOrder = ['instrumental','verse2','bridge','verse3','outro'];
+    const sel = document.getElementById('evolve-section');
+    const idx = arcOrder.indexOf(section);
+    if (idx !== -1 && idx + 1 < arcOrder.length) sel.value = arcOrder[idx + 1];
+  } catch (e) {
+    const msg = String(e).includes('404')
+      ? 'Session expired (server restarted) — please start a new session.'
+      : 'Evolve error: ' + e;
+    chatAppend(msg, 'msg-sys');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'EVOLVE →';
+  }
+});
+
+// ─── FX Rack UI ────────────────────────────────────────────────────────────
+
+const INSTR_TYPES = ['drum','bass','buchla','pads','rhodes'];
+
+// Wire all send sliders via delegation — works before rack exists
+document.querySelectorAll('.fx-send-sl').forEach(sl => {
+  sl.addEventListener('input', () => {
+    const slot  = +sl.dataset.slot;
+    const instr =  sl.dataset.instr;
+    const val   = sl.value / 100;
+    // Update value display + active highlight
+    const valEl = sl.nextElementSibling;
+    if (valEl) valEl.textContent = sl.value;
+    sl.closest('.fx-send-item').classList.toggle('active', +sl.value > 0);
+    rack?.setSend(slot, instr, val);
+  });
+});
+
+// BPM helper for delay time calculation
+function bpmDelaySeconds(division) {
+  return divToSec(division, +document.getElementById('seq-bpm').value);
+}
+
+// FX UI state — module-level so applyFxParams can reach them
+let _fxOn  = [false, false];  // [delay, shaper]
+let _fxK   = {};              // keyed by name, holds Knob refs
+
+/** Apply a FX params object (from JSON "fx" key) to both audio and UI */
+function applyFxParams(fx) {
+  if (!rack || !fx) return;
+  const bpm = +document.getElementById('seq-bpm').value;
+  rack.setParams(fx, bpm);
+
+  const d = fx.delay;
+  if (d) {
+    if (d.on       != null) { _fxOn[0] = !!d.on; document.getElementById('fx-delay-on')?.classList.toggle('active', _fxOn[0]); }
+    if (d.time)              document.getElementById('fx-delay-time').value = d.time;
+    if (d.lfo)               document.getElementById('fx-delay-ltype').value = d.lfo;
+    if (d.fb_shape)          document.getElementById('fx-delay-fshape').value = d.fb_shape;
+    if (d.feedback  != null) _fxK.d_fdbk?.setVal(d.feedback);
+    if (d.wet       != null) _fxK.d_wet?.setVal(d.wet);
+    if (d.lfo_rate  != null) _fxK.d_lrate?.setVal(d.lfo_rate);
+    if (d.lfo_depth != null) _fxK.d_ldepth?.setVal(d.lfo_depth);
+    if (d.hp        != null) _fxK.d_hp?.setVal(d.hp);
+    if (d.lp        != null) _fxK.d_lp?.setVal(d.lp);
+    // Enforce audio wet matches on-state (rack.setParams sets wet unconditionally)
+    rack.delay().setWet(_fxOn[0] ? (_fxK.d_wet?.val ?? 0) : 0);
+  }
+
+  const w = fx.waveshaper;
+  if (w) {
+    if (w.on    != null) { _fxOn[1] = !!w.on; document.getElementById('fx-shape-on')?.classList.toggle('active', _fxOn[1]); }
+    if (w.type)          document.getElementById('fx-shape-type').value = w.type;
+    if (w.drive != null) _fxK.w_drive?.setVal(w.drive);
+    if (w.tone  != null) _fxK.w_tone?.setVal(w.tone);
+    if (w.wet   != null) _fxK.w_wet?.setVal(w.wet);
+    // Enforce audio wet matches on-state (rack.setParams sets wet unconditionally)
+    rack.shaper().setWet(_fxOn[1] ? (_fxK.w_wet?.val ?? 0) : 0);
+  }
+}
+
+function initFxUI() {
+  const delay = rack.delay();
+  const shape = rack.shaper();
+
+  // ── MASTER DELAY ─────────────────────────────────────────────────────────
+  const fdbkKnob   = _fxK.d_fdbk   = new Knob(document.getElementById('fx-delay-fdbk-wrap'),   { label:'', min:0, max:0.97, value:0.45, step:0.01 });
+  const wetKnob0   = _fxK.d_wet    = new Knob(document.getElementById('fx-delay-wet-wrap'),    { label:'', min:0, max:1, value:0.3, step:0.01 });
+  const lrateKnob  = _fxK.d_lrate  = new Knob(document.getElementById('fx-delay-lrate-wrap'),  { label:'', min:0.01, max:40, value:0.3, step:0.01 });
+  const ldepthKnob = _fxK.d_ldepth = new Knob(document.getElementById('fx-delay-ldepth-wrap'), { label:'', min:0, max:0.05, value:0.002, step:0.001 });
+  const hpKnob     = _fxK.d_hp     = new Knob(document.getElementById('fx-delay-hp-wrap'),     { label:'', min:20, max:2000, value:80, step:1 });
+  const lpKnob     = _fxK.d_lp     = new Knob(document.getElementById('fx-delay-lp-wrap'),     { label:'', min:200, max:18000, value:6000, step:10 });
+
+  fdbkKnob.onChange   = v => delay.setFeedback(v);
+  wetKnob0.onChange   = v => { if (_fxOn[0]) delay.setWet(v); };
+  lrateKnob.onChange  = v => delay.setLfoRate(v);
+  ldepthKnob.onChange = v => delay.setLfoDepth(v);
+  hpKnob.onChange     = v => delay.setFbHp(v);
+  lpKnob.onChange     = v => delay.setFbLp(v);
+
+  document.getElementById('fx-delay-time').addEventListener('change', function() {
+    delay.setDelayTime(bpmDelaySeconds(this.value));
+  });
+  document.getElementById('fx-delay-ltype').addEventListener('change', function() {
+    delay.setLfoType(this.value);
+  });
+  document.getElementById('fx-delay-fshape').addEventListener('change', function() {
+    delay.setFbShape(this.value, 0.5);
+  });
+  document.getElementById('fx-delay-on').addEventListener('click', function() {
+    _fxOn[0] = !_fxOn[0];
+    this.classList.toggle('active', _fxOn[0]);
+    delay.setWet(_fxOn[0] ? _fxK.d_wet.val : 0);
+  });
+
+  // ── MASTER WAVESHAPER ────────────────────────────────────────────────────
+  const driveKnob = _fxK.w_drive = new Knob(document.getElementById('fx-shape-drive-wrap'), { label:'', min:0, max:1, value:0.3, step:0.01 });
+  const toneKnob  = _fxK.w_tone  = new Knob(document.getElementById('fx-shape-tone-wrap'),  { label:'', min:200, max:18000, value:6000, step:10 });
+  const wetKnob1  = _fxK.w_wet   = new Knob(document.getElementById('fx-shape-wet-wrap'),   { label:'', min:0, max:1, value:0.3, step:0.01 });
+
+  driveKnob.onChange = v => { shape.setDrive(v); shape.setCurve(document.getElementById('fx-shape-type').value, v); };
+  toneKnob.onChange  = v => shape.setTone(v);
+  wetKnob1.onChange  = v => { if (_fxOn[1]) shape.setWet(v); };
+
+  document.getElementById('fx-shape-type').addEventListener('change', function() {
+    shape.setCurve(this.value, driveKnob.val);
+  });
+  document.getElementById('fx-shape-on').addEventListener('click', function() {
+    _fxOn[1] = !_fxOn[1];
+    this.classList.toggle('active', _fxOn[1]);
+    shape.setWet(_fxOn[1] ? _fxK.w_wet.val : 0);
+  });
+
+  // BPM → delay time sync
+  document.getElementById('seq-bpm').addEventListener('input', () => {
+    delay.setDelayTime(bpmDelaySeconds(document.getElementById('fx-delay-time').value));
+  });
+}
+
+// ─── Log helper ────────────────────────────────────────────────────────────
+function log(msg) { document.getElementById('log').textContent += '\n' + msg; }
+
+// ─── Step Visualizer ───────────────────────────────────────────────────────
+const vizEl      = document.getElementById('step-viz');
+const vizStepsEl = document.getElementById('viz-steps');
+const vizBarEl   = document.getElementById('viz-bar');
+const vizBeatEl  = document.getElementById('viz-beat');
+let vizPips      = [];
+let vizRaf       = null;
+let vizLastSheet = null;   // detect sheet changes
+
+
+function buildVizPips(seq) {
+  vizStepsEl.innerHTML = '';
+  vizPips = [];
+  const stepBeats = seq._stepBeats;
+  const beatsPerBar = 4;
+
+  // Which steps have at least one real event?
+  const stepsWithEvents = new Set(seq._steps.map(ev => {
+    // find closest stepBeat index for this event
+    let idx = stepBeats.length - 1;
+    for (let i = 0; i < stepBeats.length - 1; i++) {
+      if (ev.beatTime < stepBeats[i + 1]) { idx = i; break; }
+    }
+    return idx;
+  }));
+
+  for (let i = 0; i < stepBeats.length; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'viz-step';
+    if (stepsWithEvents.has(i)) pip.classList.add('viz-has-event');
+    // Add a small gap at bar boundaries
+    const beat = stepBeats[i];
+    if (i > 0 && Math.floor(beat / beatsPerBar) > Math.floor(stepBeats[i - 1] / beatsPerBar)) {
+      pip.classList.add('bar-start');
+    }
+    vizStepsEl.appendChild(pip);
+    vizPips.push(pip);
+  }
+  vizLastSheet = seq.sheet;
+}
+
+function vizTick() {
+  if (!seq?.isPlaying) { vizRaf = null; return; }
+  vizRaf = requestAnimationFrame(vizTick);
+  rack?.tick();
+
+  // Rebuild pips if sheet changed
+  if (seq.sheet !== vizLastSheet) buildVizPips(seq);
+
+  const beat      = seq.getCurrentBeat();
+  const stepIdx   = seq.getCurrentStepIndex();
+  const bar       = Math.floor(beat / 4) + 1;
+  const beatInBar = (beat % 4) + 1;
+
+  vizBarEl.textContent  = bar;
+  vizBeatEl.textContent = beatInBar.toFixed(2);
+
+  for (let i = 0; i < vizPips.length; i++) {
+    vizPips[i].classList.toggle('viz-active', i === stepIdx);
+  }
+
+  // rack.tick() runs in the rAF loop below
+}
+
+function startViz() {
+  vizEl.style.display = 'block';
+  buildVizPips(seq);
+  if (!vizRaf) { vizRaf = requestAnimationFrame(vizTick); }
+}
+function stopViz() {
+  vizEl.style.display = 'none';
+  if (vizRaf) { cancelAnimationFrame(vizRaf); vizRaf = null; }
+  vizPips.forEach(p => p.classList.remove('viz-active'));
+}
+
+</script>
+</body>
+</html>
