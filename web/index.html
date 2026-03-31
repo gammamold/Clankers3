@@ -777,7 +777,7 @@ function _drawBYZ() {
   const nfm  = byz['byz-fmidx'].val / 127;
   const ndec = byz['byz-fdec'].val  / 127;
   const px = nfm * W;
-  const py = (1 - ndec) * H;
+  const py = ndec * H;
 
   _byzCtx.clearRect(0, 0, W, H);
 
