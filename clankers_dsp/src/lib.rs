@@ -77,12 +77,10 @@ impl ClankersDrums {
 
 // ── Bass ──────────────────────────────────────────────────────────────────────
 
-/// Pro-One style polyphonic bass (8 voices, TPT ladder filter).
+/// FM bass — sine carrier + sine modulator + TPT ladder LPF + pluck envelopes (8 voices).
 ///
-/// ClankerBoy CC map (all normalised 0-127):
-///   CC74 cutoff  CC71 resonance  CC73 amp_attack  CC75 amp_decay
-///   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
-///   CC5  glide_time
+/// YZ pad CC map (t:2):
+///   CC71 fm_index   CC74 cutoff   CC23 flt_decay   CC75 amp_decay
 ///
 /// Streaming API:
 ///   set_params(cc_json)              — update stored params (affects playing voices live)
@@ -153,15 +151,10 @@ fn parse_bass_params(cc_json: &str) -> BassParams {
     for (key, val) in parse_cc_map(cc_json) {
         let n = val / 127.0;
         match key {
-            74 => p.cutoff_norm    = n,
-            71 => p.resonance      = n,
-            73 => p.amp_attack     = 0.001 + n * 0.499,
-            75 => p.amp_decay      = 0.01  + n * 1.99,
-            79 => p.amp_sustain    = n,
-            72 => p.amp_release    = 0.01  + n * 1.99,
-            23 => p.flt_decay      = 0.01  + n * 0.99,
-            18 => p.detune_cents   = n * 40.0,
-            5  => p.glide_time     = n * 0.5,
+            71 => p.fm_index    = n * 8.0,
+            74 => p.cutoff_norm = n,
+            23 => p.flt_decay   = 0.01 + n * 0.99,
+            75 => p.amp_decay   = 0.01 + n * 1.99,
             _  => {}
         }
     }
@@ -442,8 +435,8 @@ fn parse_buchla_params(cc_json: &str) -> BuchlaParams {
         let n = val / 127.0;
         match key {
             74 => p.cutoff_norm = n,
-            20 => p.fold_amount = n,
-            19 => p.release_s   = 0.005 + n * 0.795,
+            20 => p.fold_amount = n * 0.4,
+            19 => p.release_s   = 0.005 + n * 2.995,
             21 => p.filter_mod  = n,
             16 => p.volume      = n,
             _  => {}

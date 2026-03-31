@@ -2,12 +2,10 @@
 /* eslint-disable */
 
 /**
- * Pro-One style polyphonic bass (8 voices, TPT ladder filter).
+ * FM bass — sine carrier + sine modulator + TPT ladder LPF + pluck envelopes (8 voices).
  *
- * ClankerBoy CC map (all normalised 0-127):
- *   CC74 cutoff  CC71 resonance  CC73 amp_attack  CC75 amp_decay
- *   CC79 amp_sustain  CC72 amp_release  CC23 flt_decay  CC18 detune_cents
- *   CC5  glide_time
+ * YZ pad CC map (t:2):
+ *   CC71 fm_index   CC74 cutoff   CC23 flt_decay   CC75 amp_decay
  *
  * Streaming API:
  *   set_params(cc_json)              — update stored params (affects playing voices live)

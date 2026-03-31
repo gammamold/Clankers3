@@ -199,20 +199,23 @@
     <button class="profile-btn"        data-profile="2">606</button>
   </div>
   <div class="knob-row" id="drum-knobs"></div>
+  <div class="knob-row" id="drum-sends"></div>
 </div>
 
 <!-- ── Bass ────────────────────────────────────────────────────────────── -->
 <div class="inst">
-  <div class="inst-hdr">BASS PRO-ONE <span>[t:2]</span> <button class="ms-btn" data-type="bass" data-ms="m">M</button><button class="ms-btn" data-type="bass" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100" value="100"></span></div>
+  <div class="inst-hdr">BASS FM <span>[t:2]</span> <button class="ms-btn" data-type="bass" data-ms="m">M</button><button class="ms-btn" data-type="bass" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100" value="100"></span></div>
   <div class="pads bass" id="bass-notes"></div>
   <div class="knob-row" id="bass-knobs"></div>
+  <div class="knob-row" id="bass-sends"></div>
 </div>
 
 <!-- ── Buchla ───────────────────────────────────────────────────────────── -->
 <div class="inst">
-  <div class="inst-hdr">BUCHLA 259/292 <span>[t:1]</span> <button class="ms-btn" data-type="buchla" data-ms="m">M</button><button class="ms-btn" data-type="buchla" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0" max="100" value="100"></span></div>
+  <div class="inst-hdr">POLY FM <span>[t:1]</span> <button class="ms-btn" data-type="buchla" data-ms="m">M</button><button class="ms-btn" data-type="buchla" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0" max="100" value="100"></span></div>
   <div class="pads buchla" id="buchla-notes"></div>
   <div class="buchla-ctrl" id="buchla-knobs"></div>
+  <div class="knob-row" id="buchla-sends"></div>
 </div>
 
 <!-- ── Pads ────────────────────────────────────────────────────────────── -->
@@ -220,6 +223,7 @@
   <div class="inst-hdr">HYBRID PADS <span>[t:6]</span> <button class="ms-btn" data-type="pads" data-ms="m">M</button><button class="ms-btn" data-type="pads" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="pads" min="0" max="100" value="100"></span></div>
   <div class="pads chords" id="chord-pads"></div>
   <div class="knob-row" id="pads-knobs"></div>
+  <div class="knob-row" id="pads-sends"></div>
 </div>
 
 <!-- ── Rhodes ────────────────────────────────────────────────────────────── -->
@@ -227,6 +231,7 @@
   <div class="inst-hdr">RHODES EP <span>[t:3]</span> <button class="ms-btn" data-type="rhodes" data-ms="m">M</button><button class="ms-btn" data-type="rhodes" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="rhodes" min="0" max="100" value="100"></span></div>
   <div class="pads chords" id="rhodes-pads"></div>
   <div class="knob-row" id="rhodes-knobs"></div>
+  <div class="knob-row" id="rhodes-sends"></div>
 </div>
 
 <!-- ── Master FX ─────────────────────────────────────────────────────────── -->
@@ -235,7 +240,7 @@
     <!-- MASTER DELAY -->
     <div class="fx-slot">
       <div class="fx-slot-hdr">
-        MASTER DELAY
+        DELAY
         <button class="fx-on" id="fx-delay-on">ON</button>
       </div>
       <div class="fx-row">
@@ -274,7 +279,7 @@
     <!-- MASTER WAVESHAPER -->
     <div class="fx-slot">
       <div class="fx-slot-hdr">
-        MASTER WAVESHAPER
+        WAVESHAPER
         <button class="fx-on" id="fx-shape-on">ON</button>
       </div>
       <div class="fx-row">
@@ -615,15 +620,19 @@ async function _doInit() {
 const drumKnobContainer = document.getElementById('drum-knobs');
 const drumGlobalKnobs = makeKnobGroup(drumKnobContainer, '', [
   { id: 'd-pitch',  label: 'PITCH',  min: -12, max: 12,    value: 0,     step: 0.5  },
-  { id: 'd-filter', label: 'FILTER', min: 0,   max: 127,   value: 127,   step: 1    },
-  { id: 'd-decay',  label: 'DECAY',  min: 0,   max: 127,   value: 63,    step: 1    },
 ]);
+
+// Drums XY pad state (X→FILTER, Y→DECAY)
+const dyz = {
+  'd-filter': { val: 127 },   // 0-127 — X axis (LPF cutoff)
+  'd-decay':  { val: 63  },   // 0-127 — Y axis (decay multiplier)
+};
 
 function sendDrumsParams() {
   if (!drumsNode) return;
   const pitch  = drumGlobalKnobs['d-pitch'].val;
-  const filt   = drumGlobalKnobs['d-filter'].val;
-  const decay  = drumGlobalKnobs['d-decay'].val;
+  const filt   = dyz['d-filter'].val;
+  const decay  = dyz['d-decay'].val;
   // Log-scale filter: 80 * (18000/80)^(v/127)  →  80..18000 Hz
   const hz     = 80 * Math.pow(225, filt / 127);
   // Log-scale decay: 0.1 * 40^(v/127)  →  0.1..4.0 multiplier
@@ -648,6 +657,80 @@ document.querySelectorAll('.profile-btn').forEach(btn => {
   });
 });
 
+// ─── Drums XY pad (X→FILTER, Y→DECAY) ─────────────────────────────────────
+const _dyzWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
+const _dyzCv   = Object.assign(document.createElement('canvas'), {
+  className: 'buchla-xy', width: 190, height: 190,
+});
+const _dyzAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
+_dyzAxes.innerHTML = '<span>← dry · filter →</span><span>FILTER · DECAY</span>';
+_dyzWrap.append(_dyzCv, _dyzAxes);
+drumKnobContainer.appendChild(_dyzWrap);
+
+const _dyzCtx = _dyzCv.getContext('2d');
+
+function _drawDYZ() {
+  const W = _dyzCv.width, H = _dyzCv.height;
+  // Dot position reflects current state regardless of invert mode
+  const nf = dyz['d-filter'].val / 127;  // 0..1 filter
+  const nd = dyz['d-decay'].val  / 127;  // 0..1 decay
+  const px = nf * W;
+  const py = (1 - nd) * H;
+
+  _dyzCtx.clearRect(0, 0, W, H);
+
+  const grad = _dyzCtx.createLinearGradient(0, H, W, 0);
+  grad.addColorStop(0,   '#100608');
+  grad.addColorStop(0.5, '#160c0a');
+  grad.addColorStop(1,   '#1c1008');
+  _dyzCtx.fillStyle = grad;
+  _dyzCtx.fillRect(0, 0, W, H);
+
+  _dyzCtx.strokeStyle = '#2a1a18';
+  _dyzCtx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    _dyzCtx.beginPath(); _dyzCtx.moveTo(W * i / 4, 0); _dyzCtx.lineTo(W * i / 4, H); _dyzCtx.stroke();
+    _dyzCtx.beginPath(); _dyzCtx.moveTo(0, H * i / 4); _dyzCtx.lineTo(W, H * i / 4); _dyzCtx.stroke();
+  }
+
+  _dyzCtx.strokeStyle = 'rgba(255,100,40,0.25)';
+  _dyzCtx.lineWidth = 1;
+  _dyzCtx.beginPath(); _dyzCtx.moveTo(px, 0); _dyzCtx.lineTo(px, H); _dyzCtx.stroke();
+  _dyzCtx.beginPath(); _dyzCtx.moveTo(0, py); _dyzCtx.lineTo(W, py); _dyzCtx.stroke();
+
+  _dyzCtx.beginPath();
+  _dyzCtx.arc(px, py, 5, 0, Math.PI * 2);
+  _dyzCtx.fillStyle = '#ff6428';
+  _dyzCtx.fill();
+
+  _dyzCtx.font = '9px monospace';
+  _dyzCtx.fillStyle = '#664433';
+  _dyzCtx.fillText(`FILT ${dyz['d-filter'].val}`, 6, H - 16);
+  _dyzCtx.fillText(`DEC  ${dyz['d-decay'].val}`,  6, H - 5);
+}
+_drawDYZ();
+
+function _dyzUpdate(e) {
+  const r  = _dyzCv.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  const nx = Math.max(0, Math.min(1, cx / r.width));
+  const ny = Math.max(0, Math.min(1, 1 - cy / r.height));  // 1=top, 0=bottom
+
+  dyz['d-filter'].val = Math.round(nx * 127);
+  dyz['d-decay'].val  = Math.round(ny * 127);
+
+  _drawDYZ();
+  sendDrumsParams();
+}
+let _dyzDrag = false;
+_dyzCv.addEventListener('mousedown',  e => { _dyzDrag = true;  _dyzUpdate(e); });
+_dyzCv.addEventListener('mousemove',  e => { if (_dyzDrag) _dyzUpdate(e); });
+_dyzCv.addEventListener('mouseup',    () => _dyzDrag = false);
+_dyzCv.addEventListener('mouseleave', () => _dyzDrag = false);
+_dyzCv.addEventListener('touchstart', e => { e.preventDefault(); _dyzUpdate(e); }, { passive: false });
+_dyzCv.addEventListener('touchmove',  e => { e.preventDefault(); _dyzUpdate(e); }, { passive: false });
+
 // ─── BASS ──────────────────────────────────────────────────────────────────
 const BASS_NOTES = [
   { label:'F#', midi:6 }, { label:'G',  midi:7 }, { label:'A',  midi:9 },
@@ -663,28 +746,110 @@ BASS_NOTES.forEach(({ label, midi }) => {
   bassGrid.appendChild(btn);
 });
 
-const bassKnobContainer = document.getElementById('bass-knobs');
-const bk = makeKnobGroup(bassKnobContainer, 'BASS', [
-  { id: 'b-cutoff', label: 'CUTOFF', min: 0, max: 127, value: 48, step: 1 },
-  { id: 'b-res',    label: 'RES',    min: 0, max: 127, value: 42, step: 1 },
-  { id: 'b-fdec',   label: 'F.DEC',  min: 0, max: 127, value: 30, step: 1 },
-]);
-const bassOctKnob = makeKnobGroup(bassKnobContainer, 'OCT', [
+// ─── Bass YZ pad (4-param: X→FM.IDX+CUTOFF, Y→FLT.DEC+AMP.DEC) ─────────────
+const _bassContainer = document.getElementById('bass-knobs');
+
+// State — all 4 params driven by one YZ position
+const byz = {
+  'byz-fmidx':  { val: 32 },   // CC71 — X axis (FM index)
+  'byz-cutoff': { val: 48 },   // CC74 — X axis (LPF, linked)
+  'byz-fdec':   { val: 30 },   // CC23 — Y axis (filter decay)
+  'byz-adec':   { val: 50 },   // CC75 — Y axis (amp decay, linked)
+};
+
+const bassOctKnob = makeKnobGroup(_bassContainer, 'OCT', [
   { id: 'b-oct', label: 'OCT', min: -2, max: 2, value: 0, step: 1 },
 ])['b-oct'];
+
+const _byzWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
+const _byzCv   = Object.assign(document.createElement('canvas'), {
+  className: 'buchla-xy', width: 190, height: 190,
+});
+const _byzAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
+_byzAxes.innerHTML = '<span>← clean · growl →</span><span>FM · LPF · F.DEC · A.DEC</span>';
+_byzWrap.append(_byzCv, _byzAxes);
+_bassContainer.appendChild(_byzWrap);
+
+const _byzCtx = _byzCv.getContext('2d');
+
+function _drawBYZ() {
+  const W = _byzCv.width, H = _byzCv.height;
+  const nfm  = byz['byz-fmidx'].val / 127;
+  const ndec = byz['byz-fdec'].val  / 127;
+  const px = nfm * W;
+  const py = (1 - ndec) * H;
+
+  _byzCtx.clearRect(0, 0, W, H);
+
+  const grad = _byzCtx.createLinearGradient(0, H, W, 0);
+  grad.addColorStop(0,   '#060a10');
+  grad.addColorStop(0.5, '#0a1018');
+  grad.addColorStop(1,   '#0d1520');
+  _byzCtx.fillStyle = grad;
+  _byzCtx.fillRect(0, 0, W, H);
+
+  _byzCtx.strokeStyle = '#252525';
+  _byzCtx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    _byzCtx.beginPath(); _byzCtx.moveTo(W * i / 4, 0); _byzCtx.lineTo(W * i / 4, H); _byzCtx.stroke();
+    _byzCtx.beginPath(); _byzCtx.moveTo(0, H * i / 4); _byzCtx.lineTo(W, H * i / 4); _byzCtx.stroke();
+  }
+
+  _byzCtx.strokeStyle = 'rgba(0,180,255,0.25)';
+  _byzCtx.lineWidth = 1;
+  _byzCtx.beginPath(); _byzCtx.moveTo(px, 0); _byzCtx.lineTo(px, H); _byzCtx.stroke();
+  _byzCtx.beginPath(); _byzCtx.moveTo(0, py); _byzCtx.lineTo(W, py); _byzCtx.stroke();
+
+  _byzCtx.beginPath();
+  _byzCtx.arc(px, py, 5, 0, Math.PI * 2);
+  _byzCtx.fillStyle = '#00b4ff';
+  _byzCtx.fill();
+
+  _byzCtx.font = '9px monospace';
+  _byzCtx.fillStyle = '#555';
+  _byzCtx.fillText(`FM ${byz['byz-fmidx'].val}  CUT ${byz['byz-cutoff'].val}`, 6, H - 16);
+  _byzCtx.fillText(`FDEC ${byz['byz-fdec'].val}  ADEC ${byz['byz-adec'].val}`, 6, H - 5);
+}
+_drawBYZ();
+
+function _byzUpdate(e) {
+  const r  = _byzCv.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  const nx = Math.max(0, Math.min(1, cx / _byzCv.width));
+  const ny = Math.max(0, Math.min(1, cy / _byzCv.height));  // 0=top, 1=bottom
+
+  byz['byz-fmidx'].val  = Math.round(nx * 127);
+  byz['byz-cutoff'].val = Math.round(nx * 127);
+  byz['byz-fdec'].val   = Math.round(ny * 127);
+  byz['byz-adec'].val   = Math.round(ny * 127);
+
+  _drawBYZ();
+  sendBassParams();
+}
+let _byzDrag = false;
+_byzCv.addEventListener('mousedown',  e => { _byzDrag = true;  _byzUpdate(e); });
+_byzCv.addEventListener('mousemove',  e => { if (_byzDrag) _byzUpdate(e); });
+_byzCv.addEventListener('mouseup',    () => _byzDrag = false);
+_byzCv.addEventListener('mouseleave', () => _byzDrag = false);
+_byzCv.addEventListener('touchstart', e => { e.preventDefault(); _byzUpdate(e); }, { passive: false });
+_byzCv.addEventListener('touchmove',  e => { e.preventDefault(); _byzUpdate(e); }, { passive: false });
+
+
+function bassCC() {
+  return { 71: byz['byz-fmidx'].val, 74: byz['byz-cutoff'].val,
+           23: byz['byz-fdec'].val,  75: byz['byz-adec'].val };
+}
 
 function triggerBass(midi) {
   ensureReady().then(() => {
     const bpm = +document.getElementById('seq-bpm').value;
     const holdSamples = Math.round(1.5 * (60 / bpm) * 44100);
-    const ccJson = JSON.stringify({
-      71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
-      73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
-    });
+    const ccJson = JSON.stringify(bassCC());
     bassNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
                                 midiNote: midi + bassOctKnob.val * 12,
                                 velocity: 0.85, holdSamples, ccJson });
-    log(`bass midi=${midi} cc74=${bk['b-cutoff'].val}`);
+    log(`bass midi=${midi} fm=${byz['byz-fmidx'].val} cut=${byz['byz-cutoff'].val}`);
   });
 }
 
@@ -703,110 +868,113 @@ BUCHLA_NOTES.forEach(({ label, midi }) => {
   buchlaGrid.appendChild(btn);
 });
 
-// ─── Buchla XY pad (4-param: X→FOLD+LPF, Y→F.MOD+RELEASE) ─────────────────
+// ─── Poly FM YZ pad (4-param: X→FM.IDX+CUTOFF, Y→F.DEC+A.DEC) ─────────────
 const _buchlaContainer = document.getElementById('buchla-knobs');
 
-// State — all 4 params driven by one XY position
-const uk = {
-  'u-fold':    { val: 37 },   // CC20 — X axis
-  'u-cutoff':  { val: 56 },   // CC74 — X axis (linked)
-  'u-fmod':    { val: 0  },   // CC21 — Y axis
-  'u-release': { val: 29 },   // CC19 — Y axis (linked)
+// State — all 4 params driven by one YZ position
+const pyz = {
+  'pyz-fmidx':  { val: 32 },   // CC71 — X axis
+  'pyz-cutoff': { val: 48 },   // CC74 — X axis (linked)
+  'pyz-fdec':   { val: 30 },   // CC23 — Y axis
+  'pyz-adec':   { val: 50 },   // CC75 — Y axis (linked)
 };
 
 // Canvas
-const _xyWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
-const _xyCv   = Object.assign(document.createElement('canvas'), {
+const _pyzWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
+const _pyzCv   = Object.assign(document.createElement('canvas'), {
   className: 'buchla-xy', width: 190, height: 190,
 });
-const _xyAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
-_xyAxes.innerHTML = '<span>← dark · bright →</span><span>FOLD · F.MOD · RELEASE · LPF</span>';
-_xyWrap.append(_xyCv, _xyAxes);
-_buchlaContainer.appendChild(_xyWrap);
+const _pyzAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
+_pyzAxes.innerHTML = '<span>← dry · bright →</span><span>FM.IDX · CUTOFF · F.DEC · A.DEC</span>';
+_pyzWrap.append(_pyzCv, _pyzAxes);
+_buchlaContainer.appendChild(_pyzWrap);
 
-const _xyCtx = _xyCv.getContext('2d');
+const _pyzCtx = _pyzCv.getContext('2d');
 
-function _drawXY() {
-  const W = _xyCv.width, H = _xyCv.height;
-  const nx = uk['u-fold'].val / 127;          // 0..1
-  const ny = uk['u-fmod'].val / 127;          // 0..1
-  const px = nx * W;
-  const py = (1 - ny) * H;
+function _drawPYZ() {
+  const W = _pyzCv.width, H = _pyzCv.height;
+  const nfm  = pyz['pyz-fmidx'].val / 127;   // 0..1 FM+cutoff
+  const ndec = pyz['pyz-fdec'].val  / 127;   // 0..1 decay
+  const px = nfm * W;
+  const py = (1 - ndec) * H;
 
-  _xyCtx.clearRect(0, 0, W, H);
+  _pyzCtx.clearRect(0, 0, W, H);
 
-  // Background gradient: dark-bottom-left → bright-top-right
-  const grad = _xyCtx.createLinearGradient(0, H, W, 0);
-  grad.addColorStop(0,   '#0d0d0d');
-  grad.addColorStop(0.5, '#141a14');
-  grad.addColorStop(1,   '#1a2010');
-  _xyCtx.fillStyle = grad;
-  _xyCtx.fillRect(0, 0, W, H);
+  // Background gradient: dark → teal
+  const grad = _pyzCtx.createLinearGradient(0, H, W, 0);
+  grad.addColorStop(0,   '#0a0d10');
+  grad.addColorStop(0.5, '#0a1218');
+  grad.addColorStop(1,   '#0a1a22');
+  _pyzCtx.fillStyle = grad;
+  _pyzCtx.fillRect(0, 0, W, H);
 
   // Grid
-  _xyCtx.strokeStyle = '#252525';
-  _xyCtx.lineWidth = 1;
+  _pyzCtx.strokeStyle = '#1a2530';
+  _pyzCtx.lineWidth = 1;
   for (let i = 1; i < 4; i++) {
-    _xyCtx.beginPath(); _xyCtx.moveTo(W * i / 4, 0); _xyCtx.lineTo(W * i / 4, H); _xyCtx.stroke();
-    _xyCtx.beginPath(); _xyCtx.moveTo(0, H * i / 4); _xyCtx.lineTo(W, H * i / 4); _xyCtx.stroke();
+    _pyzCtx.beginPath(); _pyzCtx.moveTo(W * i / 4, 0); _pyzCtx.lineTo(W * i / 4, H); _pyzCtx.stroke();
+    _pyzCtx.beginPath(); _pyzCtx.moveTo(0, H * i / 4); _pyzCtx.lineTo(W, H * i / 4); _pyzCtx.stroke();
   }
 
   // Crosshair
-  _xyCtx.strokeStyle = 'rgba(255,153,0,0.25)';
-  _xyCtx.lineWidth = 1;
-  _xyCtx.beginPath(); _xyCtx.moveTo(px, 0); _xyCtx.lineTo(px, H); _xyCtx.stroke();
-  _xyCtx.beginPath(); _xyCtx.moveTo(0, py); _xyCtx.lineTo(W, py); _xyCtx.stroke();
+  _pyzCtx.strokeStyle = 'rgba(0,180,255,0.2)';
+  _pyzCtx.lineWidth = 1;
+  _pyzCtx.beginPath(); _pyzCtx.moveTo(px, 0); _pyzCtx.lineTo(px, H); _pyzCtx.stroke();
+  _pyzCtx.beginPath(); _pyzCtx.moveTo(0, py); _pyzCtx.lineTo(W, py); _pyzCtx.stroke();
 
   // Dot
-  _xyCtx.beginPath();
-  _xyCtx.arc(px, py, 5, 0, Math.PI * 2);
-  _xyCtx.fillStyle = '#f90';
-  _xyCtx.fill();
+  _pyzCtx.beginPath();
+  _pyzCtx.arc(px, py, 5, 0, Math.PI * 2);
+  _pyzCtx.fillStyle = '#00b4ff';
+  _pyzCtx.fill();
 
-  // Value readout inside canvas
-  _xyCtx.font = '9px monospace';
-  _xyCtx.fillStyle = '#555';
-  _xyCtx.fillText(`FOLD ${uk['u-fold'].val}  LPF ${uk['u-cutoff'].val}`, 6, H - 16);
-  _xyCtx.fillText(`FMOD ${uk['u-fmod'].val}  REL ${uk['u-release'].val}`, 6, H - 5);
+  // Value readout
+  _pyzCtx.font = '9px monospace';
+  _pyzCtx.fillStyle = '#4477aa';
+  _pyzCtx.fillText(`FM ${pyz['pyz-fmidx'].val}  CUT ${pyz['pyz-cutoff'].val}`, 6, H - 16);
+  _pyzCtx.fillText(`FDEC ${pyz['pyz-fdec'].val}  ADEC ${pyz['pyz-adec'].val}`, 6, H - 5);
 }
-_drawXY();
+_drawPYZ();
 
-function _xyUpdate(e) {
-  const r  = _xyCv.getBoundingClientRect();
+function _pyzUpdate(e) {
+  const r  = _pyzCv.getBoundingClientRect();
   const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
   const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
   const nx = Math.max(0, Math.min(1, cx / r.width));
   const ny = Math.max(0, Math.min(1, 1 - cy / r.height));
 
-  // X axis → FOLD + LPF
-  uk['u-fold'].val   = Math.round(nx * 127);
-  uk['u-cutoff'].val = Math.round(nx * 127);
-  // Y axis → F.MOD + RELEASE
-  uk['u-fmod'].val    = Math.round(ny * 127);
-  uk['u-release'].val = Math.round(ny * 127);
+  // X axis → FM index + cutoff
+  pyz['pyz-fmidx'].val  = Math.round(nx * 127);
+  pyz['pyz-cutoff'].val = Math.round(nx * 127);
+  // Y axis → filter decay + amp decay
+  pyz['pyz-fdec'].val = Math.round(ny * 127);
+  pyz['pyz-adec'].val = Math.round(ny * 127);
 
-  _drawXY();
+  _drawPYZ();
   sendBuchlaParams();
 }
-let _xyDrag = false;
-_xyCv.addEventListener('mousedown',  e => { _xyDrag = true;  _xyUpdate(e); });
-_xyCv.addEventListener('mousemove',  e => { if (_xyDrag) _xyUpdate(e); });
-_xyCv.addEventListener('mouseup',    () => _xyDrag = false);
-_xyCv.addEventListener('mouseleave', () => _xyDrag = false);
-_xyCv.addEventListener('touchstart', e => { e.preventDefault(); _xyUpdate(e); }, { passive: false });
-_xyCv.addEventListener('touchmove',  e => { e.preventDefault(); _xyUpdate(e); }, { passive: false });
+let _pyzDrag = false;
+_pyzCv.addEventListener('mousedown',  e => { _pyzDrag = true;  _pyzUpdate(e); });
+_pyzCv.addEventListener('mousemove',  e => { if (_pyzDrag) _pyzUpdate(e); });
+_pyzCv.addEventListener('mouseup',    () => _pyzDrag = false);
+_pyzCv.addEventListener('mouseleave', () => _pyzDrag = false);
+_pyzCv.addEventListener('touchstart', e => { e.preventDefault(); _pyzUpdate(e); }, { passive: false });
+_pyzCv.addEventListener('touchmove',  e => { e.preventDefault(); _pyzUpdate(e); }, { passive: false });
+
 
 function buchlaCC() {
-  return { 74: uk['u-cutoff'].val, 20: uk['u-fold'].val,
-           21: uk['u-fmod'].val,   19: uk['u-release'].val };
+  return { 71: pyz['pyz-fmidx'].val, 74: pyz['pyz-cutoff'].val,
+           23: pyz['pyz-fdec'].val,  75: pyz['pyz-adec'].val };
 }
 
 function triggerBuchla(midi) {
   ensureReady().then(() => {
+    const holdSamples = Math.round(ctx.sampleRate * 1.0);
     const ccJson = JSON.stringify(buchlaCC());
     buchlaNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
-                                  midiNote: midi, velocity: 0.85, ccJson });
-    log(`buchla midi=${midi} fold=${uk['u-fold'].val} lpf=${uk['u-cutoff'].val} fmod=${uk['u-fmod'].val} rel=${uk['u-release'].val}`);
+                                  midiNote: midi, velocity: 0.85,
+                                  holdSamples, ccJson });
+    log(`poly-fm midi=${midi} fm=${pyz['pyz-fmidx'].val} cut=${pyz['pyz-cutoff'].val} fdec=${pyz['pyz-fdec'].val} adec=${pyz['pyz-adec'].val}`);
   });
 }
 
@@ -921,6 +1089,11 @@ function getSeq() {
   if (!seq) {
     seq = new Sequencer(ctx, { drums: drumsNode, bass: bassNode,
                                buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode });
+    // Wire live UI state so pads/axes affect sequence playback in real time.
+    // liveCC is used as base; per-note JSON CCs layer on top.
+    seq.liveCC = { bass: bassCC, buchla: buchlaCC };
+    // OCT knob shifts all bass MIDI notes. Default 48 = +4 oct (matches offline renderer).
+    seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
   }
   return seq;
 }
@@ -957,7 +1130,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     }
     document.getElementById('btn-play').disabled = true;
     document.getElementById('btn-stop').disabled = false;
-    if (rack) rack.attach(s._masterGain, ctx.destination);
+    if (rack) rack.attach(s._instrGains, ctx.destination);
     startViz();
   } catch (e) {
     log('Seq error: ' + e);
@@ -983,10 +1156,7 @@ document.getElementById('seq-bpm').addEventListener('input', function () {
 
 function sendBassParams() {
   if (!bassNode) return;
-  bassNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify({
-    71: bk['b-res'].val, 74: bk['b-cutoff'].val, 23: bk['b-fdec'].val,
-    73: 8, 75: 50, 79: 80, 72: 22, 18: 10,
-  })});
+  bassNode.port.postMessage({ type: 'setParams', ccJson: JSON.stringify(bassCC()) });
 }
 
 function sendBuchlaParams() {
@@ -1003,10 +1173,12 @@ function sendPadsParams() {
 }
 
 // Drum global knobs are wired via sendDrumsParams() above
-// Wire bass knobs
-for (const k of Object.values(bk)) k.onChange = sendBassParams;
-bassOctKnob.onChange = sendBassParams;
-// Buchla XY wired via sendBuchlaParams() called from _xyUpdate above
+// Bass YZ wired via sendBassParams() called from _byzUpdate above
+bassOctKnob.onChange = () => {
+  sendBassParams();
+  if (seq) seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
+};
+// Poly FM YZ wired via sendBuchlaParams() called from _pyzUpdate above
 // Wire pads knobs
 for (const k of Object.values(pk)) k.onChange = sendPadsParams;
 
@@ -1200,14 +1372,14 @@ function bakeToJson() {
   catch (e) { log('Bake failed — invalid JSON: ' + e.message); return; }
 
   const octShift = bassOctKnob.val * 12;
-  const bassCC   = { 71: bk['b-res'].val,   74: bk['b-cutoff'].val, 23: bk['b-fdec'].val };
+  const bssCC    = bassCC();
   const bCC = buchlaCC();
   const padsCC   = { 74: pk['p-cutoff'].val, 73: pk['p-atk'].val,    72: pk['p-rel'].val,
                      91: pk['p-rev'].val,    30: pk['p-cho'].val,     31: pk['p-cho'].val };
   const rhodesCC = { 74: rk['r-bright'].val, 72: rk['r-decay'].val,
                      73: rk['r-bark'].val,   20: rk['r-ratio'].val,
                      26: rk['r-trate'].val,  27: rk['r-tdepth'].val, 30: rk['r-chorus'].val };
-  const ccByType = { 1: bCC, 2: bassCC, 3: rhodesCC, 6: padsCC };
+  const ccByType = { 1: bCC, 2: bssCC, 3: rhodesCC, 6: padsCC };
 
   // Drum knobs are 0-1 (direct p0/p1/p2); JSON CCs are 0-127 — multiply to convert.
   // drumNoteToParams: kick=CC74(pitch)/CC23(sweep)/CC75(decay),
@@ -1436,19 +1608,21 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
 
 const INSTR_TYPES = ['drum','bass','buchla','pads','rhodes'];
 
-// Wire all send sliders via delegation — works before rack exists
-document.querySelectorAll('.fx-send-sl').forEach(sl => {
-  sl.addEventListener('input', () => {
-    const slot  = +sl.dataset.slot;
-    const instr =  sl.dataset.instr;
-    const val   = sl.value / 100;
-    // Update value display + active highlight
-    const valEl = sl.nextElementSibling;
-    if (valEl) valEl.textContent = sl.value;
-    sl.closest('.fx-send-item').classList.toggle('active', +sl.value > 0);
-    rack?.setSend(slot, instr, val);
-  });
-});
+// ─── FX Send Knobs (per-instrument, created at page load) ──────────────────
+// Two knobs per instrument: →DLY (slot 0) and →SHP (slot 1).
+// rack?.setSend() is safe before rack exists — value is stored in _sendVals on attach.
+const _sendKnobs = {};
+for (const type of INSTR_TYPES) {
+  const container = document.getElementById(`${type}-sends`);
+  if (!container) continue;
+  const knobs = makeKnobGroup(container, 'SENDS', [
+    { id: `${type}-send-dly`, label: '→DLY', min: 0, max: 1, value: 0, step: 0.01 },
+    { id: `${type}-send-shp`, label: '→SHP', min: 0, max: 1, value: 0, step: 0.01 },
+  ]);
+  knobs[`${type}-send-dly`].onChange = v => rack?.setSend(0, type, v);
+  knobs[`${type}-send-shp`].onChange = v => rack?.setSend(1, type, v);
+  _sendKnobs[type] = knobs;
+}
 
 // BPM helper for delay time calculation
 function bpmDelaySeconds(division) {

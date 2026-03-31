@@ -288,6 +288,18 @@ export class WaveShapeFx {
 }
 
 // ── MasterFx ─────────────────────────────────────────────────────────────────
+//
+// Send architecture: Delay and WaveShaper are parallel aux sends.
+// Each instrument has independent send amounts (0–1) to each FX unit.
+// The dry signal passes through instrGains → masterGain → destination unchanged.
+// FX units have no dry path (dry=0); their wet output returns to destination.
+//
+// Audio graph:
+//
+//   instrGain[x] ──► masterGain ──► destination
+//        │
+//        ├── delaySend[x] ──► DelayFx.input ──► DelayFx.output ──► destination
+//        └── shaperSend[x] ─► WaveShapeFx.input ──► WaveShapeFx.output ──► destination
 
 export class MasterFx {
   constructor(ctx) {
@@ -295,22 +307,67 @@ export class MasterFx {
     this._delay = new DelayFx(ctx);
     this._shape = new WaveShapeFx(ctx);
 
-    // Chain delay → shaper in series
-    this._delay.output.connect(this._shape.input);
-  }
+    // Send mode: no dry pass-through inside each FX unit
+    this._delay.setDry(0);
+    this._shape.setDry(0);
 
-  get input()  { return this._delay.input; }
-  get output() { return this._shape.output; }
+    // Per-instrument send gain nodes (populated in attach())
+    this._delaySends  = {};
+    this._shaperSends = {};
+
+    // Send values persist across seq.start() reconnects
+    this._sendVals = [
+      { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0 },
+      { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0 },
+    ];
+  }
 
   delay()  { return this._delay; }
   shaper() { return this._shape; }
 
-  /** Splice inline between masterGain and destination (call after seq.start()) */
-  attach(masterGain, destination) {
-    try { masterGain.disconnect(destination); } catch (_) {}
-    masterGain.connect(this._delay.input);
-    try { this._shape.output.disconnect(destination); } catch (_) {}
+  /**
+   * Wire per-instrument sends to FX units. Call after seq.start() each time,
+   * passing the sequencer's _instrGains object and the audio destination.
+   */
+  attach(instrGains, destination) {
+    const INSTRS = ['drum', 'bass', 'buchla', 'pads', 'rhodes'];
+
+    // Tear down old send nodes
+    for (const instr of INSTRS) {
+      if (this._delaySends[instr])  { try { this._delaySends[instr].disconnect();  } catch (_) {} }
+      if (this._shaperSends[instr]) { try { this._shaperSends[instr].disconnect(); } catch (_) {} }
+    }
+    this._delaySends  = {};
+    this._shaperSends = {};
+
+    for (const instr of INSTRS) {
+      const ds = this._delaySends[instr]  = this.ctx.createGain();
+      const ss = this._shaperSends[instr] = this.ctx.createGain();
+
+      // Restore stored send amounts
+      ds.gain.value = this._sendVals[0][instr] ?? 0;
+      ss.gain.value = this._sendVals[1][instr] ?? 0;
+
+      const ig = instrGains[instr];
+      if (ig) { ig.connect(ds); ig.connect(ss); }
+      ds.connect(this._delay.input);
+      ss.connect(this._shape.input);
+    }
+
+    // FX returns → destination (parallel, independent of master chain)
+    try { this._delay.output.disconnect(); } catch (_) {}
+    try { this._shape.output.disconnect(); } catch (_) {}
+    this._delay.output.connect(destination);
     this._shape.output.connect(destination);
+  }
+
+  /** Set send amount for one instrument to one FX slot (0=delay, 1=shaper). */
+  setSend(slot, instr, val) {
+    this._sendVals[slot][instr] = val;
+    const sends = slot === 0 ? this._delaySends : this._shaperSends;
+    if (sends[instr]) {
+      sends[instr].gain.setTargetAtTime(val, this.ctx.currentTime, 0.01);
+    }
   }
 
   getParams() {

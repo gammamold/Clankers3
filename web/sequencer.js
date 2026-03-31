@@ -11,7 +11,7 @@
  * Supported tracks:
  *   t:10  AntigravityDrums  (drums-worklet)
  *   t:2   Pro-One Bass      (bass-worklet)
- *   t:1   Buchla 259/292    (buchla-worklet)
+ *   t:1   Poly FM Bass      (buchla-worklet)
  *   t:6   HybridSynth Pads  (pads-worklet)
  *   t:3   Rhodes FM piano   (rhodes-worklet)
  *
@@ -97,6 +97,14 @@ export class Sequencer {
     this.onEnd = null;
 
     this._stepBeats = [];  // beat positions for the step visualizer
+
+    // Live UI CC getters — merged as base before per-note JSON CCs are applied.
+    // Set externally: seq.liveCC = { bass: () => ({71:32,...}), buchla: () => ({74:56,...}) }
+    this.liveCC = {};
+
+    // Semitone offset applied to all bass MIDI notes from the sheet.
+    // Matches trigger_render's +48 offset used by the offline renderer.
+    this.bassOctaveOffset = 48;
 
   }
 
@@ -256,9 +264,10 @@ export class Sequencer {
         }
 
         if (track.t === 1) {
+          const durBeats = track.dur ?? d;
           for (const note of notes) {
             raw.push({ beatTime: beat, type: 'buchla', midiNote: note, velocity: vel,
-                       ccJson: JSON.stringify(cc) });
+                       ccJson: JSON.stringify(cc), durBeats });
           }
         }
 
@@ -329,14 +338,22 @@ export class Sequencer {
 
     } else if (ev.type === 'bass') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
+      const liveCC  = this.liveCC?.bass?.() ?? {};
+      const noteCC  = JSON.parse(ev.ccJson || '{}');
+      const merged  = Object.assign({}, liveCC, noteCC);
+      const midi    = Math.max(0, Math.min(127, ev.midiNote + (this.bassOctaveOffset ?? 0)));
       port.postMessage({ type: 'trigger', audioTime,
-                         midiNote: ev.midiNote, velocity: ev.velocity,
-                         holdSamples, ccJson: ev.ccJson });
+                         midiNote: midi, velocity: ev.velocity,
+                         holdSamples, ccJson: JSON.stringify(merged) });
 
     } else if (ev.type === 'buchla') {
+      const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
+      const liveCC  = this.liveCC?.buchla?.() ?? {};
+      const noteCC  = JSON.parse(ev.ccJson || '{}');
+      const merged  = Object.assign({}, liveCC, noteCC);
       port.postMessage({ type: 'trigger', audioTime,
                          midiNote: ev.midiNote, velocity: ev.velocity,
-                         ccJson: ev.ccJson });
+                         holdSamples, ccJson: JSON.stringify(merged) });
 
     } else if (ev.type === 'pads') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
