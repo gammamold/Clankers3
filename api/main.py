@@ -51,6 +51,10 @@ app.add_middleware(
 
 # ── Request / Response models ──────────────────────────────────────────────
 
+class LoadSheetRequest(BaseModel):
+    sheet: dict
+
+
 class NewSessionRequest(BaseModel):
     brief:   str
     section: str  = "verse1"
@@ -94,6 +98,16 @@ class SheetResponse(BaseModel):
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
+
+@app.post("/session/load", response_model=NewSessionResponse)
+def session_load(req: LoadSheetRequest):
+    """
+    Create a session from an existing sheet (no LLM call).
+    The sheet is stored as-is; the user can then chat to modify it.
+    """
+    session_id = create_session(req.sheet)
+    return {"session_id": session_id, "sheet": req.sheet, "messages": []}
+
 
 @app.post("/session/new", response_model=NewSessionResponse)
 def session_new(req: NewSessionRequest):
