@@ -963,11 +963,11 @@ async function _doInit() {
   const wasmModule = await WebAssembly.compile(wasmBytes);
   _wasmModule = wasmModule;
 
-  await ctx.audioWorklet.addModule('/worklets/drums-worklet.js');
-  await ctx.audioWorklet.addModule('/worklets/bass-worklet.js');
-  await ctx.audioWorklet.addModule('/worklets/buchla-worklet.js');
-  await ctx.audioWorklet.addModule('/worklets/pads-worklet.js');
-  await ctx.audioWorklet.addModule('/worklets/rhodes-worklet.js');
+  await ctx.audioWorklet.addModule('/worklets/drums-worklet.js',  { type: 'module' });
+  await ctx.audioWorklet.addModule('/worklets/bass-worklet.js',   { type: 'module' });
+  await ctx.audioWorklet.addModule('/worklets/buchla-worklet.js', { type: 'module' });
+  await ctx.audioWorklet.addModule('/worklets/pads-worklet.js',   { type: 'module' });
+  await ctx.audioWorklet.addModule('/worklets/rhodes-worklet.js', { type: 'module' });
 
   const seed = (Math.random() * 0xffffffff) >>> 0;
   drumsNode  = new AudioWorkletNode(ctx, 'drums-worklet',  { processorOptions: { wasmModule, seed }, outputChannelCount: [1] });
@@ -2041,7 +2041,7 @@ document.getElementById('btn-new-session').addEventListener('click', async () =>
   }
 });
 
-document.getElementById('btn-load-sheet').addEventListener('click', async () => {
+document.getElementById('btn-load-sheet').addEventListener('click', () => {
   let sheet;
   try {
     sheet = JSON.parse(document.getElementById('sheet-json').value);
@@ -2049,29 +2049,7 @@ document.getElementById('btn-load-sheet').addEventListener('click', async () => 
     chatAppend('Invalid JSON in textarea: ' + e.message, 'msg-sys');
     return;
   }
-  // Trigger face reveal immediately — don't wait for the API
   sheetToSequencer(sheet, { autoStore: true });
-
-  const btn = document.getElementById('btn-load-sheet');
-  btn.disabled = true;
-  try {
-    const res = await fetch(`${API}/session/load`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sheet }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    sessionId = data.session_id;
-    document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
-    chatInput.disabled = false; chatSend.disabled = false;
-    document.getElementById('evolve-row').style.display = '';
-    const steps = sheet.steps?.length ?? 0;
-    chatAppend(`Session ready (${steps} steps @ ${sheet.bpm ?? '?'} BPM). Ask the band to modify it.`, 'msg-sys');
-  } catch (e) {
-    chatAppend('Session error: ' + e + ' — chat disabled, playback still works.', 'msg-sys');
-  } finally {
-    btn.disabled = false;
-  }
 });
 
 async function sendChat() {
