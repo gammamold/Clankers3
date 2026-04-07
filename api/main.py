@@ -99,7 +99,49 @@ class SheetResponse(BaseModel):
     sheet: dict
 
 
+class ConfigRequest(BaseModel):
+    provider: str   # "anthropic", "google", "openai"
+    model:    str
+    api_key:  str
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────
+
+_PROVIDER_KEY_ATTR = {
+    "anthropic": ("ANTHROPIC_API_KEY", "CLAUDE_MODEL"),
+    "google":    ("GEMINI_API_KEY",    "GEMINI_MODEL"),
+    "openai":    ("OPENAI_API_KEY",    "CHATGPT_MODEL"),
+}
+
+
+@app.post("/config")
+def set_config(req: ConfigRequest):
+    """Set LLM provider, model, and API key at runtime (no restart needed)."""
+    if req.provider not in _PROVIDER_KEY_ATTR:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {req.provider}")
+    key_attr, model_attr = _PROVIDER_KEY_ATTR[req.provider]
+    setattr(config, key_attr, req.api_key)
+    setattr(config, model_attr, req.model)
+    # Route all band members to the chosen provider
+    for member in config.BAND:
+        config.BAND[member] = req.provider
+    return {"ok": True}
+
+
+@app.get("/config/status")
+def config_status():
+    """Return current LLM config status — no key exposed."""
+    provider = list(set(config.BAND.values()))[0] if config.BAND else "anthropic"
+    if provider not in _PROVIDER_KEY_ATTR:
+        provider = "anthropic"
+    key_attr, model_attr = _PROVIDER_KEY_ATTR[provider]
+    configured = bool(getattr(config, key_attr, ""))
+    return {
+        "configured": configured,
+        "provider":   provider,
+        "model":      getattr(config, model_attr, ""),
+    }
+
 
 @app.post("/session/load", response_model=NewSessionResponse)
 def session_load(req: LoadSheetRequest):

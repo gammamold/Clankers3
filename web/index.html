@@ -739,6 +739,59 @@
     .sle-piano-container { display: flex; justify-content: center; }
 
     body.on-synth-lab #btn-chat-float { display: none; }
+
+    /* ══ Config / Settings Overlay ══════════════════════════════════ */
+    #config-overlay {
+      position: fixed; inset: 0; z-index: 600;
+      background: rgba(0,0,0,.92);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s ease;
+    }
+    #config-overlay.open { opacity: 1; pointer-events: all; }
+    #config-panel {
+      background: #0d0f14; border: 1px solid #2a2e40;
+      width: min(440px, 92vw); padding: 2rem; font-family: monospace;
+    }
+    #config-panel h2 {
+      color: #00d4ff; font-size: .85rem; letter-spacing: .15em;
+      margin: 0 0 1.5rem; text-transform: uppercase;
+    }
+    .cfg-row { margin-bottom: 1.2rem; }
+    .cfg-label { font-size: .65rem; color: #555; letter-spacing: .1em;
+                 text-transform: uppercase; margin-bottom: .35rem; display: block; }
+    .cfg-tabs { display: flex; gap: .4rem; }
+    .cfg-tab {
+      flex: 1; padding: .4rem; font-family: monospace; font-size: .65rem;
+      background: #111; border: 1px solid #222; color: #555;
+      cursor: pointer; text-align: center; letter-spacing: .08em;
+    }
+    .cfg-tab.active { border-color: #00d4ff; color: #00d4ff; background: #001820; }
+    .cfg-select, .cfg-input {
+      width: 100%; box-sizing: border-box;
+      background: #111; border: 1px solid #222; color: #ccc;
+      font-family: monospace; font-size: .75rem; padding: .45rem .6rem;
+    }
+    .cfg-select:focus, .cfg-input:focus { outline: none; border-color: #00d4ff; }
+    .cfg-save-btn {
+      width: 100%; padding: .6rem; font-family: monospace; font-size: .75rem;
+      background: #00d4ff; border: none; color: #000;
+      cursor: pointer; font-weight: bold; letter-spacing: .1em; margin-top: .5rem;
+    }
+    .cfg-save-btn:hover { opacity: .85; }
+    .cfg-save-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .cfg-status { font-size: .65rem; margin-top: .75rem; text-align: center; min-height: 1.2rem; }
+    .cfg-status.ok  { color: #ffe000; }
+    .cfg-status.err { color: #ff006e; }
+    #btn-settings {
+      position: fixed; top: 1rem; right: 1rem; z-index: 550;
+      background: #0a0a0a; border: 1px solid #222; color: #555;
+      font-family: monospace; font-size: .65rem; padding: .3rem .55rem;
+      cursor: pointer; border-radius: 3px;
+    }
+    #btn-settings:hover { border-color: #00d4ff; color: #00d4ff; }
+    #btn-settings.configured { border-color: #1a3020; color: #2a6040; }
+    #btn-settings.configured:hover { border-color: #00d4ff; color: #00d4ff; }
   </style>
 </head>
 <body class="on-chat">
@@ -1313,6 +1366,36 @@
   </div>
 </div>
 <button id="btn-chat-float">[CHAT]</button>
+<button id="btn-settings">⚙ LLM</button>
+
+<!-- ─── Config / Settings Overlay ──────────────────────────────── -->
+<div id="config-overlay">
+  <div id="config-panel">
+    <h2>⚙ LLM Configuration</h2>
+    <div class="cfg-row">
+      <span class="cfg-label">Provider</span>
+      <div class="cfg-tabs">
+        <button class="cfg-tab active" data-provider="anthropic">ANTHROPIC</button>
+        <button class="cfg-tab" data-provider="google">GOOGLE</button>
+        <button class="cfg-tab" data-provider="openai">OPENAI</button>
+      </div>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-label">Model</span>
+      <select id="cfg-model" class="cfg-select"></select>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-label">API Key</span>
+      <input id="cfg-key" type="password" class="cfg-input"
+             placeholder="Paste your API key here…" autocomplete="off" />
+    </div>
+    <button id="cfg-save-btn" class="cfg-save-btn">SAVE &amp; CONNECT</button>
+    <div id="cfg-status" class="cfg-status"></div>
+    <div style="margin-top:1rem;font-size:.6rem;color:#2a2a2a;text-align:center;">
+      Your key is sent only to your local server — never stored to disk.
+    </div>
+  </div>
+</div>
 
 <!-- ─── Mixer Overlay ───────────────────────────────────────────── -->
 <div id="mixer-overlay">
@@ -3784,6 +3867,92 @@ document.getElementById('btn-wizard-close').addEventListener('click', () => {
 
 // Initial state
 showScreen('chat');
+
+// ── LLM Config Overlay ────────────────────────────────────────────────────────
+
+const _PROVIDER_MODELS = {
+  anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+  google:    ['gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+  openai:    ['gpt-4o', 'gpt-4o-mini', 'o1', 'o3-mini'],
+};
+
+let _cfgProvider = 'anthropic';
+
+function _cfgSetProvider(p) {
+  _cfgProvider = p;
+  document.querySelectorAll('.cfg-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.provider === p));
+  const sel = document.getElementById('cfg-model');
+  sel.innerHTML = '';
+  for (const m of _PROVIDER_MODELS[p]) {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  }
+}
+
+document.querySelectorAll('.cfg-tab').forEach(tab =>
+  tab.addEventListener('click', () => _cfgSetProvider(tab.dataset.provider)));
+
+_cfgSetProvider('anthropic'); // initialise model list
+
+document.getElementById('btn-settings').addEventListener('click', () =>
+  document.getElementById('config-overlay').classList.toggle('open'));
+
+document.getElementById('config-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('config-overlay'))
+    document.getElementById('config-overlay').classList.remove('open');
+});
+
+document.getElementById('cfg-save-btn').addEventListener('click', async () => {
+  const key    = document.getElementById('cfg-key').value.trim();
+  const model  = document.getElementById('cfg-model').value;
+  const status = document.getElementById('cfg-status');
+  const btn    = document.getElementById('cfg-save-btn');
+
+  if (!key) {
+    status.textContent = 'Please enter an API key.';
+    status.className = 'cfg-status err';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Connecting…';
+  status.textContent = ''; status.className = 'cfg-status';
+
+  try {
+    const res = await fetch(`${API}/config`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: _cfgProvider, model, api_key: key }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    status.textContent = '✓ Connected! Ready to compose.';
+    status.className = 'cfg-status ok';
+    document.getElementById('btn-settings').classList.add('configured');
+    setTimeout(() => document.getElementById('config-overlay').classList.remove('open'), 1500);
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+    status.className = 'cfg-status err';
+  } finally {
+    btn.disabled = false; btn.textContent = 'SAVE & CONNECT';
+  }
+});
+
+// On load: check server config status — auto-open if no key is set yet
+(async () => {
+  try {
+    const res = await fetch(`${API}/config/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.configured) {
+      document.getElementById('btn-settings').classList.add('configured');
+      _cfgSetProvider(data.provider);
+      const sel = document.getElementById('cfg-model');
+      if ([...sel.options].some(o => o.value === data.model)) sel.value = data.model;
+    } else {
+      document.getElementById('config-overlay').classList.add('open');
+    }
+  } catch (_) { /* server not ready yet — user can open manually via ⚙ */ }
+})();
 
 </script>
 </body>
