@@ -26,6 +26,7 @@ if hasattr(sys.stderr, 'buffer'):
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from conductor.conductor import run_track, run_solo, DEFAULT_ARC
+from llm_menu import ask_llm_config
 
 
 def main():
@@ -84,6 +85,9 @@ Solo companion mode (invoke a single agent in isolation):
     )
 
     args = parser.parse_args()
+
+    # Prompt user to choose LLM provider, model, and API key before the pipeline starts.
+    ask_llm_config()
 
     try:
         if args.solo:
