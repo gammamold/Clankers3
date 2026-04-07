@@ -68,8 +68,9 @@ class NewSessionResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    session_id: str
-    message:    str
+    session_id:    str
+    message:       str
+    synth_context: str = ""  # active Synth Lab instruments, injected by the frontend
 
 
 class ChatResponse(BaseModel):
@@ -80,8 +81,9 @@ class ChatResponse(BaseModel):
 
 
 class EvolveRequest(BaseModel):
-    session_id: str
-    section:    str
+    session_id:    str
+    section:       str
+    synth_context: str = ""  # active Synth Lab instruments
 
 
 class EvolveResponse(BaseModel):
@@ -155,7 +157,8 @@ def chat(req: ChatRequest):
 
     old_sheet = session["sheet"]
     updated_sheet, reply, companion = _chat_evolve(
-        old_sheet, req.message, session["history"]
+        old_sheet, req.message, session["history"],
+        synth_context=req.synth_context,
     )
 
     diff = _sheet_diff(old_sheet, updated_sheet)
@@ -173,7 +176,8 @@ def sheet_evolve(req: EvolveRequest):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    evolved = evolve(session["sheet"], req.section)
+    evolved = evolve(session["sheet"], req.section,
+                     synth_context=req.synth_context)
     update_sheet(req.session_id, evolved)
     tension = evolved.get("tension", 0.5)
     reply = (
@@ -255,7 +259,7 @@ Return ONLY valid JSON -- no prose, no markdown fences:
 }"""
 
 
-def _chat_evolve(sheet: dict, message: str, history: list) -> tuple[dict, str, str]:
+def _chat_evolve(sheet: dict, message: str, history: list, synth_context: str = "") -> tuple[dict, str, str]:
     """Use Claude to parse a user message, update the sheet, return (sheet, reply, companion)."""
     client = llm_clients.get_client(config.BAND["Claude"])  # all members use Claude
 
@@ -267,6 +271,7 @@ def _chat_evolve(sheet: dict, message: str, history: list) -> tuple[dict, str, s
     user_content = (
         f"Current sheet:\n{json.dumps(sheet, indent=2)}\n\n"
         + (f"Recent chat:\n{ctx}\n" if ctx else "")
+        + (synth_context + "\n\n" if synth_context else "")
         + f"User message: {message}\n\n"
         "Return the updated sheet + companion reply as JSON."
     )

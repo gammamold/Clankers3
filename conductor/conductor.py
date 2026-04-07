@@ -113,7 +113,7 @@ _EVOLVE_SYSTEM = (
 )
 
 
-def evolve(sheet: dict, next_section: str) -> dict:
+def evolve(sheet: dict, next_section: str, synth_context: str = "") -> dict:
     """Generate the next 128-step ClankerBoy loop for next_section using Claude. BPM is locked."""
     client  = llm_clients.get_client(config.BAND["Claude"])
     tension = _SECTION_TENSION.get(next_section, 0.5)
@@ -123,7 +123,8 @@ def evolve(sheet: dict, next_section: str) -> dict:
         f"Target section: {next_section.upper()}\n"
         f"Target energy/tension: {tension}\n"
         f"BPM={sheet.get('bpm', 120)} — locked.\n\n"
-        "Generate 8 bars (128 steps at d:0.25) of ClankerBoy JSON for this section. "
+        + (synth_context + "\n\n" if synth_context else "")
+        + "Generate 8 bars (128 steps at d:0.25) of ClankerBoy JSON for this section. "
         "Evolve the motifs, density, and orchestration to match the arc guidance above. "
         "Output [SESSION COMPLETE] then the complete JSON in a ```json block."
     )

@@ -1,7 +1,9 @@
 // Minimal dev server: serves web/ with correct MIME types for WASM + ES modules
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+// Also proxies POST /api/llm → Anthropic API (bypasses COEP cross-origin restriction)
+const http  = require('http');
+const https = require('https');
+const fs    = require('fs');
+const path  = require('path');
 
 const PORT = process.env.PORT || 5174;
 const ROOT = __dirname;
@@ -14,6 +16,52 @@ const MIME = {
 };
 
 http.createServer((req, res) => {
+  // ── LLM proxy ────────────────────────────────────────────────────────────
+  if (req.method === 'POST' && req.url === '/api/llm') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch {
+        res.writeHead(400); res.end('Bad JSON'); return;
+      }
+
+      const { apiKey, ...payload } = parsed;
+      if (!apiKey) { res.writeHead(401); res.end('Missing apiKey'); return; }
+
+      const postData = JSON.stringify(payload);
+      const options = {
+        hostname: 'api.anthropic.com',
+        path:     '/v1/messages',
+        method:   'POST',
+        headers: {
+          'x-api-key':           apiKey,
+          'anthropic-version':   '2023-06-01',
+          'content-type':        'application/json',
+          'content-length':      Buffer.byteLength(postData),
+        },
+      };
+
+      const proxyReq = https.request(options, proxyRes => {
+        let data = '';
+        proxyRes.on('data', chunk => { data += chunk; });
+        proxyRes.on('end', () => {
+          res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' });
+          res.end(data);
+        });
+      });
+
+      proxyReq.on('error', err => {
+        res.writeHead(502); res.end(JSON.stringify({ error: err.message }));
+      });
+
+      proxyReq.write(postData);
+      proxyReq.end();
+    });
+    return;
+  }
+
+  // ── Static file server ────────────────────────────────────────────────────
   const urlPath = req.url.split('?')[0];
   let filePath = path.join(ROOT, urlPath === '/' ? '/index.html' : urlPath);
   fs.readFile(filePath, (err, data) => {

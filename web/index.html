@@ -6,13 +6,13 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background:#111; color:#eee; font-family:monospace; padding:1.5rem; margin:0; display:flex; flex-direction:column; }
-    h1 { color:#f90; margin:0 0 1.2rem; font-size:1.3rem; letter-spacing:.1em; }
+    h1 { color:#00d4ff; margin:0 0 1.2rem; font-size:1.3rem; letter-spacing:.1em; }
 
     /* ── Instruments ── */
     .inst-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:.6rem; margin-bottom:1rem; }
     .inst { border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; min-width:0; }
     .inst-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; margin-bottom:.5rem; display:flex; align-items:center; gap:.5rem; }
-    .inst-hdr span { color:#f90; }
+    .inst-hdr span { color:#00d4ff; }
     .ms-btn { font-size:.6rem; padding:.1rem .35rem; border:1px solid #333; background:#1a1a1a;
               color:#666; cursor:pointer; border-radius:2px; font-family:monospace; min-width:1.4rem;
               text-align:center; user-select:none; }
@@ -22,12 +22,12 @@
                    padding:.2rem .55rem; border:1px solid #444; background:#1a1a1a;
                    color:#666; cursor:pointer; border-radius:2px; user-select:none; }
     .profile-btn:hover  { border-color:#888; color:#aaa; }
-    .profile-btn.active { border-color:#f90; color:#f90; background:#1e1600; }
+    .profile-btn.active { border-color:#00d4ff; color:#00d4ff; background:#000e18; }
     .ms-btn.active-m { background:#a03020; color:#fff; border-color:#a03020; }
     .ms-btn.active-s { background:#20a040; color:#fff; border-color:#20a040; }
     .vol-wrap { display:inline-flex; align-items:center; gap:.25rem; margin-left:.3rem; }
     .vol-wrap label { font-size:.58rem; color:#444; }
-    .vol-slider { width:56px; height:3px; accent-color:#f90; cursor:pointer; vertical-align:middle; }
+    .vol-slider { width:56px; height:3px; accent-color:#00d4ff; cursor:pointer; vertical-align:middle; }
 
     /* ── Pads ── */
     .pads { display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:.5rem; }
@@ -38,12 +38,12 @@
       user-select:none;
     }
     .pad:hover  { background:#252525; border-color:#444; }
-    .pad:active { background:#f90; color:#111; border-color:#f90; }
+    .pad:active { background:#00d4ff; color:#111; border-color:#00d4ff; }
 
     /* colour accents per instrument */
-    .drums .pad  { border-top-color:#8a3020; }
+    .drums .pad  { border-top-color:#880055; }
     .bass  .pad  { border-top-color:#1a5050; }
-    .buchla .pad { border-top-color:#604010; }
+    .buchla .pad { border-top-color:#004060; }
     .chords .pad { border-top-color:#1a3050; }
 
     /* ── Buchla XY Pad ── */
@@ -63,13 +63,13 @@
                         text-orientation:mixed; padding-right:.2rem; align-self:center; }
     .knob-wrap { display:flex; flex-direction:column; align-items:center; width:52px; }
     .knob-canvas { cursor:ns-resize; touch-action:none; }
-    .knob-val { font-size:.62rem; color:#f90; text-align:center; line-height:1.2; }
+    .knob-val { font-size:.62rem; color:#00d4ff; text-align:center; line-height:1.2; }
     .knob-lab { font-size:.58rem; color:#555; text-align:center; }
 
     /* ── Step Visualizer ── */
     #step-viz { margin-bottom:.5rem; display:none; }
     #viz-pos { font-size:.68rem; color:#555; margin-bottom:.3rem; letter-spacing:.06em; }
-    #viz-pos span { color:#f90; }
+    #viz-pos span { color:#00d4ff; }
     #viz-steps { display:flex; flex-wrap:wrap; gap:2px; }
     .viz-step {
       width:10px; height:10px; border-radius:1px;
@@ -77,15 +77,15 @@
       transition: background 60ms, border-color 60ms;
     }
     .viz-step.bar-start { margin-left:6px; }
-    .viz-step.viz-active { background:#f90; border-color:#f90; }
-    .viz-step.viz-has-event { border-color:#604010; }
-    .viz-step.viz-active.viz-has-event { background:#f90; border-color:#f90; }
+    .viz-step.viz-active { background:#00d4ff; border-color:#00d4ff; }
+    .viz-step.viz-has-event { border-color:#004060; }
+    .viz-step.viz-active.viz-has-event { background:#00d4ff; border-color:#00d4ff; }
 
     /* ── Sequencer ── */
     .seq-section { margin-bottom:1rem; order:3; }
     .seq-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
     #seq-controls { display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; margin-bottom:.5rem; }
-    #bpm-val { color:#f90; min-width:2.5rem; display:inline-block; }
+    #bpm-val { color:#00d4ff; min-width:2.5rem; display:inline-block; }
     textarea {
       background:#0e0e0e; color:#888; border:1px solid #1e1e1e;
       width:100%; max-width:700px; height:10rem;
@@ -105,8 +105,8 @@
     .play-btn:hover { background:#152515; border-color:#2e6e2e; }
     .stop-btn  { background:#1e0e0e; border-color:#4e1e1e; color:#d55; }
     .stop-btn:hover { background:#251515; border-color:#6e2e2e; }
-    .bake-btn  { background:#1a1200; border-color:#4a3800; color:#f90; }
-    .bake-btn:hover { background:#221800; border-color:#6a5000; }
+    .bake-btn  { background:#00121a; border-color:#003040; color:#00d4ff; }
+    .bake-btn:hover { background:#00161e; border-color:#004858; }
     .rec-btn   { background:#1e0808; border-color:#6e1e1e; color:#f55; }
     .rec-btn:hover { background:#250f0f; border-color:#9e2e2e; }
     .rec-btn.recording { background:#3e0000; border-color:#cc0000; color:#ff4444; animation: rec-pulse 1s ease-in-out infinite; }
@@ -119,7 +119,7 @@
     .chat-section h2 { color:#555; font-size:.8rem; margin:0 0 .5rem; letter-spacing:.08em; }
     #chat-messages { background:#0a0a0a; border:1px solid #1a1a1a; padding:.5rem;
                      height:9rem; overflow-y:auto; font-size:.72rem; margin-bottom:.4rem; }
-    .msg-user { color:#f90; margin:.15rem 0; }
+    .msg-user { color:#00d4ff; margin:.15rem 0; }
     .msg-band { color:#6af; margin:.15rem 0; }
     .msg-sys  { color:#444; margin:.15rem 0; font-style:italic; }
     .input-row { display:flex; gap:.4rem; margin-bottom:.4rem; }
@@ -166,7 +166,7 @@
       white-space: nowrap;
     }
     .qnav-face:hover { color: #aaa; border-color: #333; }
-    .qnav-face.qnav-active { color: #f90; border-color: #604010; background: #1a1200; }
+    .qnav-face.qnav-active { color: #00d4ff; border-color: #004060; background: #00121a; }
 
     /* Screen: Main */
     #screen-main { align-items: center; justify-content: center; gap: 3rem; }
@@ -178,7 +178,7 @@
       transform: translateY(24px); padding: 1rem;
     }
     .face-card.revealed { opacity: 1; transform: translateY(0); }
-    .face-card:hover .face-ascii { color: #f90; }
+    .face-card:hover .face-ascii { color: #00d4ff; }
     .face-ascii { font-family: monospace; font-size: 1.6rem; color: #888;
                   transition: color .25s; user-select: none; }
     .face-label { font-family: monospace; font-size: .65rem; color: #555;
@@ -198,7 +198,7 @@
       justify-content: center; padding: 2.5rem 0 1rem;
     }
     #room-face { font-family: monospace; font-size: 1.6rem; color: #888; }
-    #room-name { font-family: monospace; font-size: 1rem; color: #f90;
+    #room-name { font-family: monospace; font-size: 1rem; color: #00d4ff;
                  letter-spacing: .15em; }
     #room-transport {
       display: flex; gap: .5rem; align-items: center;
@@ -242,13 +242,14 @@
     /* Floating [CHAT] button */
     #btn-chat-float {
       position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 150;
-      background: #1a1200; border: 1px solid #604010; color: #f90;
+      background: #00121a; border: 1px solid #004060; color: #00d4ff;
       font-family: monospace; font-size: .8rem; padding: .5rem .9rem;
       cursor: pointer; border-radius: 4px; display: none;
     }
-    #btn-chat-float:hover { background: #221800; border-color: #f90; }
+    #btn-chat-float:hover { background: #00161e; border-color: #00d4ff; }
     body.on-main #btn-chat-float,
-    body.on-room  #btn-chat-float { display: block; }
+    body.on-room  #btn-chat-float,
+    body.on-song  #btn-chat-float { display: block; }
 
     /* Legacy UI (hidden — keeps JS hooks alive) */
     #legacy-ui { display: none !important; }
@@ -280,8 +281,8 @@
     #screen-song .arr-grid { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.3rem; }
     #screen-song .arr-slot { width:2.6rem; height:2.2rem; background:#111; border:1px solid #1a1a1a; cursor:pointer; border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:.65rem; color:#444; font-family:monospace; user-select:none; }
     #screen-song .arr-slot:hover { border-color:#333; color:#666; }
-    #screen-song .arr-slot.has-pat { background:#110d00; border-color:#604010; color:#c87020; }
-    #screen-song .arr-slot.arr-playing { border-color:#f90 !important; color:#f90 !important; }
+    #screen-song .arr-slot.has-pat { background:#000d18; border-color:#004060; color:#00aad4; }
+    #screen-song .arr-slot.arr-playing { border-color:#00d4ff !important; color:#00d4ff !important; }
 
     /* SONG button on main screen */
     #btn-song-screen {
@@ -342,9 +343,9 @@
       content: ''; position: absolute; top: 0; left: 0; right: 0;
       height: 3px; border-radius: 5px 5px 0 0;
     }
-    .mx-strip[data-inst="drum"]   ::before, .mx-strip[data-inst="drum"]::before   { background: #8a3020; }
+    .mx-strip[data-inst="drum"]   ::before, .mx-strip[data-inst="drum"]::before   { background: #880055; }
     .mx-strip[data-inst="bass"]   ::before, .mx-strip[data-inst="bass"]::before   { background: #1a5050; }
-    .mx-strip[data-inst="buchla"] ::before, .mx-strip[data-inst="buchla"]::before { background: #604010; }
+    .mx-strip[data-inst="buchla"] ::before, .mx-strip[data-inst="buchla"]::before { background: #004060; }
     .mx-strip[data-inst="pads"]   ::before, .mx-strip[data-inst="pads"]::before   { background: #1a3050; }
     .mx-strip[data-inst="rhodes"] ::before, .mx-strip[data-inst="rhodes"]::before { background: #4a3010; }
 
@@ -397,11 +398,11 @@
       transform: rotate(-90deg);
       z-index: 1;
       cursor: pointer;
-      accent-color: #f90;
+      accent-color: #00d4ff;
       margin: 0;
     }
     .mx-val {
-      font-family: monospace; font-size: .6rem; color: #f90; text-align: center;
+      font-family: monospace; font-size: .6rem; color: #00d4ff; text-align: center;
     }
 
     /* ── FX Rack ── */
@@ -410,7 +411,7 @@
                 padding:.4rem 0 .1rem; border-top:1px solid #1a1a1a; margin-top:.1rem; }
     .fx-slot-hdr { font-size:.7rem; color:#555; letter-spacing:.07em; display:flex;
                    align-items:center; gap:.4rem; margin-bottom:.45rem; flex-wrap:wrap; }
-    .fx-slot-hdr span { color:#f90; }
+    .fx-slot-hdr span { color:#00d4ff; }
     .fx-row { display:flex; gap:.3rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem; }
     .fx-label { font-size:.58rem; color:#444; min-width:2rem; }
     .fx-select { background:#111; color:#888; border:1px solid #222; font-family:monospace;
@@ -422,44 +423,322 @@
     .fx-arm  { font-size:.6rem; padding:.1rem .35rem; border:1px solid #1e2e3e; background:#0a0e1a;
                color:#45a; cursor:pointer; border-radius:2px; font-family:monospace; }
     .fx-arm.armed  { background:#100e2a; border-color:#45a; color:#88f; }
-    .fx-arm.active { background:#1a0e0a; border-color:#a64; color:#f90; }
+    .fx-arm.active { background:#1a0e0a; border-color:#a64; color:#00d4ff; }
     .fx-gate { font-size:.6rem; padding:.1rem .35rem; border:1px solid #3e1e1e; background:#1a0a0a;
                color:#844; cursor:pointer; border-radius:2px; font-family:monospace; }
     .fx-send-grid { display:flex; flex-direction:column; gap:.2rem; margin:.25rem 0; }
     .fx-send-item { display:flex; align-items:center; gap:.4rem; }
     .fx-send-item label { font-size:.6rem; color:#555; width:3.2rem; letter-spacing:.04em; }
-    .fx-send-sl { flex:1; min-width:60px; max-width:100px; height:3px; accent-color:#f90; cursor:pointer; }
+    .fx-send-sl { flex:1; min-width:60px; max-width:100px; height:3px; accent-color:#00d4ff; cursor:pointer; }
     .fx-send-val { font-size:.58rem; color:#444; width:1.8rem; text-align:right; }
-    .fx-send-item.active label { color:#f90; }
-    .fx-send-item.active .fx-send-val { color:#f90; }
+    .fx-send-item.active label { color:#00d4ff; }
+    .fx-send-item.active .fx-send-val { color:#00d4ff; }
 
     /* ── FX Step Grid ── */
     .fx-step-seq { display:flex; gap:2px; margin:.45rem 0 .1rem; flex-wrap:nowrap; }
     .fx-step-btn { width:13px; height:13px; background:#111; border:1px solid #1e1e1e;
                    cursor:pointer; border-radius:2px; flex-shrink:0; transition:background .05s; }
-    .fx-step-btn.on   { background:#603000; border-color:#a05000; }
+    .fx-step-btn.on   { background:#003060; border-color:#005090; }
     .fx-step-btn.play { border-color:#fff !important; }
-    .fx-step-btn.on.play { background:#f90; border-color:#ffb040; }
+    .fx-step-btn.on.play { background:#00d4ff; border-color:#40e0ff; }
     .fx-step-divider { width:1px; background:#2a2a2a; align-self:stretch; margin:0 1px; flex-shrink:0; }
 
     /* ── Song Mode ── */
     .song-section { margin-bottom:1rem; border:1px solid #1e1e1e; border-radius:4px; padding:.6rem .8rem; order:4; }
     .song-hdr { font-size:.72rem; color:#555; letter-spacing:.08em; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
-    .song-hdr span { color:#f90; }
+    .song-hdr span { color:#00d4ff; }
     .pat-bank { display:flex; flex-wrap:wrap; gap:.35rem; }
     .pat-btn { min-width:4rem; font-size:.68rem; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .pat-btn.has-pat { border-color:#604010; color:#c87020; }
-    .pat-btn.active-pat { background:#1a1200; border-color:#f90; color:#f90; }
-    .pat-btn.has-pat.active-pat { color:#f90; }
+    .pat-btn.has-pat { border-color:#004060; color:#00aad4; }
+    .pat-btn.active-pat { background:#00121a; border-color:#00d4ff; color:#00d4ff; }
+    .pat-btn.has-pat.active-pat { color:#00d4ff; }
     .arr-grid { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.4rem; }
     .arr-slot { width:2.6rem; height:2.2rem; background:#111; border:1px solid #1a1a1a; cursor:pointer;
                 border-radius:3px; display:flex; align-items:center; justify-content:center;
                 font-size:.65rem; color:#444; font-family:monospace; user-select:none; }
     .arr-slot:hover { border-color:#333; color:#666; }
-    .arr-slot.has-pat { background:#110d00; border-color:#604010; color:#c87020; }
-    .arr-slot.arr-playing { border-color:#f90 !important; color:#f90 !important; box-shadow:0 0 5px #f903; }
+    .arr-slot.has-pat { background:#000d18; border-color:#004060; color:#00aad4; }
+    .arr-slot.arr-playing { border-color:#00d4ff !important; color:#00d4ff !important; box-shadow:0 0 5px #00d4ff3; }
     .mode-btn { font-size:.65rem; padding:.2rem .5rem; }
-    .mode-active { background:#1a1200; border-color:#f90; color:#f90; }
+    .mode-active { background:#00121a; border-color:#00d4ff; color:#00d4ff; }
+
+    /* ══ Synth Lab ════════════════════════════════════════════════════ */
+
+    /* Entry button on main screen */
+    #btn-synth-lab {
+      position: fixed; bottom: 4.5rem; right: 1.5rem; z-index: 160;
+      background: #131000; border: 1px solid #5a4a00; color: #ffe000;
+      font-family: monospace; font-size: .78rem; padding: .5rem .9rem;
+      cursor: pointer; border-radius: 4px;
+      display: none;
+    }
+    body.on-main #btn-synth-lab,
+    body.on-song  #btn-synth-lab,
+    body.on-room  #btn-synth-lab { display: block; }
+    #btn-synth-lab:hover { border-color: #ffe000; color: #ffff70; }
+
+    /* Screen */
+    #screen-synth-lab { padding: 0; flex-direction: row; overflow: hidden; }
+
+    /* Left sidebar: slot cards */
+    #synth-slots-sidebar {
+      width: 200px; flex-shrink: 0;
+      background: #0c0c0c; border-right: 1px solid #1a1a1a;
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    #synth-slots-hdr {
+      font-family: monospace; font-size: .7rem; color: #555;
+      letter-spacing: .12em; padding: .8rem 1rem .5rem;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    #synth-slots-row {
+      display: flex; flex-direction: column; gap: .35rem; padding: .5rem;
+      flex: 1; overflow-y: auto;
+    }
+    .synth-slot-card {
+      background: #111; border: 1px solid #1e1e1e; border-radius: 4px;
+      padding: .55rem .65rem; cursor: pointer;
+      transition: border-color .15s;
+    }
+    .synth-slot-card:hover { border-color: #524800; }
+    .synth-slot-card.ssc-active { border-color: #ffe000; background: #101000; }
+    .ssc-slot-label { font-family: monospace; font-size: .58rem; color: #ffe000;
+                      letter-spacing: .12em; margin-bottom: .1rem; }
+    .ssc-name { font-family: monospace; font-size: .75rem; color: #ccc;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ssc-empty { font-family: monospace; font-size: .75rem; color: #ffe000;
+                 letter-spacing: .08em; }
+    .ssc-tag { font-family: monospace; font-size: .6rem; color: #6a5a00; margin: .2rem 0; }
+    .ssc-assign-sel {
+      font-family: monospace; font-size: .58rem;
+      background: #111; border: 1px solid #2a2a2a; color: #ffe000;
+      padding: .1rem .25rem; cursor: pointer; margin-top: .2rem; width: 100%;
+    }
+    .ssc-btns { display: flex; gap: .3rem; margin-top: .35rem; }
+    .ssc-edit-btn, .ssc-clear-btn, .ssc-new-btn {
+      font-family: monospace; font-size: .62rem; padding: .15rem .4rem;
+      border-radius: 2px; cursor: pointer;
+    }
+    .ssc-edit-btn { background: #1a1a1a; border: 1px solid #333; color: #aaa; }
+    .ssc-edit-btn:hover { border-color: #ffe000; color: #ffff70; }
+    .ssc-load-btn { background: #00121a; border: 1px solid #004060; color: #00d4ff;
+                    font-family: monospace; font-size: .62rem; padding: .15rem .4rem;
+                    border-radius: 2px; cursor: pointer; }
+    .ssc-load-btn:hover { border-color: #00d4ff; color: #40e0ff; }
+    .ssc-clear-btn { background: #1a0a0a; border: 1px solid #4e1e1e; color: #a44; }
+    .ssc-clear-btn:hover { background: #2a1010; border-color: #a44; color: #f77; }
+    .ssc-new-btn { background: #131000; border: 1px solid #5a4a00; color: #ffe000;
+                   width: 100%; margin-top: .3rem; padding: .25rem .4rem; }
+    .ssc-new-btn:hover { border-color: #ffe000; color: #ffff70; }
+
+    /* Main editor area */
+    #synth-lab-main {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+      position: relative;
+    }
+
+    /* Back button inside synth lab sidebar */
+    #btn-synth-lab-back {
+      margin: auto .5rem .7rem;
+      font-family: monospace; font-size: .7rem; letter-spacing: .08em;
+      background: transparent; border: 1px solid #2a2a2a; color: #555;
+      padding: .35rem .6rem; cursor: pointer; border-radius: 3px; width: calc(100% - 1rem);
+    }
+    #btn-synth-lab-back:hover { border-color: #555; color: #aaa; }
+
+    #synth-lab-editor {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .sle-placeholder {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      font-family: monospace; font-size: .75rem; color: #333; letter-spacing: .08em;
+    }
+
+    .sle-header {
+      display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+      padding: .8rem 1.2rem .6rem; border-bottom: 1px solid #1a1a1a;
+      flex-shrink: 0; background: #0c0c0c;
+    }
+    .sle-name  { font-family: monospace; font-size: .9rem; color: #ddd; letter-spacing: .06em; }
+    .sle-badge { font-family: monospace; font-size: .6rem; letter-spacing: .12em;
+                 color: #555; background: #1a1a1a; border: 1px solid #2a2a2a;
+                 padding: .1rem .4rem; border-radius: 2px; }
+    .sle-track { font-family: monospace; font-size: .65rem; color: #6a5a00; }
+    .sle-action-btns { display: flex; gap: .35rem; margin-left: auto; }
+    .sle-action-btns button {
+      font-family: monospace; font-size: .68rem; padding: .3rem .6rem;
+      border-radius: 3px; cursor: pointer;
+      background: #1a1a1a; border: 1px solid #333; color: #aaa;
+    }
+    .sle-action-btns button:hover { border-color: #666; color: #eee; }
+    .sle-forge { border-color: #003040 !important; color: #00d4ff !important; background: #00121a !important; }
+    .sle-forge:hover { border-color: #00d4ff !important; }
+
+    .sle-rack-area {
+      flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
+      padding: .7rem .8rem;
+    }
+    .sle-rack {
+      display: flex; gap: 4px; align-items: flex-start; min-width: min-content;
+    }
+
+    .sle-piano-area {
+      flex-shrink: 0; padding: .5rem 1rem .8rem;
+      border-top: 1px solid #1a1a1a; background: #0c0c0c;
+    }
+
+    /* Synth Designer component styles (needed for ModulePanel / Knob / PianoKeys) */
+    :root {
+      --bg:         #0d0f14;
+      --bg2:        #141720;
+      --bg3:        #1c2030;
+      --border:     #2a2e40;
+      --text:       #c8cfe0;
+      --text-dim:   #5a6180;
+      --text-bright:#eef0f8;
+      --accent:     #ff006e;
+      --accent-c:   #00d4ff;
+      --accent-y:   #ffe000;
+      --font:       'Courier New', Courier, monospace;
+    }
+    .module-panel {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-top: 3px solid var(--panel-color, #555);
+      min-width: 110px; max-width: 130px;
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    .panel-header {
+      font-size: 9px; letter-spacing: 2px; color: var(--panel-color, #888);
+      padding: 6px 8px 4px; border-bottom: 1px solid var(--border); text-align: center;
+    }
+    .panel-body { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 8px 4px; }
+    /* Scope all synth-lab knob styles under .module-panel to avoid conflicting with legacy knobs */
+    .module-panel .knob-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: ns-resize; user-select: none; width: auto; }
+    .module-panel .knob-svg { overflow: visible; }
+    .module-panel .knob-track { fill: none; stroke: var(--bg3); stroke-width: 4; }
+    .module-panel .knob-arc   { fill: none; stroke: var(--panel-color, #2a9d8f); stroke-width: 4; stroke-linecap: round; }
+    .module-panel .knob-body  { fill: #1a1e2a; stroke: #3a3e50; stroke-width: 1.5; }
+    .module-panel .knob-body:hover { stroke: var(--panel-color, #555); }
+    .module-panel .knob-tick  { stroke: var(--text-bright); stroke-width: 2; stroke-linecap: round; }
+    .module-panel .knob-value { font-size: 9px; color: var(--text-dim); min-width: 40px; text-align: center; }
+    .module-panel .knob-label { font-size: 8px; letter-spacing: 1px; color: var(--text-dim); text-align: center; }
+    .select-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; width: 100%; }
+    .select-label { font-size: 8px; letter-spacing: 1px; color: var(--text-dim); }
+    .module-select { font-family: var(--font); font-size: 10px; background: var(--bg3);
+                     color: var(--text); border: 1px solid var(--border); padding: 3px 4px; width: 100%; cursor: pointer; outline: none; }
+    .module-select:focus { border-color: var(--panel-color, #555); }
+    .toggle-wrap { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; width: 100%; gap: 6px; }
+    .toggle-label { font-size: 8px; letter-spacing: 1px; color: var(--text-dim); }
+    .toggle-btn { font-family: var(--font); font-size: 8px; letter-spacing: 1px; padding: 3px 8px;
+                  background: var(--bg3); color: var(--text-dim); border: 1px solid var(--border); cursor: pointer; }
+    .toggle-btn.active { background: var(--panel-color, #2a9d8f); color: var(--bg); border-color: var(--panel-color, #2a9d8f); font-weight: bold; }
+    .piano-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .octave-indicator { font-size: 10px; letter-spacing: 2px; color: var(--text-dim); font-family: var(--font); }
+    .piano-keys { display: flex; position: relative; height: 70px; gap: 1px; }
+    .piano-key.white { width: 28px; height: 70px; background: #dde2ee; border: 1px solid #8899aa;
+                       border-radius: 0 0 3px 3px; cursor: pointer; position: relative; z-index: 1; }
+    .piano-key.black { width: 18px; height: 44px; background: #1a1e2a; border: 1px solid #0a0c12;
+                       border-radius: 0 0 2px 2px; cursor: pointer; margin: 0 -9px; position: relative; z-index: 2; }
+    .piano-key.white.active { background: var(--accent); }
+    .piano-key.black.active { background: #cc0060; }
+    .keyboard-hint { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 8px; text-align: center; }
+
+    /* Wizard overlay (for the Synth Lab's LLM wizard) */
+    #synth-wizard-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.88);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s ease;
+    }
+    #synth-wizard-overlay.open { opacity: 1; pointer-events: all; }
+    #synth-wizard-panel {
+      background: #0d0f14; border: 1px solid #2a2e40;
+      width: min(640px, 96vw); height: min(80vh, 700px);
+      display: flex; flex-direction: column; overflow: hidden; border-radius: 4px;
+    }
+    #synth-wizard-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .6rem 1rem; border-bottom: 1px solid #1e2030;
+      font-family: monospace; font-size: .75rem; color: #555; letter-spacing: .15em;
+    }
+    #btn-wizard-close {
+      background: transparent; border: 1px solid #333; color: #555;
+      font-family: monospace; font-size: .7rem; padding: .2rem .5rem;
+      cursor: pointer; border-radius: 3px;
+    }
+    #btn-wizard-close:hover { border-color: #666; color: #aaa; }
+    #synth-wizard-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* LLM Wizard component styles */
+    .llm-key-setup { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; }
+    .key-setup-inner { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 420px; max-width: 90vw; }
+    .key-logo  { font-size: 28px; color: #ff006e; }
+    .key-title { font-size: 16px; color: #eef0f8; letter-spacing: 2px; }
+    .key-desc  { font-size: 11px; color: #5a6180; text-align: center; line-height: 1.6; }
+    .key-input { font-family: monospace; font-size: 12px; background: #141720; border: 1px solid #2a2e40;
+                 color: #eef0f8; padding: 10px 14px; width: 100%; outline: none; }
+    .key-input:focus { border-color: #ff006e; }
+    .key-btn   { font-family: monospace; font-size: 11px; letter-spacing: 2px; padding: 10px 24px;
+                 background: #ff006e; border: none; color: #0d0f14; cursor: pointer; font-weight: bold; width: 100%; }
+    .key-btn:hover { opacity: .85; }
+    .key-link  { font-size: 10px; color: #5a6180; text-decoration: none; letter-spacing: 1px; }
+    .key-link:hover { color: #ff006e; }
+    .llm-chat-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+                   border-bottom: 1px solid #2a2e40; background: #141720; flex-shrink: 0; }
+    .chat-logo  { font-size: 18px; color: #ff006e; }
+    .chat-title { font-size: 13px; letter-spacing: 3px; color: #eef0f8; font-weight: bold; }
+    .chat-sub   { font-size: 9px; letter-spacing: 2px; color: #5a6180; }
+    .chat-model-select { margin-left: auto; background: #141720; border: 1px solid #2a2e40; color: #5a6180;
+                         font-family: monospace; font-size: 10px; padding: 3px 6px; cursor: pointer; letter-spacing: 1px; }
+    .chat-model-select:focus { outline: none; border-color: #ff006e; }
+    .chat-key-reset { background: none; border: 1px solid #2a2e40; color: #5a6180; cursor: pointer; font-size: 14px; padding: 3px 8px; }
+    .chat-key-reset:hover { color: #eef0f8; }
+    .key-model-row  { display: flex; align-items: center; gap: 10px; width: 100%; }
+    .key-model-label { font-family: monospace; font-size: 10px; color: #5a6180; letter-spacing: 2px; white-space: nowrap; }
+    .key-model-select { flex: 1; background: #141720; border: 1px solid #2a2e40; color: #eef0f8;
+                        font-family: monospace; font-size: 11px; padding: 8px 10px; cursor: pointer; }
+    .key-model-select:focus { outline: none; border-color: #ff006e; }
+    .chat-feed  { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .chat-msg   { max-width: 75%; padding: 12px 16px; font-size: 12px; line-height: 1.6; border-radius: 2px; }
+    .chat-msg--user      { background: #1c2030; border: 1px solid #2a2e40; align-self: flex-end; color: #eef0f8; }
+    .chat-msg--assistant { background: #141720; border-left: 2px solid #ff006e; align-self: flex-start; color: #c8cfe0; }
+    .chat-msg--error     { background: #2d0a0a; border-left: 2px solid #e63946; align-self: flex-start; color: #e63946; }
+    .chat-thinking { align-self: flex-start; display: flex; gap: 5px; padding: 10px 14px; background: #141720; border-left: 2px solid #2a2e40; }
+    .chat-thinking span { width: 6px; height: 6px; background: #5a6180; border-radius: 50%; animation: thinking 1.2s infinite ease-in-out; }
+    .chat-thinking span:nth-child(2) { animation-delay: .2s; }
+    .chat-thinking span:nth-child(3) { animation-delay: .4s; }
+    @keyframes thinking { 0%,80%,100%{transform:scale(.6);opacity:.3} 40%{transform:scale(1);opacity:1} }
+    .chat-build-card { align-self: flex-start; display: flex; align-items: flex-start; gap: 14px;
+                       padding: 14px 18px; background: #141720; border: 1px solid #ff006e;
+                       max-width: 85%; flex-direction: column; }
+    .chat-build-card > div:first-child { display: flex; align-items: center; gap: 14px; }
+    .build-card-icon { font-size: 22px; color: #ff006e; flex-shrink: 0; }
+    .build-card-text { font-size: 11px; line-height: 1.6; color: #c8cfe0; }
+    .build-card-name { color: #eef0f8; font-size: 13px; display: block; }
+    .build-card-info { color: #5a6180; font-size: 10px; }
+    .build-card-actions { display: flex; gap: 8px; padding-top: 4px; }
+    .build-load-btn  { font-family: monospace; font-size: 10px; letter-spacing: 1px; padding: 6px 14px;
+                       background: #ff006e; border: none; color: #0d0f14; cursor: pointer; font-weight: bold; }
+    .build-load-btn:hover { opacity: .85; }
+    .build-forge-btn { font-family: monospace; font-size: 10px; letter-spacing: 1px; padding: 6px 14px;
+                       background: transparent; border: 1px solid #00d4ff; color: #00d4ff; cursor: pointer; }
+    .build-forge-btn:hover { background: #00121a; }
+    .chat-input-row { display: flex; padding: 12px 20px; border-top: 1px solid #2a2e40; background: #141720; flex-shrink: 0; }
+    .chat-textarea  { flex: 1; font-family: monospace; font-size: 12px; background: #1c2030;
+                      border: 1px solid #2a2e40; border-right: none; color: #eef0f8;
+                      padding: 10px 14px; resize: none; outline: none; line-height: 1.5; }
+    .chat-textarea:focus { border-color: #ff006e; }
+    .chat-send-btn  { font-family: monospace; background: #ff006e; border: none; color: #0d0f14;
+                      padding: 0 20px; font-size: 16px; cursor: pointer; font-weight: bold; }
+    .chat-send-btn:hover { opacity: .85; }
+    .chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .sle-piano-container { display: flex; justify-content: center; }
+
+    body.on-synth-lab #btn-chat-float { display: none; }
   </style>
 </head>
 <body class="on-chat">
@@ -474,6 +753,7 @@
   <div id="faces-row"></div>
   <button id="btn-song-screen">SONG BUILDER →</button>
 </div>
+<button id="btn-synth-lab">SYNTH LAB →</button>
 
 <!-- ─── Screen: Room (instrument drill-down) ───────────────────── -->
 <div id="screen-room" class="screen">
@@ -490,13 +770,13 @@
       BPM <input type="range" id="room-bpm" min="60" max="200" step="1" value="128" style="width:110px;">
       <span id="room-bpm-val">128</span>
     </label>
-    <button id="room-mixer-btn" style="margin-left:.6rem;background:#1a1200;border:1px solid #604010;color:#f90;font-family:monospace;font-size:.75rem;padding:.4rem .7rem;cursor:pointer;border-radius:3px;">MIXER</button>
+    <button id="room-mixer-btn" style="margin-left:.6rem;background:#00121a;border:1px solid #004060;color:#00d4ff;font-family:monospace;font-size:.75rem;padding:.4rem .7rem;cursor:pointer;border-radius:3px;">MIXER</button>
     <button id="room-bake-btn"   class="bake-btn"   style="font-size:.75rem;padding:.4rem .7rem;" title="Bake knob state into JSON">BAKE</button>
     <button id="room-rec-btn"    class="rec-btn"    style="font-size:.75rem;padding:.4rem .7rem;" title="Record live audio">⏺ REC</button>
     <button id="room-render-btn" class="render-btn" style="font-size:.75rem;padding:.4rem .7rem;" title="Offline WAV render">⬇ WAV</button>
     <label style="display:inline-flex;align-items:center;gap:.4rem;font-size:.75rem;margin-left:.4rem;">
       NOTE
-      <select id="room-resolution" style="background:#0e0e0e;color:#f90;border:1px solid #604010;font-family:monospace;font-size:.72rem;padding:.2rem .35rem;border-radius:2px;cursor:pointer;">
+      <select id="room-resolution" style="background:#0e0e0e;color:#00d4ff;border:1px solid #004060;font-family:monospace;font-size:.72rem;padding:.2rem .35rem;border-radius:2px;cursor:pointer;">
         <option value="0.25">1/16</option>
         <option value="0.5" selected>1/8</option>
         <option value="1">1/4</option>
@@ -511,17 +791,45 @@
   <div id="room-fx-panel"></div>
 </div>
 
+<!-- ─── Screen: Synth Lab ───────────────────────────────────────── -->
+<div id="screen-synth-lab" class="screen">
+  <!-- Left sidebar: slot cards -->
+  <div id="synth-slots-sidebar">
+    <div id="synth-slots-hdr">— SYNTH LAB —</div>
+    <div id="synth-slots-row"></div>
+    <button id="btn-synth-lab-back">← BACK</button>
+  </div>
+
+  <!-- Main editor area -->
+  <div id="synth-lab-main">
+    <div id="synth-lab-editor"></div>
+  </div>
+</div>
+
+<!-- ─── Wizard overlay (floating, above all screens) ──────────── -->
+<div id="synth-wizard-overlay">
+  <div id="synth-wizard-panel">
+    <div id="synth-wizard-topbar">
+      SYNTH WIZARD
+      <button id="btn-wizard-close">✕ CLOSE</button>
+    </div>
+    <div id="synth-wizard-body"></div>
+  </div>
+</div>
+
 <!-- ─── Screen: Song (pattern bank + arranger) ─────────────────── -->
 <div id="screen-song" class="screen">
   <button id="btn-song-back" class="back-btn">← BACK</button>
   <div style="padding:3rem 2rem 1rem;max-width:900px;margin:0 auto;width:100%;">
-    <div class="song-hdr" style="font-family:monospace;font-size:.85rem;color:#555;letter-spacing:.15em;margin-bottom:1.2rem;">
-      — SONG BUILDER —
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.2rem;">
+      <span style="font-family:monospace;font-size:.85rem;color:#555;letter-spacing:.15em;">— SONG BUILDER —</span>
+      <button id="song-play-btn" class="play-btn" style="font-family:monospace;font-size:.75rem;padding:.35rem .8rem;border:1px solid;border-radius:3px;cursor:pointer;">▶ PLAY</button>
+      <button id="song-stop-btn" class="stop-btn" style="font-family:monospace;font-size:.75rem;padding:.35rem .8rem;border:1px solid;border-radius:3px;cursor:pointer;" disabled>■ STOP</button>
     </div>
     <!-- Pattern bank — moved from legacy -->
     <div style="font-family:monospace;font-size:.72rem;color:#555;letter-spacing:.1em;margin-bottom:.4rem;">PATTERNS</div>
     <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem;">
-      <span id="song-pat-label" style="font-family:monospace;font-size:.72rem;color:#f90;">P1</span>
+      <span id="song-pat-label" style="font-family:monospace;font-size:.72rem;color:#00d4ff;">P1</span>
       <button id="song-btn-store" class="mode-btn">← STORE</button>
       <button id="song-btn-loop" class="mode-btn mode-active">LOOP</button>
       <button id="song-btn-song" class="mode-btn">SONG</button>
@@ -670,91 +978,283 @@
     <div id="viz-steps"></div>
   </div>
   <span class="label-sm">ClankerBoy JSON — edit &amp; press PLAY</span>
-  <textarea id="sheet-json">{
-  "explanation": {
-    "intent": "melancholy, introspective, late-night warmth — pad adds harmonic depth and atmosphere",
-    "style": "cool jazz",
-    "timbre": "warm, dark, dry rhodes leads; lush slow-attack reverb pad recessed behind; buchla woody plucks high",
-    "section": "verse1",
-    "energy": 0.35,
-    "key": "Bb natural minor",
-    "progression": "i Bbm7 → iv Ebm7 → VII AbMaj7 → III DbMaj7",
-    "rhythm": "kick on 1+3, snare on 2+4, HH sparse 8ths, walking bass roots+passing tones",
-    "orchestration": "rhodes two-hand voicing leads, pad shell chords (3rd+7th rootless) slow swell behind, buchla high arpeggiated fills, bass walks roots, drums minimal brush feel",
-    "pad_voicing": "bar1 Bbm7: [61,68] Db4+Ab4 | bar2 Ebm7: [66,61] Gb4+Db4 | bar3 AbMaj7: [67,72] G4+C5 | bar4 DbMaj7: [65,72] F4+C5"
-  },
-  "bpm": 92,
-  "steps": [
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":92},{"t":2,"n":[10],"v":85,"cc":{"18":10,"23":30,"71":42,"72":22,"73":8,"74":48,"75":50,"79":80}},{"t":3,"n":[58,68],"v":68,"dur":3.5,"cc":{"72":90,"73":48,"74":52}},{"t":6,"n":[61,68],"v":58,"dur":7.5,"cc":{"29":28,"30":50,"72":95,"73":68,"74":32,"88":85,"91":88}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":62}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55},{"t":1,"n":[65],"v":82,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":70}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58},{"t":1,"n":[68],"v":76,"cc":{"10":22,"17":6,"19":6,"20":37,"71":26,"74":68}}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":3,"n":[65,70],"v":72,"dur":2,"cc":{"72":85,"73":40,"74":55}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":88},{"t":2,"n":[10],"v":80,"cc":{"23":28,"74":45}},{"t":1,"n":[61],"v":80,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":72}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[65],"v":85,"cc":{"10":22,"17":7,"19":5,"20":37,"71":28,"74":74}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":82},{"t":10,"n":[42],"v":55}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":50},{"t":2,"n":[12],"v":75,"cc":{"23":25,"74":50}}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[70],"v":78,"cc":{"10":24,"17":8,"19":6,"20":37,"71":26,"74":66}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":90},{"t":2,"n":[15],"v":86,"cc":{"23":32,"74":46}},{"t":3,"n":[63,70],"v":66,"dur":3.5,"cc":{"72":90,"73":46,"74":50}},{"t":6,"n":[66,61],"v":56,"dur":7.5,"cc":{"29":28,"30":50,"72":95,"73":66,"74":30,"88":85,"91":88}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":1,"n":[66],"v":80,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":68}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":76}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
-    {"d":0.25,"tracks":[{"t":3,"n":[66,73],"v":70,"dur":2,"cc":{"72":86,"73":42,"74":54}},{"t":1,"n":[70],"v":78,"cc":{"10":22,"17":7,"19":5,"20":37,"71":26,"74":70}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":86},{"t":2,"n":[15],"v":78,"cc":{"23":28,"74":44}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56},{"t":1,"n":[63],"v":82,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":66}}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":80},{"t":10,"n":[42],"v":52}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[66],"v":76,"cc":{"10":24,"17":7,"19":6,"20":37,"71":26,"74":70}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
-    {"d":0.25,"tracks":[{"t":2,"n":[17],"v":74,"cc":{"23":26,"74":48}}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[70],"v":80,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":68}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":94},{"t":2,"n":[20],"v":88,"cc":{"23":30,"74":50}},{"t":3,"n":[68,75],"v":64,"dur":3.5,"cc":{"72":92,"73":44,"74":48}},{"t":6,"n":[67,72],"v":54,"dur":7.5,"cc":{"29":26,"30":52,"72":95,"73":64,"74":28,"88":88,"91":90}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":62}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":54},{"t":1,"n":[68],"v":84,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":72}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56}]},
-    {"d":0.25,"tracks":[{"t":3,"n":[72,79],"v":68,"dur":2,"cc":{"72":88,"73":40,"74":52}},{"t":1,"n":[72],"v":76,"cc":{"10":22,"17":7,"19":6,"20":37,"71":26,"74":70}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":88},{"t":2,"n":[20],"v":80,"cc":{"23":28,"74":46}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58},{"t":1,"n":[75],"v":80,"cc":{"10":18,"17":9,"19":5,"20":37,"71":30,"74":68}}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":80},{"t":10,"n":[42],"v":54}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[68],"v":78,"cc":{"10":24,"17":8,"19":5,"20":37,"71":26,"74":66}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56}]},
-    {"d":0.25,"tracks":[{"t":2,"n":[22],"v":76,"cc":{"23":26,"74":48}}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[72],"v":82,"cc":{"10":20,"17":7,"19":5,"20":37,"71":28,"74":70}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":92},{"t":2,"n":[13],"v":84,"cc":{"23":29,"74":47}},{"t":3,"n":[61,68],"v":66,"dur":3,"cc":{"72":88,"73":44,"74":50}},{"t":6,"n":[65,72],"v":55,"dur":3,"cc":{"29":28,"30":50,"72":92,"73":65,"74":30,"88":85,"91":88}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":60}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":52},{"t":1,"n":[65],"v":82,"cc":{"10":20,"17":8,"19":5,"20":37,"71":28,"74":70}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":76}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
-    {"d":0.25,"tracks":[{"t":3,"n":[65,72],"v":70,"dur":1.5,"cc":{"72":86,"73":42,"74":53}},{"t":1,"n":[68],"v":76,"cc":{"10":22,"17":7,"19":6,"20":37,"71":26,"74":68}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[36],"v":86},{"t":2,"n":[13],"v":76,"cc":{"23":25,"74":44}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":56},{"t":1,"n":[61],"v":80,"cc":{"10":18,"17":9,"19":4,"20":37,"71":30,"74":66}}]},
-    {"d":0.25,"tracks":[]},
-    {"d":0.25,"tracks":[{"t":10,"n":[38],"v":78},{"t":10,"n":[42],"v":52}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[65],"v":78,"cc":{"10":24,"17":8,"19":5,"20":37,"71":26,"74":68}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":55}]},
-    {"d":0.25,"tracks":[{"t":2,"n":[10],"v":72,"cc":{"23":24,"74":46}}]},
-    {"d":0.25,"tracks":[{"t":1,"n":[68],"v":75,"cc":{"10":22,"17":7,"19":6,"20":37,"71":24,"74":66}}]},
-    {"d":0.25,"tracks":[{"t":10,"n":[42],"v":58}]},
-    {"d":0.25,"tracks":[]}
-  ],
-  "tension": 0.3
-}</textarea>
+  <textarea id="sheet-json">
+{
+    "explanation": {
+      "intent":        "Underground warehouse descent — hypnotic, menacing, tension-building",
+      "style":         "Acid House, straight 16ths, 4-on-floor, squelchy 303 bass leads",
+      "timbre":        "Cold, mechanical, wet. Bass high-resonance squelch, drums punchy/dry, pads dark and buried, buchla percussive chirps",
+      "section":       "verse1",
+      "energy":        0.42,
+      "key":           "F# natural minor",
+      "progression":   "i m7 (F#m7) × 2 bars → iv m7 (Bm7) × 2 bars",
+      "rhythm":        "Straight 16ths, 4-on-floor kick, snare 2+4, closed HH on 8ths, acid bass syncopated 16ths with filter automation",
+      "orchestration":  "Bass stars: acid squelch pattern with CC74 sweeps. Rhodes: rootless 3rd+7th shell, very filtered, long dur. Pads: dark sustain underneath. Buchla: high percussive chirps on upbeats, chord tones only. Drums: full acid house kit."
+    },
+    "bpm": 115,
+    "steps": [
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 100 },
+          { "t": 2,  "n": [6],  "v": 110, "cc": {"71":115,"74":20,"23":8,"73":8,"75":50,"79":80,"72":22,"18":10} },
+          { "t": 3,  "n": [57,64], "v": 62, "dur": 8.0, "cc": {"74":28,"72":95,"73":55} },
+          { "t": 6,  "n": [57,64], "v": 52, "dur": 8.0, "cc": {"74":22,"73":70,"72":95,"91":72,"88":78,"29":28,"30":42} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 65 },
+          { "t": 2,  "n": [6],  "v": 95, "cc": {"74":35,"23":6} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 },
+          { "t": 1,  "n": [73], "v": 82, "cc": {"74":78,"17":10,"19":4,"20":37,"71":30,"10":18} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 98 },
+          { "t": 10, "n": [38], "v": 85 },
+          { "t": 2,  "n": [1],  "v": 88, "cc": {"74":55,"23":10} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 72 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 60 },
+          { "t": 10, "n": [46], "v": 78 },
+          { "t": 2,  "n": [6],  "v": 100, "cc": {"74":22,"23":6} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 65 },
+          { "t": 1,  "n": [66], "v": 78, "cc": {"74":65,"17":8,"19":5,"20":37,"71":28,"10":22} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 102 },
+          { "t": 2,  "n": [4],  "v": 92, "cc": {"74":40,"23":8} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 62 },
+          { "t": 2,  "n": [6],  "v": 80, "cc": {"74":28,"23":5} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 },
+          { "t": 1,  "n": [73], "v": 90, "cc": {"74":85,"17":12,"19":4,"20":37,"71":32,"10":15} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 96 },
+          { "t": 10, "n": [38], "v": 100 },
+          { "t": 2,  "n": [1],  "v": 105, "cc": {"74":72,"23":12} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 65 },
+          { "t": 10, "n": [46], "v": 80 },
+          { "t": 2,  "n": [6],  "v": 88, "cc": {"74":38,"23":7} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 }
+      ]},
+
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 104 },
+          { "t": 2,  "n": [6],  "v": 108, "cc": {"74":18,"23":6} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 72 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 60 },
+          { "t": 2,  "n": [9],  "v": 85, "cc": {"74":45,"23":8} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 65 },
+          { "t": 1,  "n": [66], "v": 80, "cc": {"74":72,"17":9,"19":5,"20":37,"71":28,"10":20} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 99 },
+          { "t": 10, "n": [38], "v": 86 },
+          { "t": 2,  "n": [6],  "v": 94, "cc": {"74":30,"23":7} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 63 },
+          { "t": 10, "n": [46], "v": 75 },
+          { "t": 2,  "n": [4],  "v": 90, "cc": {"74":22,"23":5} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 },
+          { "t": 1,  "n": [73], "v": 85, "cc": {"74":80,"17":11,"19":4,"20":37,"71":30,"10":18} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 101 },
+          { "t": 2,  "n": [1],  "v": 100, "cc": {"74":58,"23":10} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 62 },
+          { "t": 2,  "n": [6],  "v": 82, "cc": {"74":26,"23":6} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 72 },
+          { "t": 1,  "n": [66], "v": 88, "cc": {"74":70,"17":10,"19":5,"20":37,"71":28,"10":22} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 97 },
+          { "t": 10, "n": [38], "v": 103 },
+          { "t": 2,  "n": [6],  "v": 110, "cc": {"74":85,"23":14} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 65 },
+          { "t": 10, "n": [46], "v": 82 },
+          { "t": 2,  "n": [9],  "v": 95, "cc": {"74":42,"23":8} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 }
+      ]},
+
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 104 },
+          { "t": 2,  "n": [11], "v": 112, "cc": {"74":18,"23":6} },
+          { "t": 3,  "n": [62,69], "v": 60, "dur": 8.0, "cc": {"74":26,"72":95,"73":55} },
+          { "t": 6,  "n": [62,69], "v": 50, "dur": 8.0, "cc": {"74":20,"73":68,"72":95,"91":72,"88":78} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 72 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 62 },
+          { "t": 2,  "n": [11], "v": 88, "cc": {"74":38,"23":8} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 66 },
+          { "t": 1,  "n": [66], "v": 84, "cc": {"74":75,"17":9,"19":5,"20":37,"71":28,"10":20} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 100 },
+          { "t": 10, "n": [38], "v": 87 },
+          { "t": 2,  "n": [2],  "v": 90, "cc": {"74":55,"23":10} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 60 },
+          { "t": 10, "n": [46], "v": 78 },
+          { "t": 2,  "n": [11], "v": 96, "cc": {"74":28,"23":6} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 65 },
+          { "t": 1,  "n": [74], "v": 88, "cc": {"74":82,"17":11,"19":4,"20":37,"71":30,"10":16} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 103 },
+          { "t": 2,  "n": [9],  "v": 92, "cc": {"74":42,"23":8} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 63 },
+          { "t": 2,  "n": [11], "v": 84, "cc": {"74":25,"23":5} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 },
+          { "t": 1,  "n": [66], "v": 80, "cc": {"74":68,"17":9,"19":5,"20":37,"71":28,"10":22} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 98 },
+          { "t": 10, "n": [38], "v": 101 },
+          { "t": 2,  "n": [2],  "v": 105, "cc": {"74":68,"23":12} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 62 },
+          { "t": 10, "n": [46], "v": 80 },
+          { "t": 2,  "n": [11], "v": 90, "cc": {"74":35,"23":7} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 66 }
+      ]},
+
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 106 },
+          { "t": 2,  "n": [11], "v": 110, "cc": {"74":20,"23":6} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 72 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 64 },
+          { "t": 2,  "n": [6],  "v": 88, "cc": {"74":50,"23":9} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 },
+          { "t": 1,  "n": [74], "v": 82, "cc": {"74":78,"17":10,"19":4,"20":37,"71":30,"10":18} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 100 },
+          { "t": 10, "n": [38], "v": 88 },
+          { "t": 2,  "n": [9],  "v": 95, "cc": {"74":62,"23":11} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 60 },
+          { "t": 10, "n": [46], "v": 76 },
+          { "t": 2,  "n": [11], "v": 100, "cc": {"74":30,"23":7} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 65 },
+          { "t": 1,  "n": [66], "v": 92, "cc": {"74":88,"17":13,"19":4,"20":37,"71":32,"10":14} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 103 },
+          { "t": 2,  "n": [2],  "v": 98, "cc": {"74":45,"23":9} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 62 },
+          { "t": 2,  "n": [11], "v": 86, "cc": {"74":28,"23":6} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 68 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [36], "v": 100 },
+          { "t": 10, "n": [38], "v": 105 },
+          { "t": 2,  "n": [6],  "v": 107, "cc": {"74":78,"23":13} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 70 }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 63 },
+          { "t": 10, "n": [46], "v": 82 },
+          { "t": 2,  "n": [9],  "v": 93, "cc": {"74":40,"23":8} }
+      ]},
+      { "d": 0.25, "tracks": [
+          { "t": 10, "n": [42], "v": 67 },
+          { "t": 1,  "n": [73], "v": 86, "cc": {"74":75,"17":10,"19":5,"20":37,"71":28,"10":20} }
+      ]}
+    ]
+  }
+</textarea>
 </div>
 
 <!-- ── Pattern Bank + Song Mode ──────────────────────────────────────────── -->
@@ -828,9 +1328,14 @@
 <div id="log">Click a pad or press PLAY to start.</div>
 
 <script type="module">
-import { Sequencer } from './sequencer.js?v=18';
+import { Sequencer }        from './sequencer.js?v=18';
 import { MasterFx, makeCurve, divToSec } from './fx.js';
-import { offlineRender } from './render.js';
+import { offlineRender }   from './render.js';
+import { SynthLab }        from './synth-lab.js';
+
+// ── Synth Lab singleton ───────────────────────────────────────────────────────
+const synthLab = new SynthLab();
+window._synthLab = synthLab; // debug handle
 
 // ─── Knob class ────────────────────────────────────────────────────────────
 class Knob {
@@ -885,7 +1390,7 @@ class Knob {
     c.beginPath(); c.arc(cx, cy, r, sa, ea);
     c.strokeStyle = '#252525'; c.stroke();
     c.beginPath(); c.arc(cx, cy, r, sa, va);
-    c.strokeStyle = '#f90'; c.stroke();
+    c.strokeStyle = '#00d4ff'; c.stroke();
     c.beginPath();
     c.moveTo(cx + Math.cos(va) * 6, cy + Math.sin(va) * 6);
     c.lineTo(cx + Math.cos(va) * (r - 1), cy + Math.sin(va) * (r - 1));
@@ -986,6 +1491,7 @@ async function _doInit() {
 
   rack = new MasterFx(ctx);
   initFxUI();
+  synthLab.init(ctx);   // give SynthLab the AudioContext as soon as it's live
   log('Worklets ready — click any pad!');
   window._ctx = ctx; window._rack = rack;
   window._drumsNode = drumsNode; window._bassNode = bassNode;
@@ -1076,12 +1582,12 @@ const _axisOpts = DRUM_PARAMS.map(p => `<option value="${p.id}">${p.label}</opti
 const _dyzSelX  = Object.assign(document.createElement('select'), {
   innerHTML: _axisOpts,
   title: 'X axis parameter',
-  style: 'background:#0c0c0c;color:#f90;border:1px solid #2a1a00;font-family:monospace;font-size:.65rem;padding:.15rem;',
+  style: 'background:#0c0c0c;color:#00d4ff;border:1px solid #2a1a00;font-family:monospace;font-size:.65rem;padding:.15rem;',
 });
 const _dyzSelY  = Object.assign(document.createElement('select'), {
   innerHTML: _axisOpts,
   title: 'Y axis parameter',
-  style: 'background:#0c0c0c;color:#f90;border:1px solid #2a1a00;font-family:monospace;font-size:.65rem;padding:.15rem;',
+  style: 'background:#0c0c0c;color:#00d4ff;border:1px solid #2a1a00;font-family:monospace;font-size:.65rem;padding:.15rem;',
 });
 _dyzSelX.value = dyzX;
 _dyzSelY.value = dyzY;
@@ -1170,8 +1676,8 @@ let _drumPanelOpen = false;
 _drumToggleBtn.addEventListener('click', () => {
   _drumPanelOpen = !_drumPanelOpen;
   _drumPanel.style.display = _drumPanelOpen ? '' : 'none';
-  _drumToggleBtn.style.color  = _drumPanelOpen ? '#f90' : '#666';
-  _drumToggleBtn.style.borderColor = _drumPanelOpen ? '#4a3800' : '#222';
+  _drumToggleBtn.style.color  = _drumPanelOpen ? '#00d4ff' : '#666';
+  _drumToggleBtn.style.borderColor = _drumPanelOpen ? '#003040' : '#222';
 });
 // Append toggle button into the drum inst-hdr
 document.querySelector('.inst-hdr').appendChild(_drumToggleBtn);
@@ -1591,11 +2097,11 @@ function getSeq() {
   if (!seq) {
     seq = new Sequencer(ctx, { drums: drumsNode, bass: bassNode,
                                buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode });
-    // Wire live UI state so pads/axes affect sequence playback in real time.
-    // liveCC is used as base; per-note JSON CCs layer on top.
     seq.liveCC = { bass: bassCC, buchla: buchlaCC };
-    // OCT knob shifts all bass MIDI notes. Default 48 = +4 oct (matches offline renderer).
     seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
+    seq.synthLab = synthLab;  // enable Synth Lab track playback
+    synthLab._seq = seq;      // let SynthLab register note-routing overrides
+    synthLab._reapplyOverrides(); // re-register any patches loaded before sequencer existed
   }
   return seq;
 }
@@ -1633,6 +2139,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     document.getElementById('btn-play').disabled = true;
     document.getElementById('btn-stop').disabled = false;
     if (rack) rack.attach(s._instrGains, ctx.destination);
+    synthLab.connectToMaster(s._masterGain); // route synth slots through seq master gain
     startViz();
   } catch (e) {
     log('Seq error: ' + e);
@@ -2074,6 +2581,32 @@ document.getElementById('btn-load-sheet').addEventListener('click', async () => 
   }
 });
 
+/**
+ * Build a context string describing any active Synth Lab instruments.
+ * Injected into chat/evolve so the LLMs know which instruments have been
+ * replaced and can compose natively for them (using the old track type
+ * which now routes to the new synth).
+ */
+function _synthLabContext() {
+  const T_NAMES = { 2: 'Bass FM (t:2)', 1: 'Poly FM (t:1)', 6: 'Pads (t:6)', 3: 'Rhodes (t:3)' };
+  const lines = [];
+  for (let i = 0; i < 4; i++) {
+    const state = synthLab.getSlotState(i);
+    if (!state?.name) continue;
+    const legacyT = synthLab.getSlotAssignment(i);
+    const label   = T_NAMES[legacyT] ?? `Slot ${i}`;
+    const mods = state.modules;
+    const desc = [
+      `waveform=${mods?.vco?.waveform ?? '?'}`,
+      `filter=${mods?.vcf?.type ?? '?'} cutoff=${mods?.vcf?.cutoff ?? '?'}Hz`,
+      mods?.effects?.length ? `fx:${mods.effects.map(e => e.type).join('+')}` : null,
+    ].filter(Boolean).join(', ');
+    lines.push(`  ${label} → replaced by "${state.name}" (${desc})`);
+  }
+  if (!lines.length) return '';
+  return `\n\nACTIVE SYNTH LAB INSTRUMENTS (these replace the default WASM synths — compose for them using the same track IDs):\n${lines.join('\n')}`;
+}
+
 async function sendChat() {
   const msg = chatInput.value.trim();
   if (!msg || !sessionId) return;
@@ -2083,7 +2616,8 @@ async function sendChat() {
   try {
     const res  = await fetch(`${API}/chat`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, message: msg }),
+      body: JSON.stringify({ session_id: sessionId, message: msg,
+                             synth_context: _synthLabContext() }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -2122,7 +2656,8 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
     const res = await fetch(`${API}/sheet/evolve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, section }),
+      body: JSON.stringify({ session_id: sessionId, section,
+                             synth_context: _synthLabContext() }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -3153,6 +3688,28 @@ document.getElementById('btn-song-screen').addEventListener('click', () => {
 });
 document.getElementById('btn-song-back').addEventListener('click', () => showScreen('main'));
 
+// Song builder play/stop — delegate to the legacy transport buttons
+document.getElementById('song-play-btn').addEventListener('click', () => {
+  document.getElementById('btn-play').click();
+});
+document.getElementById('song-stop-btn').addEventListener('click', () => {
+  document.getElementById('btn-stop').click();
+});
+
+// Keep song builder buttons in sync with the legacy transport state
+const _legacyPlay = document.getElementById('btn-play');
+const _legacyStop = document.getElementById('btn-stop');
+const _songPlay   = document.getElementById('song-play-btn');
+const _songStop   = document.getElementById('song-stop-btn');
+new MutationObserver(() => {
+  _songPlay.disabled = _legacyPlay.disabled;
+  _songStop.disabled = _legacyStop.disabled;
+}).observe(_legacyPlay, { attributes: true });
+new MutationObserver(() => {
+  _songStop.disabled = _legacyStop.disabled;
+  _songPlay.disabled = _legacyPlay.disabled;
+}).observe(_legacyStop, { attributes: true });
+
 // ── Chat panel in screen-chat ─────────────────────────────────────────────────
 // On the chat screen, embed the chat section directly (centred column).
 // On main/room screens it moves back to the floating overlay.
@@ -3199,6 +3756,31 @@ openRoom = function(faceObj) {
   _origOpenRoom(faceObj);
   buildQuickNav(faceObj);
 };
+
+// ── Synth Lab navigation ──────────────────────────────────────────────────────
+
+let _synthLabPrevScreen = 'main';
+document.getElementById('btn-synth-lab').addEventListener('click', () => {
+  // Remember where we came from
+  const cur = document.body.className.replace('on-', '');
+  if (cur !== 'synth-lab') _synthLabPrevScreen = cur;
+  synthLab.buildUI();
+  // Bootstrap an AudioContext so the piano works even before the sequencer starts.
+  // If the sequencer already ran, reuse its context (window._ctx set in initAudio).
+  if (!synthLab._ctx) {
+    const existingCtx = window._ctx || new (window.AudioContext || window.webkitAudioContext)();
+    synthLab.init(existingCtx);
+  }
+  showScreen('synth-lab');
+});
+
+document.getElementById('btn-synth-lab-back').addEventListener('click', () => {
+  showScreen(_synthLabPrevScreen || 'main');
+});
+
+document.getElementById('btn-wizard-close').addEventListener('click', () => {
+  document.getElementById('synth-wizard-overlay').classList.remove('open');
+});
 
 // Initial state
 showScreen('chat');

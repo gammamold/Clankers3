@@ -14,10 +14,15 @@
  *   t:1   Poly FM Bass      (buchla-worklet)
  *   t:6   HybridSynth Pads  (pads-worklet)
  *   t:3   Rhodes FM piano   (rhodes-worklet)
+ *   t:7   Synth Lab slot 0  (SynthVoice / Web Audio)
+ *   t:8   Synth Lab slot 1
+ *   t:9   Synth Lab slot 2
+ *   t:11  Synth Lab slot 3
  *
  * Usage:
  *   const seq = new Sequencer(audioCtx, { drums, bass, buchla, pads, rhodes });
  *   // each value is an AudioWorkletNode
+ *   seq.synthLab = synthLabInstance; // optional: enables Synth Lab playback
  *   seq.load(sheet);
  *   seq.start();
  *   seq.stop();
@@ -89,9 +94,22 @@ export class Sequencer {
     this._stepIdx   = 0;
 
     // Per-instrument mute/solo/volume
-    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false };
-    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false };
-    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0  };
+    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false };
+    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false };
+    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,  synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0  };
+
+    /**
+     * SynthLab instance — set externally to enable Synth Lab playback.
+     * @type {import('./synth-lab.js').SynthLab|null}
+     */
+    this.synthLab = null;
+
+    /**
+     * When a SynthLab slot is active, mirror old-track-type notes to it.
+     * e.g. { 2: 0 } means t:2 (Bass FM) notes ALSO trigger synth slot 0.
+     * Set by SynthLab.loadPatch() / clearSlot() via seq.setSynthOverride().
+     */
+    this.synthOverrides = {}; // { trackType: slotIndex }
 
     this.loop  = true;
     this.onEnd = null;
@@ -111,8 +129,9 @@ export class Sequencer {
   // ── Public API ─────────────────────────────────────────────────────────────
 
   load(sheet) {
-    this.sheet = sheet;
-    this._bpm  = sheet.bpm ?? 120;
+    this.sheet      = sheet;
+    this._lastSheet = sheet;
+    this._bpm       = sheet.bpm ?? 120;
     this._compile(sheet);
   }
 
@@ -206,6 +225,24 @@ export class Sequencer {
   }
   getVolumes() { return { ...this._volumes }; }
 
+  /**
+   * Register a SynthLab slot as the replacement for a legacy track type.
+   * e.g. setSynthOverride(2, 0)  → t:2 (Bass FM) notes also play on synth slot 0.
+   * Pass slotIndex=null to remove override. Reloads the current sheet to recompile.
+   */
+  setSynthOverride(trackType, slotIndex) {
+    if (slotIndex === null || slotIndex === undefined) {
+      delete this.synthOverrides[trackType];
+    } else {
+      this.synthOverrides[trackType] = slotIndex;
+    }
+    // Recompile if a sheet is loaded so new events are immediately scheduled
+    if (this._steps.length) {
+      const sheet = this._lastSheet;
+      if (sheet) this.load(sheet);
+    }
+  }
+
   // ── Internal ───────────────────────────────────────────────────────────────
 
   _isAudible(type) {
@@ -218,6 +255,14 @@ export class Sequencer {
     for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
       if (this._instrGains?.[type]) {
         this._instrGains[type].gain.value = this._isAudible(type) ? this._volumes[type] : 0.0;
+      }
+    }
+    // Propagate mute/volume to SynthLab slots
+    if (this.synthLab) {
+      for (let i = 0; i < 4; i++) {
+        const key = `synth${i}`;
+        this.synthLab.setMute(i, !this._isAudible(key));
+        this.synthLab.setVolume(i, this._volumes[key]);
       }
     }
   }
@@ -286,6 +331,27 @@ export class Sequencer {
                        ccJson: JSON.stringify(cc), durBeats });
           }
         }
+
+        // Synth Lab slots (t:7 = slot 0, t:8 = slot 1, t:9 = slot 2, t:11 = slot 3)
+        const SYNTH_T_SLOT = { 7: 0, 8: 1, 9: 2, 11: 3 };
+        if (track.t in SYNTH_T_SLOT) {
+          const slotIndex = SYNTH_T_SLOT[track.t];
+          const durBeats  = track.dur ?? step.d ?? 0.5;
+          for (const note of notes) {
+            raw.push({ beatTime: beat, type: `synth${slotIndex}`, midiNote: note,
+                       velocity: vel, durBeats });
+          }
+        }
+
+        // SynthLab override — if a slot replaces a legacy track type, mirror notes to it
+        if (track.t in this.synthOverrides) {
+          const slotIndex = this.synthOverrides[track.t];
+          const durBeats  = track.dur ?? step.d ?? 0.5;
+          for (const note of notes) {
+            raw.push({ beatTime: beat, type: `synth${slotIndex}`, midiNote: note,
+                       velocity: vel, durBeats });
+          }
+        }
       }
 
       beat += d;
@@ -329,6 +395,16 @@ export class Sequencer {
   }
 
   _sendTrigger(ev, audioTime) {
+    // Synth Lab events are handled separately below (no worklet port)
+    const SYNTH_TYPE_SLOT = { synth0: 0, synth1: 1, synth2: 2, synth3: 3 };
+    if (ev.type in SYNTH_TYPE_SLOT) {
+      if (this.synthLab) {
+        const holdMs = ev.durBeats * (60 / this._bpm) * 1000;
+        this.synthLab.scheduleNote(SYNTH_TYPE_SLOT[ev.type], ev.midiNote, ev.velocity, audioTime, holdMs);
+      }
+      return;
+    }
+
     const port = this._ports[ev.type];
     if (!port) return;
 
