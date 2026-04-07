@@ -27,8 +27,10 @@ AVAILABLE MODULES & PARAMETERS
 
 ── FM MODULATION (vco_fm) ──
   enabled:    true | false
-  ratio:      0.5 to 16 (modulator freq = carrier freq × ratio)
-  amount:     0 to 1000 (modulation index in Hz)
+  ratio:      0.25 to 16 (modulator freq = carrier freq × ratio)
+              1.0 = pure tone, 3.14 = metallic/inharmonic, 7.0 = bell/glassy
+  amount:     0 to 8000 (modulation depth in Hz — controls punch/brightness)
+              100–400 = subtle, 800–2000 = punchy, 3000+ = harsh/metallic
   waveform:   "sine" | "square" | "sawtooth" | "triangle"
 
 ── FILTERS (vcf) ──
@@ -74,7 +76,7 @@ REPLACES OPTIONS (which Clanker this replaces)
   "poly_fm"    — the melodic synth / chords
   "pad_synth"  — pads and atmosphere
   "rhodes"     — rhodes / keys
-  "drums"      — drum machine (not yet supported, skip)
+  "drums"      — FM percussion patch (use for kicks, snares, cymbals, toms)
 
 ═══════════════════════════════════════════════
 BEHAVIOUR RULES
@@ -99,8 +101,8 @@ The JSON must follow this schema exactly:
 {
   "id": "",
   "name": "string",
-  "type": "subtractive",
-  "replaces": "bass_fm",
+  "type": "subtractive",            // use "fm_drum" for percussive FM patches
+  "replaces": "bass_fm",            // use "drums" for FM percussion patches
   "modules": {
     "vco": { waveform, octave, detune, enabled2, waveform2, octave2, detune2, mix2 },
     "vco_fm": { enabled, ratio, amount, waveform },
@@ -117,7 +119,18 @@ The JSON must follow this schema exactly:
 
 5. SOUND FX: You can also build sound effect instruments — impacts, sweeps, risers, drones. Same JSON format, just designed for atmospheric/textural use.
 
-6. Keep responses concise. You are embedded in a UI, not a chat app.`;
+6. FM PERCUSSION (Elektron Model:Cycles style):
+   - Set vco_fm.enabled: true and adsr_amp.sustain: 0 for all percussive patches.
+   - vco_fm.ratio controls "color": 1.0 = punchy/tonal, 2.0 = warm, 3.14 = metallic, 7.0 = bell.
+   - vco_fm.amount controls punch/brightness: kick=200–600, snare=400–1200, metal=1000–3000.
+   - Short percussive envelopes: attack=0.001–0.005s, decay=0.05–0.5s, sustain=0, release=0.03–0.1s.
+   - For pitch sweep (kick thud): use adsr_filter with fast decay on filter amount.
+   - Always set type: "fm_drum" and replaces: "drums" for percussion patches.
+   - Kick: ratio≈1.0, amount≈300, decay≈0.3s. Snare: ratio≈1.5–2.5, add noise_enabled:true, noise_mix:0.4.
+   - Cymbal/hat: ratio≈7–11 (inharmonic), amount≈2000+, decay≈0.05–0.15s.
+   - Perc/tom: ratio≈2–3, amount≈400–800, decay≈0.08–0.2s.
+
+7. Keep responses concise. You are embedded in a UI, not a chat app.`;
 
 /**
  * Extract SYNTH_JSON block from LLM response.

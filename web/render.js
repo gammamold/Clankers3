@@ -159,9 +159,19 @@ export async function offlineRender(sheet, opts = {}) {
   // ── 6. Compile sheet and pre-schedule all events ──────────────────────────
   // Events are queued in the worklet's internal _queue; the worklet drains
   // them at the correct sample time during process() — same as live mode.
+  // Push FM drum voice params if provided (mirrors live session state)
+  if (opts.fmDrumParams && Array.isArray(opts.fmDrumParams)) {
+    opts.fmDrumParams.forEach((vp, vi) => {
+      if (!vp) return;
+      for (const [param, value] of Object.entries(vp)) {
+        fmDrumsNode.port.postMessage({ type: 'setVoiceParam', voiceId: vi, param, value });
+      }
+    });
+  }
+
   const seq = new Sequencer(offCtx, {
     drums: drumsNode, bass: bassNode, buchla: buchlaNode,
-    pads: padsNode, rhodes: rhodesNode,
+    pads: padsNode, rhodes: rhodesNode, fmDrums: fmDrumsNode,
   });
   seq.bassOctaveOffset = bassOctaveOffset;
   seq.load(sheet);

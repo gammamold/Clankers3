@@ -127,9 +127,40 @@ export const PAD_TEMPLATE = {
   voice: { polyphony: 8, glide: 0.05 },
 };
 
+export const FM_DRUM_TEMPLATE = {
+  id: '',
+  name: 'FM Drum',
+  type: 'fm_drum',
+  replaces: 'drums',
+  modules: {
+    vco: {
+      waveform: 'sine',
+      octave: 0,
+      detune: 0,
+      enabled2: false,
+      waveform2: 'sine',
+      octave2: 0,
+      detune2: 0,
+      mix2: 0,
+      unison: 1,
+      unison_detune: 0,
+      noise_enabled: false,
+      noise_mix: 0,
+    },
+    vco_fm: { enabled: true, ratio: 2.0, amount: 300, waveform: 'sine' },
+    vcf: { type: 'highpass', cutoff: 60, resonance: 1 },
+    adsr_amp:    { attack: 0.002, decay: 0.30, sustain: 0, release: 0.05 },
+    adsr_filter: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.05, amount: 0.3 },
+    lfo: { waveform: 'sine', rate: 1, amount: 0, enabled: false },
+    effects: [],
+  },
+  voice: { polyphony: 1, glide: 0 },
+};
+
 export const TEMPLATES = {
   subtractive: SUBTRACTIVE_TEMPLATE,
   bass: BASS_TEMPLATE,
   pad: PAD_TEMPLATE,
   lead: LEAD_TEMPLATE,
+  fm_drum: FM_DRUM_TEMPLATE,
 };

@@ -1,11 +1,11 @@
 /**
  * synth-lab.js — Synth Lab integration for Clankers 3
  *
- * Bridges the Synth Designer (subtractive Web Audio synth) into Clankers as a
+ * Bridges the Synth Designer (subtractive/FM Web Audio synth) into Clankers as a
  * new room with up to 4 playable synth slots.
  *
  * Track type mapping (ClankerBoy JSON sheets):
- *   t:7  → slot 0   t:8  → slot 1   t:9  → slot 2   t:11 → slot 3
+ *   t:7  → slot 0   t:8  → slot 1   t:9  → slot 2   t:11 → slot 3   t:12 → slot 4 (FM DRUMS)
  *
  * Note scheduling:
  *   Worklets get sample-accurate triggers. SynthVoice uses main-thread Web Audio,
@@ -20,9 +20,12 @@ import { ModulePanel }       from './synth/ui/ModulePanel.js';
 import { PianoKeys }         from './synth/ui/PianoKeys.js';
 import { LLMWizard }         from './synth/wizard/LLMWizard.js';
 
-/** Track types for slots 0–3 (t:10 = drums, so skip it) */
-export const SYNTH_SLOT_T = [7, 8, 9, 11];
-export const T_TO_SLOT    = { 7: 0, 8: 1, 9: 2, 11: 3 };
+/** Track types for slots 0–4 (t:10 = drums, so skip it; t:12 = FM DRUMS slot 4) */
+export const SYNTH_SLOT_T = [7, 8, 9, 11, 12];
+export const T_TO_SLOT    = { 7: 0, 8: 1, 9: 2, 11: 3, 12: 4 };
+
+/** Pre-filled wizard prompt for the FM DRUMS slot */
+const FM_DRUMS_WIZARD_PROMPT = 'I want an FM percussion patch — Elektron Model:Cycles style';
 
 /** Human-readable name for each legacy track type */
 const LEGACY_T_NAMES = { 1: 'POLY FM', 2: 'BASS FM', 3: 'RHODES EP', 6: 'HYBRID PADS' };
@@ -63,7 +66,7 @@ export class SynthLab {
     /** Slot index → legacy track type it currently replaces (default mapping) */
     this._slotLegacyT = { 0: 2, 1: 1, 2: 6, 3: 3 };
 
-    this._slots = Array.from({ length: 4 }, (_, i) => ({
+    this._slots = Array.from({ length: 5 }, (_, i) => ({
       index:  i,
       state:  null,
       voice:  null,
@@ -138,8 +141,10 @@ export class SynthLab {
 
     if (this._editingSlot === slotIndex) this._renderEditor(slotIndex);
     this._refreshSlotCards();
-    // Register override so existing sheets route legacy track notes here too
-    this._seq?.setSynthOverride(this._slotLegacyT[slotIndex], slotIndex);
+    // Register override so existing sheets route legacy track notes here too (not for FM DRUMS slot 4)
+    if (this._slotLegacyT[slotIndex] != null) {
+      this._seq?.setSynthOverride(this._slotLegacyT[slotIndex], slotIndex);
+    }
     this._saveSession();
     console.log(`[SynthLab] slot ${slotIndex} loaded: "${patchState.name}" — overrides t:${this._slotLegacyT[slotIndex]}`);
   }
@@ -151,8 +156,10 @@ export class SynthLab {
     if (slot.voice) { try { slot.voice.destroy(); } catch (_) {} slot.voice = null; }
     slot.state = null;
     slot.bridge.init({});
-    // Remove override — legacy track resumes playing its original WASM instrument
-    this._seq?.setSynthOverride(this._slotLegacyT[slotIndex], null);
+    // Remove override — legacy track resumes playing its original WASM instrument (not for FM DRUMS slot 4)
+    if (this._slotLegacyT[slotIndex] != null) {
+      this._seq?.setSynthOverride(this._slotLegacyT[slotIndex], null);
+    }
     if (this._editingSlot === slotIndex) { this._editingSlot = null; this._clearEditor(); }
     this._refreshSlotCards();
     this._saveSession();
@@ -204,13 +211,16 @@ export class SynthLab {
     row.innerHTML = '';
 
     this._slots.forEach((slot, i) => {
+      const isFmDrums = i === 4;
       const t    = this._slotLegacyT[i];
-      const name = LEGACY_T_NAMES[t] ?? `SLOT ${i}`;
+      const name = isFmDrums ? 'FM DRUMS' : (LEGACY_T_NAMES[t] ?? `SLOT ${i}`);
+      const accentStyle = isFmDrums ? ' style="color:#f4a261"' : '';
 
       const card = document.createElement('div');
       card.className = 'synth-slot-card' + (this._editingSlot === i ? ' ssc-active' : '');
+      if (isFmDrums) card.style.borderColor = '#f4a261';
 
-      const assignSel = `
+      const assignSel = isFmDrums ? '' : `
         <select class="ssc-assign-sel" title="Assign slot to instrument track">
           <option value="2" ${t===2?'selected':''}>BASS FM</option>
           <option value="1" ${t===1?'selected':''}>POLY FM</option>
@@ -220,7 +230,7 @@ export class SynthLab {
 
       if (slot.state) {
         card.innerHTML = `
-          <div class="ssc-slot-label">${name}</div>
+          <div class="ssc-slot-label"${accentStyle}>${name}</div>
           ${assignSel}
           <div class="ssc-name">${slot.state.name || 'Untitled'}</div>
           <div class="ssc-tag">t:${SYNTH_SLOT_T[i]}</div>
@@ -237,7 +247,7 @@ export class SynthLab {
         card.addEventListener('click', e => { if (!e.target.closest('button,select')) this._openEditor(i); });
       } else {
         card.innerHTML = `
-          <div class="ssc-empty">${name}</div>
+          <div class="ssc-empty"${accentStyle}>${name}</div>
           ${assignSel}
           <div class="ssc-tag">t:${SYNTH_SLOT_T[i]} · empty</div>
           <div class="ssc-btns" style="margin-top:.3rem;">
@@ -248,9 +258,11 @@ export class SynthLab {
         card.querySelector('.ssc-load-btn').addEventListener('click', () => this._pickAndLoadFile(i));
       }
 
-      card.querySelector('.ssc-assign-sel').addEventListener('change', e => {
-        this.reassignSlot(i, Number(e.target.value));
-      });
+      if (!isFmDrums) {
+        card.querySelector('.ssc-assign-sel').addEventListener('change', e => {
+          this.reassignSlot(i, Number(e.target.value));
+        });
+      }
 
       row.appendChild(card);
     });
@@ -347,6 +359,23 @@ export class SynthLab {
     vcoEl.appendChild(_makeToggle('NOISE',  m.vco.noise_enabled || false,                                  x => { bridge.set('modules.vco.noise_enabled',  x); v?.setVcoParam('noise_enabled', x); }));
     rackEl.appendChild(vcoEl); panels.push(vcoPanel);
 
+    // ── FM Modulator (only shown when patch uses FM) ──
+    if (m.vco_fm?.enabled) {
+      const fmPanel = new ModulePanel({
+        title: 'FM MOD', color: '#f4a261', bridge,
+        knobs: [
+          { label: 'RATIO',  path: 'modules.vco_fm.ratio',  min: 0.25, max: 16,   scale: 'log', decimals: 2, onAudio: x => v?.setFmParam('ratio', x) },
+          { label: 'AMOUNT', path: 'modules.vco_fm.amount', min: 0,    max: 8000, scale: 'log', decimals: 0, unit: 'Hz', onAudio: x => v?.setFmParam('amount', x) },
+        ],
+      });
+      const fmEl = fmPanel.render();
+      fmEl.appendChild(_makeSelect('MOD WAVE', ['sine','sawtooth','square','triangle'], m.vco_fm.waveform,
+        x => { bridge.set('modules.vco_fm.waveform', x); v?.setFmParam('waveform', x); }));
+      fmEl.appendChild(_makeToggle('FM ON', m.vco_fm.enabled,
+        x => { bridge.set('modules.vco_fm.enabled', x); v?.setFmParam('enabled', x); }));
+      rackEl.appendChild(fmEl); panels.push(fmPanel);
+    }
+
     // ── Filter ──
     const vcfPanel = new ModulePanel({
       title: 'FILTER', color: '#2a9d8f', bridge,
@@ -413,14 +442,20 @@ export class SynthLab {
     overlay.classList.add('open');
     body.innerHTML = '';
 
+    const isFmDrums = slotIndex === 4;
     const wizard = new LLMWizard(state => {
       overlay.classList.remove('open');
-      // Route to the slot that currently owns the target legacy track, or fall back to the one opened from
-      const targetT    = REPLACES_KEY_TO_T[state.replaces];
-      const targetSlot = (targetT !== undefined ? this._legacyTToSlot[targetT] : undefined) ?? slotIndex;
+      // FM DRUMS slot always loads into slot 4; others route by replaces field
+      let targetSlot;
+      if (isFmDrums) {
+        targetSlot = 4;
+      } else {
+        const targetT = REPLACES_KEY_TO_T[state.replaces];
+        targetSlot = (targetT !== undefined ? this._legacyTToSlot[targetT] : undefined) ?? slotIndex;
+      }
       this.loadPatch(targetSlot, state);
       this._openEditor(targetSlot);
-    });
+    }, isFmDrums ? FM_DRUMS_WIZARD_PROMPT : null);
     wizard.render(body);
   }
 
@@ -455,7 +490,7 @@ export class SynthLab {
   /** Called when the sequencer connects — registers overrides for any already-loaded slots. */
   _reapplyOverrides() {
     this._slots.forEach((slot, i) => {
-      if (slot.state) {
+      if (slot.state && this._slotLegacyT[i] != null) {
         this._seq?.setSynthOverride(this._slotLegacyT[i], i);
       }
     });

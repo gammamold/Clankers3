@@ -6,13 +6,11 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Audio output (generated — don't commit renders)
-output/*.wav
-output/*.mp3
-output/logs/
+# Output (generated)
+output/
 
-# Samples (large binary files)
-samples/
+# Node
+node_modules/
 
 # Secrets / local config overrides
 .env
@@ -23,6 +21,7 @@ samples/
 
 # Rust / WASM build artifacts
 clankers_dsp/target/
+clankers_dsp/pkg/
 
 # OS
 .DS_Store

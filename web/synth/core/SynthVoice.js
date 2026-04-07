@@ -339,6 +339,30 @@ export class SynthVoice {
     this.adsrFilter._params[key] = value;
   }
 
+  setFmParam(key, value) {
+    if (!this._built || !this._fmOsc) return;
+    const t = this.engine.currentTime;
+    switch (key) {
+      case 'ratio':
+        // ratio is relative to the current note frequency — update at next noteOn,
+        // but also update now if a frequency is known
+        this._fm.ratio = value;
+        break;
+      case 'amount':
+        this._fm.amount = value;
+        this._fmDepth.gain.setTargetAtTime(value, t, 0.01);
+        break;
+      case 'waveform':
+        this._fm.waveform = value;
+        this._fmOsc.type = value;
+        break;
+      case 'enabled':
+        this._fm.enabled = value;
+        this._fmDepth.gain.setTargetAtTime(value ? (this._fm.amount || 0) : 0, t, 0.01);
+        break;
+    }
+  }
+
   setLfoParam(key, value) {
     if (!this._built) return;
     const t = this.engine.currentTime;

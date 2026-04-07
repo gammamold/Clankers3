@@ -1,12 +1,4 @@
-anthropic
-google-genai
-openai
-numpy
-scipy
-pydub
-requests
-python-dotenv
-dawdreamer; platform_system=="Windows"
-flask
 fastapi
 uvicorn[standard]
+anthropic
+python-dotenv

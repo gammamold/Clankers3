@@ -18,6 +18,7 @@
  *   t:8   Synth Lab slot 1
  *   t:9   Synth Lab slot 2
  *   t:11  Synth Lab slot 3
+ *   t:12  Synth Lab slot 4  (FM DRUMS — percussive FM patch)
  *
  * Usage:
  *   const seq = new Sequencer(audioCtx, { drums, bass, buchla, pads, rhodes });
@@ -94,9 +95,9 @@ export class Sequencer {
     this._stepIdx   = 0;
 
     // Per-instrument mute/solo/volume
-    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false };
-    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false };
-    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,  synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0  };
+    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,  synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0,  synth4: 1.0  };
 
     /**
      * SynthLab instance — set externally to enable Synth Lab playback.
@@ -259,7 +260,7 @@ export class Sequencer {
     }
     // Propagate mute/volume to SynthLab slots
     if (this.synthLab) {
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         const key = `synth${i}`;
         this.synthLab.setMute(i, !this._isAudible(key));
         this.synthLab.setVolume(i, this._volumes[key]);
@@ -332,8 +333,8 @@ export class Sequencer {
           }
         }
 
-        // Synth Lab slots (t:7 = slot 0, t:8 = slot 1, t:9 = slot 2, t:11 = slot 3)
-        const SYNTH_T_SLOT = { 7: 0, 8: 1, 9: 2, 11: 3 };
+        // Synth Lab slots (t:7 = slot 0, t:8 = slot 1, t:9 = slot 2, t:11 = slot 3, t:12 = slot 4 FM DRUMS)
+        const SYNTH_T_SLOT = { 7: 0, 8: 1, 9: 2, 11: 3, 12: 4 };
         if (track.t in SYNTH_T_SLOT) {
           const slotIndex = SYNTH_T_SLOT[track.t];
           const durBeats  = track.dur ?? step.d ?? 0.5;
@@ -396,7 +397,7 @@ export class Sequencer {
 
   _sendTrigger(ev, audioTime) {
     // Synth Lab events are handled separately below (no worklet port)
-    const SYNTH_TYPE_SLOT = { synth0: 0, synth1: 1, synth2: 2, synth3: 3 };
+    const SYNTH_TYPE_SLOT = { synth0: 0, synth1: 1, synth2: 2, synth3: 3, synth4: 4 };
     if (ev.type in SYNTH_TYPE_SLOT) {
       if (this.synthLab) {
         const holdMs = ev.durBeats * (60 / this._bpm) * 1000;

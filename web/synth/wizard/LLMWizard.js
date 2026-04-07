@@ -6,8 +6,9 @@
 import { callLLM, extractSynthJSON, MODELS } from './SynthAgent.js';
 
 export class LLMWizard {
-  constructor(onComplete) {
+  constructor(onComplete, prefill = null) {
     this.onComplete = onComplete;
+    this._prefill   = prefill;
     this._messages  = [];
     this._apiKey    = sessionStorage.getItem('clankers_api_key') || '';
     this._model     = sessionStorage.getItem('clankers_model') || MODELS.haiku;
@@ -177,7 +178,10 @@ export class LLMWizard {
   }
 
   async _greet() {
-    await this._llmTurn(null); // null = no user message, just trigger greeting
+    if (this._prefill) {
+      this._addMessage('user', this._prefill);
+    }
+    await this._llmTurn(this._prefill || null);
   }
 
   async _send() {
