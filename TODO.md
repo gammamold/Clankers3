@@ -78,6 +78,37 @@
 
 ---
 
+## Modular Plug/Unplug Synth Architecture
+
+> Full plan: `.claude/plans/wobbly-wibbling-squid.md`
+>
+> Currently the WASM instruments and Synth Lab are two parallel systems with separate dispatch paths in the sequencer. The goal is a unified slot system where any slot can hold either type, instruments can be swapped at runtime, and custom patches live in a persistent library.
+
+### Phase 1 — `InstrumentAdapter` abstraction
+- [ ] **Create `web/synth/core/InstrumentAdapter.js`** — base class with `connect()`, `disconnect()`, `scheduleNote()`, `setParams()`, `stop()`, `getState()`
+- [ ] **`WasmInstrumentAdapter`** — wraps `AudioWorkletNode`, forwards `scheduleNote()` as `port.postMessage({type:'trigger',...})`, handles worklet ready handshake
+- [ ] **`WebAudioInstrumentAdapter`** — wraps `SynthVoice` + `JSONBridge`, forwards `scheduleNote()` via setTimeout scheduling
+- [ ] **`SynthVoice.js` minor** — ensure clean `connect()`/`disconnect()` lifecycle
+
+### Phase 2 — `InstrumentRegistry`
+- [ ] **Create `web/synth/core/InstrumentRegistry.js`** — catalog with `register()`, `unregister()`, `get()`, `list(role?)`, `save()`/`restore()` to localStorage
+- [ ] Register 5 built-in WASM instruments at startup with `builtIn: true`
+- [ ] Modify SynthLab forge to auto-register created patches in the registry
+- [ ] Persist custom instruments to `localStorage['clankers_instrument_library']`
+
+### Phase 3 — Slot manager + sequencer unification
+- [ ] **Refactor `web/synth-lab.js`** — slots hold `InstrumentAdapter` instances; add `plug(slotIndex, id)`, `unplug(slotIndex)`, `swap(slotIndex, id)`
+- [ ] **Refactor `web/sequencer.js`** — replace dual dispatch (`_ports` + `synthLab.scheduleNote`) with single `_sendTrigger()` through slot adapters; remove `synthOverrides` mechanism
+- [ ] **Modify `web/render.js`** — use adapter `connect(offlineCtx)` for offline rendering with custom instruments
+
+### Phase 4 — Library UI
+- [ ] Slot cards showing current instrument with swap/unplug buttons
+- [ ] Library browser panel, filterable by role (bass / lead / pad / keys / drums)
+- [ ] LLM wizard output auto-registered in library
+- [ ] Slot assignments persist to localStorage across reloads
+
+---
+
 ## Testing
 
 - [ ] **E2E test: full session flow** — start FastAPI → `POST /session/new` with brief → load returned sheet into sequencer → play → verify audio.
