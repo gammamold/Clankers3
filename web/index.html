@@ -824,6 +824,49 @@
       .input-row input { font-size: .85rem; padding: .55rem .65rem; }
       body.on-chat #chat-overlay .chat-section { padding: .5rem .75rem; }
     }
+
+    /* 2.2 – Main screen: tighten spacing, shrink floating nav buttons */
+    @media (max-width: 640px) {
+      #screen-main { gap: 1.5rem; }
+      #faces-row { gap: 1rem; }
+      .face-card { padding: .75rem .5rem; }
+      /* Floating buttons: smaller and repositioned so they don't crowd */
+      #btn-song-screen { bottom: 1rem; left: 1rem; font-size: .72rem; padding: .4rem .7rem; }
+      #btn-synth-lab   { bottom: 3.5rem; right: 1rem; font-size: .72rem; padding: .4rem .7rem; }
+      #btn-chat-float  { bottom: 1rem; right: 1rem; font-size: .72rem; padding: .4rem .75rem; }
+    }
+
+    /* 2.3 – Room screen: layout restructure for narrow screens */
+    @media (max-width: 640px) {
+      #screen-room { padding: .75rem; }
+
+      /* Keep header top-padding so back button doesn't overlap */
+      #room-header { order: 1; padding: 2.5rem 0 .5rem; }
+
+      /* Pull quick-nav out of absolute position, place below header */
+      #room-quick-nav {
+        position: static;
+        order: 2;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: .3rem;
+        padding: 0 .5rem .5rem;
+      }
+      .qnav-face { font-size: .7rem; white-space: normal; text-align: center; }
+
+      /* Transport bar */
+      #room-transport { order: 3; margin-bottom: .75rem; gap: .4rem; }
+
+      /* Piano roll already 100% width — just reduce bottom margin */
+      #room-roll { margin-bottom: 1rem; }
+
+      /* FX panel: single column, no side padding */
+      #room-fx-panel { padding: 0; }
+      .room-fx-slot  { flex: none; width: 100%; min-width: 0; }
+
+      /* FX step buttons: grow from 13px to 18px for easier tapping */
+      .fx-step-btn { width: 18px; height: 18px; }
+    }
   </style>
 </head>
 <body class="on-chat">
