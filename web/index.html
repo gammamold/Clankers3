@@ -147,12 +147,48 @@
     /* Screen: Chat */
     #screen-chat { align-items: center; justify-content: center; }
     #chat-logo { font-family: monospace; font-size: 2.2rem; letter-spacing: .2em;
-                 color: #888; margin-bottom: 2.5rem; text-align: center; }
+                 color: #888; margin-bottom: 1.5rem; text-align: center; }
     #screen-chat .chat-section {
       width: 100%; max-width: 540px;
       display: flex; flex-direction: column;
     }
     #screen-chat .chat-section h2 { display: none; }
+
+    /* ── LLM Config Panel ── */
+    #llm-config-panel {
+      width: 100%; max-width: 540px;
+      background: #0d0d0d; border: 1px solid #222; border-radius: 4px;
+      padding: .7rem .9rem; margin-bottom: 1.2rem;
+      font-family: monospace;
+    }
+    #llm-config-hdr {
+      font-size: .65rem; letter-spacing: .12em; color: #444;
+      margin-bottom: .55rem;
+    }
+    #llm-config-hdr span { color: #00d4ff; margin-left: .5rem; font-size: .6rem; }
+    #llm-config-form {
+      display: flex; flex-wrap: wrap; gap: .4rem; align-items: center;
+    }
+    #llm-config-form select, #llm-config-form input[type="password"] {
+      background: #0e0e0e; color: #888; border: 1px solid #1e1e1e;
+      font-family: monospace; font-size: .72rem; padding: .3rem .45rem;
+      border-radius: 3px; outline: none;
+    }
+    #llm-config-form select:focus, #llm-config-form input[type="password"]:focus {
+      border-color: #333; color: #aaa;
+    }
+    #llm-provider  { flex: 0 0 auto; }
+    #llm-model     { flex: 1 1 140px; }
+    #llm-apikey    { flex: 1 1 180px; }
+    #llm-apikey::placeholder { color: #333; }
+    #btn-llm-confirm {
+      flex: 0 0 auto; font-size: .72rem; padding: .3rem .6rem;
+      background: #0a1a0a; border: 1px solid #1e3e1e; color: #3a3;
+      cursor: pointer; border-radius: 3px; font-family: monospace;
+    }
+    #btn-llm-confirm:hover  { border-color: #2e6e2e; color: #5d5; }
+    #btn-llm-confirm.saved  { border-color: #00d4ff; color: #00d4ff; background: #00121a; }
+    #llm-config-status { font-size: .6rem; color: #444; margin-top: .35rem; }
     /* Instrument quick-nav strip in room */
     #room-quick-nav {
       position: absolute; top: .7rem; right: 1rem;
@@ -746,6 +782,22 @@
 <!-- ─── Screen: Chat (initial state) ──────────────────────────── -->
 <div id="screen-chat" class="screen active">
   <div id="chat-logo">CLANKERS</div>
+
+  <!-- LLM provider / model / API key selector -->
+  <div id="llm-config-panel">
+    <div id="llm-config-hdr">LLM CONFIG <span id="llm-config-confirmed"></span></div>
+    <div id="llm-config-form">
+      <select id="llm-provider">
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="google">Google (Gemini)</option>
+        <option value="openai">OpenAI (ChatGPT)</option>
+      </select>
+      <select id="llm-model"></select>
+      <input id="llm-apikey" type="password" placeholder="API key" autocomplete="off" spellcheck="false" />
+      <button id="btn-llm-confirm">SAVE</button>
+    </div>
+    <div id="llm-config-status"></div>
+  </div>
 </div>
 
 <!-- ─── Screen: Main (face reveal) ────────────────────────────── -->
@@ -2525,7 +2577,7 @@ document.getElementById('btn-new-session').addEventListener('click', async () =>
   try {
     const res  = await fetch(`${API}/session/new`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief, section: 'verse1', solo: sessionSolo }),
+      body: JSON.stringify({ brief, section: 'verse1', solo: sessionSolo, ...llmPayload() }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -2617,7 +2669,7 @@ async function sendChat() {
     const res  = await fetch(`${API}/chat`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, message: msg,
-                             synth_context: _synthLabContext() }),
+                             synth_context: _synthLabContext(), ...llmPayload() }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -2657,7 +2709,7 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, section,
-                             synth_context: _synthLabContext() }),
+                             synth_context: _synthLabContext(), ...llmPayload() }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -3781,6 +3833,93 @@ document.getElementById('btn-synth-lab-back').addEventListener('click', () => {
 document.getElementById('btn-wizard-close').addEventListener('click', () => {
   document.getElementById('synth-wizard-overlay').classList.remove('open');
 });
+
+// ── LLM Config Panel ─────────────────────────────────────────────────────────
+
+const _LLM_MODELS = {
+  anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+  google:    ['gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+  openai:    ['gpt-4o', 'gpt-4o-mini', 'o1', 'o3-mini'],
+};
+
+const _llmProviderSel = document.getElementById('llm-provider');
+const _llmModelSel    = document.getElementById('llm-model');
+const _llmApiKey      = document.getElementById('llm-apikey');
+const _llmStatus      = document.getElementById('llm-config-status');
+const _llmConfirmed   = document.getElementById('llm-config-confirmed');
+const _btnLlmConfirm  = document.getElementById('btn-llm-confirm');
+
+// Saved config (kept in memory; also persisted to localStorage)
+let _llmCfg = { provider: 'anthropic', model: 'claude-sonnet-4-6', api_key: '' };
+
+function _populateModels(provider) {
+  _llmModelSel.innerHTML = '';
+  for (const m of (_LLM_MODELS[provider] || [])) {
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = m;
+    _llmModelSel.appendChild(opt);
+  }
+}
+
+function _loadLlmConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('clankers_llm') || '{}');
+    if (saved.provider) _llmCfg.provider = saved.provider;
+    if (saved.model)    _llmCfg.model    = saved.model;
+    if (saved.api_key)  _llmCfg.api_key  = saved.api_key;
+  } catch (_) {}
+}
+
+function _applyLlmConfigToUI() {
+  _llmProviderSel.value = _llmCfg.provider;
+  _populateModels(_llmCfg.provider);
+  if (_llmCfg.model && [..._llmModelSel.options].some(o => o.value === _llmCfg.model))
+    _llmModelSel.value = _llmCfg.model;
+  _llmApiKey.value = _llmCfg.api_key || '';
+  if (_llmCfg.api_key) {
+    _llmStatus.textContent = 'Key loaded from storage.';
+    _llmConfirmed.textContent = '✓ configured';
+    _btnLlmConfirm.classList.add('saved');
+  }
+}
+
+/** Returns the llm fields to spread into every API request body. */
+function llmPayload() {
+  const p = {};
+  if (_llmCfg.provider) p.llm_provider = _llmCfg.provider;
+  if (_llmCfg.model)    p.llm_model    = _llmCfg.model;
+  if (_llmCfg.api_key)  p.llm_api_key  = _llmCfg.api_key;
+  return p;
+}
+
+_llmProviderSel.addEventListener('change', () => {
+  _populateModels(_llmProviderSel.value);
+  _btnLlmConfirm.classList.remove('saved');
+  _llmConfirmed.textContent = '';
+});
+
+_llmModelSel.addEventListener('change', () => {
+  _btnLlmConfirm.classList.remove('saved');
+  _llmConfirmed.textContent = '';
+});
+
+_btnLlmConfirm.addEventListener('click', () => {
+  _llmCfg.provider = _llmProviderSel.value;
+  _llmCfg.model    = _llmModelSel.value;
+  _llmCfg.api_key  = _llmApiKey.value.trim();
+  try {
+    localStorage.setItem('clankers_llm', JSON.stringify(_llmCfg));
+  } catch (_) {}
+  _llmStatus.textContent = _llmCfg.api_key
+    ? `Saved — ${_llmCfg.provider} / ${_llmCfg.model}`
+    : `Saved — ${_llmCfg.provider} / ${_llmCfg.model} (no key — using server config)`;
+  _llmConfirmed.textContent = '✓ configured';
+  _btnLlmConfirm.classList.add('saved');
+});
+
+// Init
+_loadLlmConfig();
+_applyLlmConfigToUI();
 
 // Initial state
 showScreen('chat');

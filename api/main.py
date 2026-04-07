@@ -56,9 +56,12 @@ class LoadSheetRequest(BaseModel):
 
 
 class NewSessionRequest(BaseModel):
-    brief:   str
-    section: str  = "verse1"
-    solo:    bool = True   # True = fast (Claude only); False = full 3-LLM debate
+    brief:       str
+    section:     str  = "verse1"
+    solo:        bool = True   # True = fast (Claude only); False = full 3-LLM debate
+    llm_provider: str | None = None
+    llm_model:    str | None = None
+    llm_api_key:  str | None = None
 
 
 class NewSessionResponse(BaseModel):
@@ -71,6 +74,9 @@ class ChatRequest(BaseModel):
     session_id:    str
     message:       str
     synth_context: str = ""  # active Synth Lab instruments, injected by the frontend
+    llm_provider:  str | None = None
+    llm_model:     str | None = None
+    llm_api_key:   str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -84,6 +90,9 @@ class EvolveRequest(BaseModel):
     session_id:    str
     section:       str
     synth_context: str = ""  # active Synth Lab instruments
+    llm_provider:  str | None = None
+    llm_model:     str | None = None
+    llm_api_key:   str | None = None
 
 
 class EvolveResponse(BaseModel):
@@ -97,6 +106,21 @@ class PatchSheetRequest(BaseModel):
 
 class SheetResponse(BaseModel):
     sheet: dict
+
+
+# ── Dynamic client helper ──────────────────────────────────────────────────
+
+def _resolve_client(provider: str | None, model: str | None, api_key: str | None):
+    """
+    Return an LLM client.
+    If the request carries provider/model/api_key, build a one-off client with
+    those credentials; otherwise fall back to the server's config defaults.
+    """
+    return llm_clients.get_dynamic_client(
+        provider=provider or config.BAND["Claude"],
+        model=model,
+        api_key=api_key,
+    )
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -117,7 +141,8 @@ def session_new(req: NewSessionRequest):
     Start a new session. Chatroom negotiates the opening Music Sheet.
     solo=True skips the 3-LLM debate (Claude generates in one pass — much faster).
     """
-    room  = Chatroom(session_name=req.section)
+    room  = Chatroom(session_name=req.section,
+                     client=_resolve_client(req.llm_provider, req.llm_model, req.llm_api_key))
     sheet = room.negotiate_section(
         brief=req.brief,
         section_name=req.section,
@@ -159,6 +184,7 @@ def chat(req: ChatRequest):
     updated_sheet, reply, companion = _chat_evolve(
         old_sheet, req.message, session["history"],
         synth_context=req.synth_context,
+        client=_resolve_client(req.llm_provider, req.llm_model, req.llm_api_key),
     )
 
     diff = _sheet_diff(old_sheet, updated_sheet)
@@ -177,7 +203,8 @@ def sheet_evolve(req: EvolveRequest):
         raise HTTPException(status_code=404, detail="Session not found")
 
     evolved = evolve(session["sheet"], req.section,
-                     synth_context=req.synth_context)
+                     synth_context=req.synth_context,
+                     client=_resolve_client(req.llm_provider, req.llm_model, req.llm_api_key))
     update_sheet(req.session_id, evolved)
     tension = evolved.get("tension", 0.5)
     reply = (
@@ -259,9 +286,10 @@ Return ONLY valid JSON -- no prose, no markdown fences:
 }"""
 
 
-def _chat_evolve(sheet: dict, message: str, history: list, synth_context: str = "") -> tuple[dict, str, str]:
-    """Use Claude to parse a user message, update the sheet, return (sheet, reply, companion)."""
-    client = llm_clients.get_client(config.BAND["Claude"])  # all members use Claude
+def _chat_evolve(sheet: dict, message: str, history: list, synth_context: str = "", client=None) -> tuple[dict, str, str]:
+    """Use an LLM to parse a user message, update the sheet, return (sheet, reply, companion)."""
+    if client is None:
+        client = llm_clients.get_client(config.BAND["Claude"])
 
     # Last 4 history entries (2 turns) for context, formatted as user messages
     ctx = ""

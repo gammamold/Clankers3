@@ -335,8 +335,39 @@ def get_client(provider):
         "google": GeminiClient,
         "openai": ChatGPTClient,
     }
-    
+
     if provider not in clients:
         raise ValueError(f"Unknown provider: {provider}. Choose from: {list(clients.keys())}")
-    
+
     return clients[provider]()
+
+
+def get_dynamic_client(provider: str, model: str | None = None, api_key: str | None = None):
+    """
+    Like get_client() but with optional model and api_key overrides.
+    If model or api_key are None/empty the client falls back to config defaults.
+
+    Used by the web API so each request can carry its own credentials.
+    """
+    client = get_client(provider)
+
+    if model:
+        # Patch the model attribute read by _ensure_client / send()
+        if provider == "anthropic":
+            config.CLAUDE_MODEL  = model
+        elif provider == "google":
+            config.GEMINI_MODEL  = model
+        elif provider == "openai":
+            config.CHATGPT_MODEL = model
+
+    if api_key:
+        if provider == "anthropic":
+            config.ANTHROPIC_API_KEY = api_key
+        elif provider == "google":
+            config.GEMINI_API_KEY    = api_key
+        elif provider == "openai":
+            config.OPENAI_API_KEY    = api_key
+        # Force re-initialisation so the new key is picked up
+        client.client = None
+
+    return client

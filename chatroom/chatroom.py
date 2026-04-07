@@ -469,16 +469,17 @@ def _extract_sheet_json(text: str) -> dict | None:
 # ── CHATROOM ──────────────────────────────────────────────────────────────
 
 class Chatroom:
-    def __init__(self, session_name: str = "section"):
+    def __init__(self, session_name: str = "section", client=None):
         self.session_name = session_name
         self.messages: list[dict] = []
         self.clients:  dict[str, llm_clients.BaseLLMClient] = {}
         self.round_count = 0
 
-        # All members are the same Claude model — one LLM impersonates the whole band
-        claude_client = llm_clients.get_client(config.BAND["Claude"])
+        # All members share one LLM client (one model impersonates the whole band)
+        if client is None:
+            client = llm_clients.get_client(config.BAND["Claude"])
         for name in DEFAULT_ORDER:
-            self.clients[name] = claude_client
+            self.clients[name] = client
 
     # ── core run ──────────────────────────────────────────────────────────
 

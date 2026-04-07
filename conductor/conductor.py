@@ -113,9 +113,10 @@ _EVOLVE_SYSTEM = (
 )
 
 
-def evolve(sheet: dict, next_section: str, synth_context: str = "") -> dict:
-    """Generate the next 128-step ClankerBoy loop for next_section using Claude. BPM is locked."""
-    client  = llm_clients.get_client(config.BAND["Claude"])
+def evolve(sheet: dict, next_section: str, synth_context: str = "", client=None) -> dict:
+    """Generate the next 128-step ClankerBoy loop for next_section. BPM is locked."""
+    if client is None:
+        client = llm_clients.get_client(config.BAND["Claude"])
     tension = _SECTION_TENSION.get(next_section, 0.5)
 
     prompt = (
