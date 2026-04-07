@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Clankers 3</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -739,6 +740,37 @@
     .sle-piano-container { display: flex; justify-content: center; }
 
     body.on-synth-lab #btn-chat-float { display: none; }
+
+    /* ══ Mobile / Touch ════════════════════════════════════════════════ */
+
+    /* 1.2 – Mixer channels: scroll horizontally instead of overflowing */
+    #mixer-channels { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    #mixer-panel { max-width: min(96vw, 700px); }
+
+    /* 1.3 – Minimum 44px touch targets on touchscreen devices */
+    @media (pointer: coarse) {
+      button { min-height: 44px; }
+      .pad { min-height: 44px; min-width: 44px; padding: .55rem .7rem; }
+      .ms-btn { min-height: 44px; min-width: 44px; }
+      .mx-btn { min-height: 44px; min-width: 44px; }
+      .fx-on, .fx-arm, .fx-gate { min-height: 44px; padding: .35rem .7rem; }
+      .profile-btn { min-height: 44px; padding: .3rem .85rem; }
+      .ssc-edit-btn, .ssc-clear-btn, .ssc-load-btn, .ssc-new-btn { min-height: 44px; }
+      input[type="range"] { height: 44px; }
+      .qnav-face { min-height: 44px; padding: .45rem .55rem;
+                   display: inline-flex; align-items: center; }
+      .vol-slider { height: 44px; width: 80px; }
+    }
+
+    /* 2.1 – Chat screen: mobile layout */
+    @media (max-width: 640px) {
+      body { padding: .75rem; }
+      #chat-logo { font-size: 1.4rem; letter-spacing: .12em; margin-bottom: 1.2rem; }
+      #chat-messages { height: min(42vh, 260px); }
+      .input-row { flex-wrap: wrap; }
+      .input-row input { font-size: .85rem; padding: .55rem .65rem; }
+      body.on-chat #chat-overlay .chat-section { padding: .5rem .75rem; }
+    }
   </style>
 </head>
 <body class="on-chat">
