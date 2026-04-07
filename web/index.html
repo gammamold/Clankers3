@@ -796,6 +796,16 @@
 
     /* ══ Mobile / Touch ════════════════════════════════════════════════ */
 
+    /* 3.3 – Prevent elastic overscroll on fixed screens */
+    body { overscroll-behavior: none; }
+
+    /* 3.3 – Eliminate 300ms tap delay and double-tap zoom on interactive elements */
+    button, .pad, .pat-btn, .arr-slot, .face-card, .qnav-face,
+    .fx-on, .fx-arm, .fx-gate, .fx-step-btn, .ms-btn, .mx-btn { touch-action: manipulation; }
+
+    /* 3.3 – Piano roll canvas: block scroll so touch drag doesn't scroll the page */
+    #room-roll { touch-action: none; }
+
     /* 1.2 – Mixer channels: scroll horizontally instead of overflowing */
     #mixer-channels { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     #mixer-panel { max-width: min(96vw, 700px); }
@@ -866,6 +876,12 @@
 
       /* FX step buttons: grow from 13px to 18px for easier tapping */
       .fx-step-btn { width: 18px; height: 18px; }
+    }
+
+    /* 2.4 – Song Builder: tighten padding, bring arr-slots to tap-safe height */
+    @media (max-width: 640px) {
+      #screen-song > div { padding: 2.5rem 1rem 1rem !important; }
+      #screen-song .arr-slot { height: 2.75rem; }
     }
   </style>
 </head>
@@ -1527,6 +1543,23 @@ class Knob {
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     });
+    this.cv.addEventListener('touchstart', e => {
+      e.preventDefault();
+      py = e.touches[0].clientY; pv = self._v;
+      function onMove(e2) {
+        e2.preventDefault();
+        const range = max - min;
+        self._v = Math.max(min, Math.min(max, pv + (py - e2.touches[0].clientY) / 100 * range));
+        self._draw();
+        if (self.onChange) self.onChange(self._v);
+      }
+      function onUp() {
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+      }
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onUp);
+    }, { passive: false });
     this.cv.addEventListener('wheel', e => {
       e.preventDefault();
       const bump = step >= 1 ? step * 3 : step * 5;
@@ -3188,6 +3221,11 @@ class PianoRoll {
     this.ROW_H_PITCHED = 12;
 
     canvas.addEventListener('click', e => this._onClick(e));
+    canvas.addEventListener('touchend', e => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      this._onClick({ clientX: t.clientX, clientY: t.clientY });
+    }, { passive: false });
     this._sheet = null;
     this._tType = null;
   }
