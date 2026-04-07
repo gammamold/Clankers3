@@ -1,30 +1,53 @@
 # config.py -- The Clankers 3
-# Inherits API keys + LLM settings from the_Clankers (sibling project).
-# Uses importlib to load by absolute path -- avoids name collision with this file.
+# Tries to inherit API keys + LLM settings from the_Clankers (sibling project).
+# Falls back to empty defaults if the sibling project is not found.
+# The LLM selection menu (llm_menu.py) overwrites these at runtime.
 
 import importlib.util
 from pathlib import Path
 
-_SIBLING = Path(__file__).resolve().parent.parent / "the_Clankers" / "config.py"
-_spec    = importlib.util.spec_from_file_location("_clankers1_config", _SIBLING)
-_orig    = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_orig)
+# ── Try to load sibling config ─────────────────────────────────────────────
 
-# ── Inherited ──────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = _orig.ANTHROPIC_API_KEY
-GEMINI_API_KEY    = _orig.GEMINI_API_KEY
-OPENAI_API_KEY    = _orig.OPENAI_API_KEY
-CLAUDE_MODEL      = _orig.CLAUDE_MODEL
-GEMINI_MODEL      = _orig.GEMINI_MODEL
-CHATGPT_MODEL     = _orig.CHATGPT_MODEL
-BAND              = _orig.BAND
-GEMINI_TIMEOUT_MS = _orig.GEMINI_TIMEOUT_MS
-GEMINI_RPM        = getattr(_orig, "GEMINI_RPM",  140)
-CLAUDE_RPM        = getattr(_orig, "CLAUDE_RPM",  200)
-CHATGPT_RPM       = getattr(_orig, "CHATGPT_RPM", 200)
+_SIBLING = Path(__file__).resolve().parent.parent / "the_Clankers" / "config.py"
+
+_orig = None
+if _SIBLING.exists():
+    try:
+        _spec = importlib.util.spec_from_file_location("_clankers1_config", _SIBLING)
+        _orig = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_orig)
+    except Exception:
+        _orig = None
+
+def _get(attr, default=None):
+    return getattr(_orig, attr, default) if _orig else default
+
+# ── API keys ───────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY = _get("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY    = _get("GEMINI_API_KEY",    "")
+OPENAI_API_KEY    = _get("OPENAI_API_KEY",    "")
+
+# ── Model names ────────────────────────────────────────────────────────────
+CLAUDE_MODEL  = _get("CLAUDE_MODEL",  "claude-sonnet-4-6")
+GEMINI_MODEL  = _get("GEMINI_MODEL",  "gemini-2.0-flash")
+CHATGPT_MODEL = _get("CHATGPT_MODEL", "gpt-4o")
+
+# ── Band mapping: persona -> provider key used by llm_clients.get_client() ─
+# All three personas default to Claude. The LLM menu can redirect them all
+# to a single chosen provider at startup.
+BAND = _get("BAND", {
+    "Claude":  "anthropic",
+    "Gemini":  "google",
+    "ChatGPT": "openai",
+})
+
+# ── Rate limits (requests per minute) ─────────────────────────────────────
+GEMINI_TIMEOUT_MS = _get("GEMINI_TIMEOUT_MS", 120_000)
+GEMINI_RPM        = _get("GEMINI_RPM",  140)
+CLAUDE_RPM        = _get("CLAUDE_RPM",  200)
+CHATGPT_RPM       = _get("CHATGPT_RPM", 200)
 
 # ── Chatroom settings ──────────────────────────────────────────────────────
-# Shorter than the original -- we negotiate one section at a time.
 MAX_ROUNDS_PER_SESSION = 6
 
 # ── VST paths ──────────────────────────────────────────────────────────────
