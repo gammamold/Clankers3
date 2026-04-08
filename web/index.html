@@ -55,6 +55,32 @@
     .buchla-xy-axes { display:flex; justify-content:space-between;
                       font-size:.58rem; color:#555; margin-top:3px; width:100%; box-sizing:border-box; }
 
+    /* ── KNOBS / XY toggle tabs ── */
+    .inst-ctrl-tabs { display:flex; gap:.3rem; margin:.35rem 0 .2rem; flex-wrap:wrap; }
+    .ctrl-tab {
+      font-family:monospace; font-size:.62rem; letter-spacing:.06em;
+      padding:.15rem .45rem; border:1px solid #333; background:#111;
+      color:#555; cursor:pointer; border-radius:2px; user-select:none;
+    }
+    .ctrl-tab:hover { border-color:#666; color:#aaa; }
+    .ctrl-tab.ct-active { border-color:#00d4ff; color:#00d4ff; background:#00121a; }
+    /* Mobile (≤600px): XY is default, knobs hidden */
+    @media (max-width:600px) {
+      .inst-knobs-panel { display:none !important; }
+      .inst-xy-panel    { display:block !important; }
+      .ctrl-tab-knobs   { color:#444 !important; border-color:#222 !important; background:#111 !important; }
+      .ctrl-tab-xy      { border-color:#00d4ff !important; color:#00d4ff !important; background:#00121a !important; }
+    }
+
+    /* ── XYPad component ── */
+    .xy-pad-wrap    { display:flex; flex-direction:column; gap:.25rem; }
+    .xy-profile-sel { background:#0c0c0c; color:#00d4ff; border:1px solid #333;
+                      font-family:monospace; font-size:.65rem; padding:.15rem .3rem; cursor:pointer; }
+    .xy-pad-cv      { display:block; cursor:crosshair; touch-action:none;
+                      border:1px solid #2a2a2a; border-radius:3px; max-width:100%; }
+    .xy-axes-label  { display:flex; justify-content:space-between;
+                      font-size:.58rem; color:#555; }
+
     /* ── Knobs ── */
     .knob-row { display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-start; }
     .knob-group { display:flex; gap:.4rem; align-items:flex-start; padding-right:.6rem;
@@ -1013,8 +1039,15 @@
 <div class="inst">
   <div class="inst-hdr">BASS FM <span>[t:2]</span> <button class="ms-btn" data-type="bass" data-ms="m">M</button><button class="ms-btn" data-type="bass" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100" value="100"></span></div>
   <div class="pads bass" id="bass-notes"></div>
-  <div class="knob-row" id="bass-knobs"></div>
-  <div class="knob-row" id="bass-sends"></div>
+  <div class="inst-ctrl-tabs">
+    <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="bass">KNOBS</button>
+    <button class="ctrl-tab ctrl-tab-xy" data-inst="bass">XY</button>
+  </div>
+  <div class="inst-knobs-panel" id="bass-knobs-panel">
+    <div class="knob-row" id="bass-knobs"></div>
+    <div class="knob-row" id="bass-sends"></div>
+  </div>
+  <div class="inst-xy-panel" id="bass-xy-panel" style="display:none"></div>
 </div>
 
 <!-- ── Buchla ───────────────────────────────────────────────────────────── -->
@@ -1506,6 +1539,7 @@ import { Sequencer }        from './sequencer.js?v=18';
 import { MasterFx, makeCurve, divToSec } from './fx.js';
 import { offlineRender }   from './render.js';
 import { SynthLab }        from './synth-lab.js';
+import { XYPad }           from './synth/ui/XYPad.js';
 
 // ── Synth Lab singleton ───────────────────────────────────────────────────────
 const synthLab = new SynthLab();
@@ -1945,79 +1979,33 @@ const bassOctKnob = makeKnobGroup(_bassContainer, 'OCT', [
   { id: 'b-oct', label: 'OCT', min: -2, max: 2, value: 0, step: 1 },
 ])['b-oct'];
 
-const _byzWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
-const _byzCv   = Object.assign(document.createElement('canvas'), {
-  className: 'buchla-xy', width: 190, height: 190,
+const bassXY = new XYPad({
+  accentColor: '#00b4ff',
+  profiles: [
+    { name: 'GROWL',
+      x: { label: 'FM+CUT', min: 0, max: 127,
+           get: ()  => byz['byz-fmidx'].val,
+           set: v  => { byz['byz-fmidx'].val = Math.round(v); byz['byz-cutoff'].val = Math.round(v); sendBassParams(); } },
+      y: { label: 'DEC',    min: 0, max: 127,
+           get: ()  => byz['byz-fdec'].val,
+           set: v  => { byz['byz-fdec'].val = Math.round(v);  byz['byz-adec'].val  = Math.round(v); sendBassParams(); } } },
+    { name: 'TEXTURE',
+      x: { label: 'FM IDX', min: 0, max: 127,
+           get: ()  => byz['byz-fmidx'].val,
+           set: v  => { byz['byz-fmidx'].val = Math.round(v); sendBassParams(); } },
+      y: { label: 'CUTOFF', min: 0, max: 127,
+           get: ()  => byz['byz-cutoff'].val,
+           set: v  => { byz['byz-cutoff'].val = Math.round(v); sendBassParams(); } } },
+    { name: 'ENVELOPE',
+      x: { label: 'F.DEC',  min: 0, max: 127,
+           get: ()  => byz['byz-fdec'].val,
+           set: v  => { byz['byz-fdec'].val = Math.round(v); sendBassParams(); } },
+      y: { label: 'A.DEC',  min: 0, max: 127,
+           get: ()  => byz['byz-adec'].val,
+           set: v  => { byz['byz-adec'].val = Math.round(v); sendBassParams(); } } },
+  ],
 });
-const _byzAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
-_byzAxes.innerHTML = '<span>← clean · growl →</span><span>FM · LPF · F.DEC · A.DEC</span>';
-_byzWrap.append(_byzCv, _byzAxes);
-_bassContainer.appendChild(_byzWrap);
-
-const _byzCtx = _byzCv.getContext('2d');
-
-function _drawBYZ() {
-  const W = _byzCv.width, H = _byzCv.height;
-  const nfm  = byz['byz-fmidx'].val / 127;
-  const ndec = byz['byz-fdec'].val  / 127;
-  const px = nfm * W;
-  const py = ndec * H;
-
-  _byzCtx.clearRect(0, 0, W, H);
-
-  const grad = _byzCtx.createLinearGradient(0, H, W, 0);
-  grad.addColorStop(0,   '#060a10');
-  grad.addColorStop(0.5, '#0a1018');
-  grad.addColorStop(1,   '#0d1520');
-  _byzCtx.fillStyle = grad;
-  _byzCtx.fillRect(0, 0, W, H);
-
-  _byzCtx.strokeStyle = '#252525';
-  _byzCtx.lineWidth = 1;
-  for (let i = 1; i < 4; i++) {
-    _byzCtx.beginPath(); _byzCtx.moveTo(W * i / 4, 0); _byzCtx.lineTo(W * i / 4, H); _byzCtx.stroke();
-    _byzCtx.beginPath(); _byzCtx.moveTo(0, H * i / 4); _byzCtx.lineTo(W, H * i / 4); _byzCtx.stroke();
-  }
-
-  _byzCtx.strokeStyle = 'rgba(0,180,255,0.25)';
-  _byzCtx.lineWidth = 1;
-  _byzCtx.beginPath(); _byzCtx.moveTo(px, 0); _byzCtx.lineTo(px, H); _byzCtx.stroke();
-  _byzCtx.beginPath(); _byzCtx.moveTo(0, py); _byzCtx.lineTo(W, py); _byzCtx.stroke();
-
-  _byzCtx.beginPath();
-  _byzCtx.arc(px, py, 5, 0, Math.PI * 2);
-  _byzCtx.fillStyle = '#00b4ff';
-  _byzCtx.fill();
-
-  _byzCtx.font = '9px monospace';
-  _byzCtx.fillStyle = '#555';
-  _byzCtx.fillText(`FM ${byz['byz-fmidx'].val}  CUT ${byz['byz-cutoff'].val}`, 6, H - 16);
-  _byzCtx.fillText(`FDEC ${byz['byz-fdec'].val}  ADEC ${byz['byz-adec'].val}`, 6, H - 5);
-}
-_drawBYZ();
-
-function _byzUpdate(e) {
-  const r  = _byzCv.getBoundingClientRect();
-  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
-  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
-  const nx = Math.max(0, Math.min(1, cx / _byzCv.width));
-  const ny = Math.max(0, Math.min(1, cy / _byzCv.height));  // 0=top, 1=bottom
-
-  byz['byz-fmidx'].val  = Math.round(nx * 127);
-  byz['byz-cutoff'].val = Math.round(nx * 127);
-  byz['byz-fdec'].val   = Math.round(ny * 127);
-  byz['byz-adec'].val   = Math.round(ny * 127);
-
-  _drawBYZ();
-  sendBassParams();
-}
-let _byzDrag = false;
-_byzCv.addEventListener('mousedown',  e => { _byzDrag = true;  _byzUpdate(e); });
-_byzCv.addEventListener('mousemove',  e => { if (_byzDrag) _byzUpdate(e); });
-_byzCv.addEventListener('mouseup',    () => _byzDrag = false);
-_byzCv.addEventListener('mouseleave', () => _byzDrag = false);
-_byzCv.addEventListener('touchstart', e => { e.preventDefault(); _byzUpdate(e); }, { passive: false });
-_byzCv.addEventListener('touchmove',  e => { e.preventDefault(); _byzUpdate(e); }, { passive: false });
+document.getElementById('bass-xy-panel').appendChild(bassXY.render());
 
 
 function bassCC() {
@@ -2868,6 +2856,21 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = 'EVOLVE →';
   }
+});
+
+// ─── KNOBS / XY tab toggle (shared for all instruments) ────────────────────
+document.querySelectorAll('.ctrl-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const inst = btn.dataset.inst;
+    const isXY = btn.classList.contains('ctrl-tab-xy');
+    document.querySelectorAll(`.ctrl-tab[data-inst="${inst}"]`)
+      .forEach(b => b.classList.remove('ct-active'));
+    btn.classList.add('ct-active');
+    const kp = document.getElementById(`${inst}-knobs-panel`);
+    const xp = document.getElementById(`${inst}-xy-panel`);
+    if (kp) kp.style.display = isXY ? 'none' : '';
+    if (xp) xp.style.display = isXY ? '' : 'none';
+  });
 });
 
 // ─── FX Rack UI ────────────────────────────────────────────────────────────
