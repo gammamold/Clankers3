@@ -885,8 +885,11 @@
     @media (max-width: 640px) {
       #screen-room { padding: .75rem; }
 
-      /* Keep header top-padding so back button doesn't overlap */
-      #room-header { order: 1; padding: 2.5rem 0 .5rem; }
+      /* Back button: pull out of absolute positioning, flow at top of column */
+      .back-btn { position: static; order: -1; align-self: flex-start; margin: .1rem 0 .4rem; }
+
+      /* Header: reduce top padding now that back btn is in the flow */
+      #room-header { order: 1; padding: 1rem 0 .5rem; }
 
       /* Pull quick-nav out of absolute position, place below header */
       #room-quick-nav {
@@ -915,8 +918,14 @@
 
     /* 2.4 – Song Builder: tighten padding, bring arr-slots to tap-safe height */
     @media (max-width: 640px) {
-      #screen-song > div { padding: 2.5rem 1rem 1rem !important; }
+      /* Back btn is now in-flow, so content div needs only a small top gap */
+      #screen-song > div { padding: .75rem 1rem 1rem !important; }
       #screen-song .arr-slot { height: 2.75rem; }
+    }
+
+    /* 2.5 – LLM settings button: move off piano roll on narrow screens */
+    @media (max-width: 640px) {
+      #btn-settings { top: auto; bottom: 6.5rem; right: auto; left: 1rem; }
     }
   </style>
 </head>
