@@ -603,6 +603,15 @@
     .sle-forge { border-color: #003040 !important; color: #00d4ff !important; background: #00121a !important; }
     .sle-forge:hover { border-color: #00d4ff !important; }
 
+    .sle-ctrl-tabs  { display:flex; gap:.3rem; padding:.4rem 1rem .2rem; }
+    .sle-ctrl-tab   {
+      font-family:monospace; font-size:.62rem; letter-spacing:.06em;
+      padding:.15rem .45rem; border:1px solid #333; background:#111;
+      color:#555; cursor:pointer; border-radius:2px; user-select:none;
+    }
+    .sle-ctrl-tab:hover { border-color:#666; color:#aaa; }
+    .sle-ctrl-tab.ct-active { border-color:#00d4ff; color:#00d4ff; background:#00121a; }
+
     .sle-rack-area {
       flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
       padding: .7rem .8rem;
@@ -1031,47 +1040,85 @@
     <button class="profile-btn"        data-profile="1">909</button>
     <button class="profile-btn"        data-profile="2">606</button>
   </div>
-  <div class="knob-row" id="drum-knobs"></div>
-  <div class="knob-row" id="drum-sends"></div>
+  <div class="inst-ctrl-wrap" data-inst="drum">
+    <div class="inst-ctrl-tabs">
+      <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="drum">KNOBS</button>
+      <button class="ctrl-tab ctrl-tab-xy" data-inst="drum">XY</button>
+    </div>
+    <div class="inst-knobs-panel" id="drum-knobs-panel">
+      <div class="knob-row" id="drum-knobs"></div>
+      <div class="knob-row" id="drum-sends"></div>
+    </div>
+    <div class="inst-xy-panel" id="drum-xy-panel" style="display:none"></div>
+  </div>
 </div>
 
 <!-- ── Bass ────────────────────────────────────────────────────────────── -->
 <div class="inst">
   <div class="inst-hdr">BASS FM <span>[t:2]</span> <button class="ms-btn" data-type="bass" data-ms="m">M</button><button class="ms-btn" data-type="bass" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100" value="100"></span></div>
   <div class="pads bass" id="bass-notes"></div>
-  <div class="inst-ctrl-tabs">
-    <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="bass">KNOBS</button>
-    <button class="ctrl-tab ctrl-tab-xy" data-inst="bass">XY</button>
+  <div class="inst-ctrl-wrap" data-inst="bass">
+    <div class="inst-ctrl-tabs">
+      <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="bass">KNOBS</button>
+      <button class="ctrl-tab ctrl-tab-xy" data-inst="bass">XY</button>
+    </div>
+    <div class="inst-knobs-panel" id="bass-knobs-panel">
+      <div class="knob-row" id="bass-knobs"></div>
+      <div class="knob-row" id="bass-sends"></div>
+    </div>
+    <div class="inst-xy-panel" id="bass-xy-panel" style="display:none"></div>
   </div>
-  <div class="inst-knobs-panel" id="bass-knobs-panel">
-    <div class="knob-row" id="bass-knobs"></div>
-    <div class="knob-row" id="bass-sends"></div>
-  </div>
-  <div class="inst-xy-panel" id="bass-xy-panel" style="display:none"></div>
 </div>
 
 <!-- ── Buchla ───────────────────────────────────────────────────────────── -->
 <div class="inst">
   <div class="inst-hdr">POLY FM <span>[t:1]</span> <button class="ms-btn" data-type="buchla" data-ms="m">M</button><button class="ms-btn" data-type="buchla" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0" max="100" value="100"></span></div>
   <div class="pads buchla" id="buchla-notes"></div>
-  <div class="buchla-ctrl" id="buchla-knobs"></div>
-  <div class="knob-row" id="buchla-sends"></div>
+  <div class="inst-ctrl-wrap" data-inst="polyfm">
+    <div class="inst-ctrl-tabs">
+      <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="polyfm">KNOBS</button>
+      <button class="ctrl-tab ctrl-tab-xy" data-inst="polyfm">XY</button>
+    </div>
+    <div class="inst-knobs-panel" id="polyfm-knobs-panel">
+      <div class="buchla-ctrl" id="buchla-knobs"></div>
+      <div class="knob-row" id="buchla-sends"></div>
+    </div>
+    <div class="inst-xy-panel" id="polyfm-xy-panel" style="display:none"></div>
+  </div>
 </div>
 
 <!-- ── Pads ────────────────────────────────────────────────────────────── -->
 <div class="inst">
   <div class="inst-hdr">HYBRID PADS <span>[t:6]</span> <button class="ms-btn" data-type="pads" data-ms="m">M</button><button class="ms-btn" data-type="pads" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="pads" min="0" max="100" value="100"></span></div>
   <div class="pads chords" id="chord-pads"></div>
-  <div class="knob-row" id="pads-knobs"></div>
-  <div class="knob-row" id="pads-sends"></div>
+  <div class="inst-ctrl-wrap" data-inst="pads">
+    <div class="inst-ctrl-tabs">
+      <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="pads">KNOBS</button>
+      <button class="ctrl-tab ctrl-tab-xy" data-inst="pads">XY</button>
+    </div>
+    <div class="inst-knobs-panel" id="pads-knobs-panel">
+      <div class="knob-row" id="pads-knobs"></div>
+      <div class="knob-row" id="pads-sends"></div>
+    </div>
+    <div class="inst-xy-panel" id="pads-xy-panel" style="display:none"></div>
+  </div>
 </div>
 
 <!-- ── Rhodes ────────────────────────────────────────────────────────────── -->
 <div class="inst">
   <div class="inst-hdr">RHODES EP <span>[t:3]</span> <button class="ms-btn" data-type="rhodes" data-ms="m">M</button><button class="ms-btn" data-type="rhodes" data-ms="s">S</button><span class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="rhodes" min="0" max="100" value="100"></span></div>
   <div class="pads chords" id="rhodes-pads"></div>
-  <div class="knob-row" id="rhodes-knobs"></div>
-  <div class="knob-row" id="rhodes-sends"></div>
+  <div class="inst-ctrl-wrap" data-inst="rhodes">
+    <div class="inst-ctrl-tabs">
+      <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="rhodes">KNOBS</button>
+      <button class="ctrl-tab ctrl-tab-xy" data-inst="rhodes">XY</button>
+    </div>
+    <div class="inst-knobs-panel" id="rhodes-knobs-panel">
+      <div class="knob-row" id="rhodes-knobs"></div>
+      <div class="knob-row" id="rhodes-sends"></div>
+    </div>
+    <div class="inst-xy-panel" id="rhodes-xy-panel" style="display:none"></div>
+  </div>
 </div>
 
 <!-- ── Master FX ─────────────────────────────────────────────────────────── -->
@@ -1794,96 +1841,27 @@ document.querySelectorAll('.profile-btn').forEach(btn => {
 });
 
 // ── 4. XY pad ─────────────────────────────────────────────────────────────
-const _dyzWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
-const _dyzCv   = Object.assign(document.createElement('canvas'), {
-  className: 'buchla-xy', width: 190, height: 190,
+const drumsXY = new XYPad({
+  accentColor: '#ff6428',
+  profiles: [
+    { name: 'TEXTURE',
+      x: { label: 'FILTER', min: 0, max: 127, get: () => drumVals['d-filter'],
+           set: v => { drumVals['d-filter'] = v; _syncKnob('d-filter'); sendDrumsParams(); } },
+      y: { label: 'DECAY',  min: 0, max: 127, get: () => drumVals['d-decay'],
+           set: v => { drumVals['d-decay'] = v;  _syncKnob('d-decay');  sendDrumsParams(); } } },
+    { name: 'COLOR',
+      x: { label: 'PITCH',  min: -12, max: 12, get: () => drumVals['d-pitch'],
+           set: v => { drumVals['d-pitch'] = v;  _syncKnob('d-pitch');  sendDrumsParams(); } },
+      y: { label: 'FILTER', min: 0, max: 127, get: () => drumVals['d-filter'],
+           set: v => { drumVals['d-filter'] = v; _syncKnob('d-filter'); sendDrumsParams(); } } },
+    { name: 'SWEEP',
+      x: { label: 'FILTER', min: 0, max: 127, get: () => drumVals['d-filter'],
+           set: v => { drumVals['d-filter'] = v; _syncKnob('d-filter'); sendDrumsParams(); } },
+      y: { label: 'PITCH',  min: -12, max: 12, get: () => drumVals['d-pitch'],
+           set: v => { drumVals['d-pitch'] = v;  _syncKnob('d-pitch');  sendDrumsParams(); } } },
+  ],
 });
-
-// Axis selector row (shown below the pad)
-const _dyzAxisRow = Object.assign(document.createElement('div'), {
-  style: 'display:flex;gap:.3rem;align-items:center;margin-top:.25rem;flex-wrap:wrap;',
-});
-const _axisOpts = DRUM_PARAMS.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
-const _dyzSelX  = Object.assign(document.createElement('select'), {
-  innerHTML: _axisOpts,
-  title: 'X axis parameter',
-  style: 'background:#0c0c0c;color:#00d4ff;border:1px solid #2a1a00;font-family:monospace;font-size:.65rem;padding:.15rem;',
-});
-const _dyzSelY  = Object.assign(document.createElement('select'), {
-  innerHTML: _axisOpts,
-  title: 'Y axis parameter',
-  style: 'background:#0c0c0c;color:#00d4ff;border:1px solid #2a1a00;font-family:monospace;font-size:.65rem;padding:.15rem;',
-});
-_dyzSelX.value = dyzX;
-_dyzSelY.value = dyzY;
-Object.assign(document.createElement('span'), { textContent: 'X' }); // not appended; labels inline
-_dyzAxisRow.innerHTML = '<span style="color:#555;font-size:.62rem;">X</span>';
-_dyzAxisRow.appendChild(_dyzSelX);
-const _sep = Object.assign(document.createElement('span'), { textContent: '|', style:'color:#333;' });
-_dyzAxisRow.appendChild(_sep);
-const _yLbl = Object.assign(document.createElement('span'), { textContent: 'Y', style:'color:#555;font-size:.62rem;' });
-_dyzAxisRow.appendChild(_yLbl);
-_dyzAxisRow.appendChild(_dyzSelY);
-
-_dyzSelX.addEventListener('change', () => { dyzX = _dyzSelX.value; _drawDYZ(); });
-_dyzSelY.addEventListener('change', () => { dyzY = _dyzSelY.value; _drawDYZ(); });
-
-_dyzWrap.append(_dyzCv, _dyzAxisRow);
-drumKnobContainer.appendChild(_dyzWrap);
-
-const _dyzCtx = _dyzCv.getContext('2d');
-
-function _drawDYZ() {
-  const W = _dyzCv.width, H = _dyzCv.height;
-  const px = DRUM_PARAMS.find(p => p.id === dyzX) ? ((drumVals[dyzX] - DRUM_PARAMS.find(p=>p.id===dyzX).min) / (DRUM_PARAMS.find(p=>p.id===dyzX).max - DRUM_PARAMS.find(p=>p.id===dyzX).min)) * W : W/2;
-  const py = DRUM_PARAMS.find(p => p.id === dyzY) ? (1 - (drumVals[dyzY] - DRUM_PARAMS.find(p=>p.id===dyzY).min) / (DRUM_PARAMS.find(p=>p.id===dyzY).max - DRUM_PARAMS.find(p=>p.id===dyzY).min)) * H : H/2;
-
-  _dyzCtx.clearRect(0, 0, W, H);
-  const grad = _dyzCtx.createLinearGradient(0, H, W, 0);
-  grad.addColorStop(0, '#100608'); grad.addColorStop(0.5, '#160c0a'); grad.addColorStop(1, '#1c1008');
-  _dyzCtx.fillStyle = grad; _dyzCtx.fillRect(0, 0, W, H);
-
-  _dyzCtx.strokeStyle = '#2a1a18'; _dyzCtx.lineWidth = 1;
-  for (let i = 1; i < 4; i++) {
-    _dyzCtx.beginPath(); _dyzCtx.moveTo(W * i/4, 0); _dyzCtx.lineTo(W * i/4, H); _dyzCtx.stroke();
-    _dyzCtx.beginPath(); _dyzCtx.moveTo(0, H * i/4); _dyzCtx.lineTo(W, H * i/4); _dyzCtx.stroke();
-  }
-  _dyzCtx.strokeStyle = 'rgba(255,100,40,0.25)'; _dyzCtx.lineWidth = 1;
-  _dyzCtx.beginPath(); _dyzCtx.moveTo(px, 0); _dyzCtx.lineTo(px, H); _dyzCtx.stroke();
-  _dyzCtx.beginPath(); _dyzCtx.moveTo(0, py); _dyzCtx.lineTo(W, py); _dyzCtx.stroke();
-  _dyzCtx.beginPath(); _dyzCtx.arc(px, py, 5, 0, Math.PI * 2);
-  _dyzCtx.fillStyle = '#ff6428'; _dyzCtx.fill();
-
-  const xMeta = DRUM_PARAMS.find(p => p.id === dyzX);
-  const yMeta = DRUM_PARAMS.find(p => p.id === dyzY);
-  _dyzCtx.font = '9px monospace'; _dyzCtx.fillStyle = '#664433';
-  _dyzCtx.fillText(xMeta ? xMeta.label + ' ' + xMeta.display(drumVals[dyzX]) : '', 6, H - 16);
-  _dyzCtx.fillText(yMeta ? yMeta.label + ' ' + yMeta.display(drumVals[dyzY]) : '', 6, H - 5);
-}
-_drawDYZ();
-
-function _dyzUpdate(e) {
-  const r  = _dyzCv.getBoundingClientRect();
-  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
-  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
-  const nx = Math.max(0, Math.min(1, cx / r.width));
-  const ny = Math.max(0, Math.min(1, 1 - cy / r.height));
-
-  const xMeta = DRUM_PARAMS.find(p => p.id === dyzX);
-  const yMeta = DRUM_PARAMS.find(p => p.id === dyzY);
-  if (xMeta) { drumVals[dyzX] = xMeta.min + nx * (xMeta.max - xMeta.min); _syncKnob(dyzX); }
-  if (yMeta) { drumVals[dyzY] = yMeta.min + ny * (yMeta.max - yMeta.min); _syncKnob(dyzY); }
-
-  _drawDYZ();
-  sendDrumsParams();
-}
-let _dyzDrag = false;
-_dyzCv.addEventListener('mousedown',  e => { _dyzDrag = true;  _dyzUpdate(e); });
-_dyzCv.addEventListener('mousemove',  e => { if (_dyzDrag) _dyzUpdate(e); });
-_dyzCv.addEventListener('mouseup',    () => _dyzDrag = false);
-_dyzCv.addEventListener('mouseleave', () => _dyzDrag = false);
-_dyzCv.addEventListener('touchstart', e => { e.preventDefault(); _dyzUpdate(e); }, { passive: false });
-_dyzCv.addEventListener('touchmove',  e => { e.preventDefault(); _dyzUpdate(e); }, { passive: false });
+document.getElementById('drum-xy-panel').appendChild(drumsXY.render());
 
 // ── 5. Full param panel (hidden by default) ────────────────────────────────
 const _drumPanel = Object.assign(document.createElement('div'), {
@@ -1931,7 +1909,7 @@ for (const grp of _drumKnobGroups) {
     _drumKnobs[id] = knobs[id];
     knobs[id].onChange = v => {
       drumVals[id] = v;
-      _drawDYZ();
+      drumsXY.syncDot();
       sendDrumsParams();
     };
   }
@@ -2040,104 +2018,41 @@ BUCHLA_NOTES.forEach(({ label, midi }) => {
   buchlaGrid.appendChild(btn);
 });
 
-// ─── Poly FM YZ pad (4-param: X→FM.IDX+CUTOFF, Y→F.DEC+A.DEC) ─────────────
-const _buchlaContainer = document.getElementById('buchla-knobs');
-
-// State — all 4 params driven by one YZ position
-const pyz = {
-  'pyz-fmidx':  { val: 32 },   // CC71 — X axis
-  'pyz-cutoff': { val: 48 },   // CC74 — X axis (linked)
-  'pyz-fdec':   { val: 30 },   // CC23 — Y axis
-  'pyz-adec':   { val: 50 },   // CC75 — Y axis (linked)
+// ─── Poly FM XY pad — ClankersBuchla params (CC74 cutoff, CC20 fold, CC19 release, CC21 filter_mod)
+// Fixed: old code sent wrong CCs (CC71/23/75) that the engine ignored.
+const pfm = {
+  cutoff:    { val: 48 },   // CC74 — cutoff_norm  (0-127 → 0..1)
+  fold:      { val: 20 },   // CC20 — fold_amount  (0-127 → 0..0.4)
+  release:   { val: 40 },   // CC19 — release_s    (0-127 → 5ms..3s)
+  filterMod: { val: 50 },   // CC21 — filter_mod   (0-127 → 0..1)
 };
 
-// Canvas
-const _pyzWrap = Object.assign(document.createElement('div'), { className: 'buchla-xy-wrap' });
-const _pyzCv   = Object.assign(document.createElement('canvas'), {
-  className: 'buchla-xy', width: 190, height: 190,
-});
-const _pyzAxes = Object.assign(document.createElement('div'), { className: 'buchla-xy-axes' });
-_pyzAxes.innerHTML = '<span>← dry · bright →</span><span>FM.IDX · CUTOFF · F.DEC · A.DEC</span>';
-_pyzWrap.append(_pyzCv, _pyzAxes);
-_buchlaContainer.appendChild(_pyzWrap);
-
-const _pyzCtx = _pyzCv.getContext('2d');
-
-function _drawPYZ() {
-  const W = _pyzCv.width, H = _pyzCv.height;
-  const nfm  = pyz['pyz-fmidx'].val / 127;   // 0..1 FM+cutoff
-  const ndec = pyz['pyz-fdec'].val  / 127;   // 0..1 decay
-  const px = nfm * W;
-  const py = (1 - ndec) * H;
-
-  _pyzCtx.clearRect(0, 0, W, H);
-
-  // Background gradient: dark → teal
-  const grad = _pyzCtx.createLinearGradient(0, H, W, 0);
-  grad.addColorStop(0,   '#0a0d10');
-  grad.addColorStop(0.5, '#0a1218');
-  grad.addColorStop(1,   '#0a1a22');
-  _pyzCtx.fillStyle = grad;
-  _pyzCtx.fillRect(0, 0, W, H);
-
-  // Grid
-  _pyzCtx.strokeStyle = '#1a2530';
-  _pyzCtx.lineWidth = 1;
-  for (let i = 1; i < 4; i++) {
-    _pyzCtx.beginPath(); _pyzCtx.moveTo(W * i / 4, 0); _pyzCtx.lineTo(W * i / 4, H); _pyzCtx.stroke();
-    _pyzCtx.beginPath(); _pyzCtx.moveTo(0, H * i / 4); _pyzCtx.lineTo(W, H * i / 4); _pyzCtx.stroke();
-  }
-
-  // Crosshair
-  _pyzCtx.strokeStyle = 'rgba(0,180,255,0.2)';
-  _pyzCtx.lineWidth = 1;
-  _pyzCtx.beginPath(); _pyzCtx.moveTo(px, 0); _pyzCtx.lineTo(px, H); _pyzCtx.stroke();
-  _pyzCtx.beginPath(); _pyzCtx.moveTo(0, py); _pyzCtx.lineTo(W, py); _pyzCtx.stroke();
-
-  // Dot
-  _pyzCtx.beginPath();
-  _pyzCtx.arc(px, py, 5, 0, Math.PI * 2);
-  _pyzCtx.fillStyle = '#00b4ff';
-  _pyzCtx.fill();
-
-  // Value readout
-  _pyzCtx.font = '9px monospace';
-  _pyzCtx.fillStyle = '#4477aa';
-  _pyzCtx.fillText(`FM ${pyz['pyz-fmidx'].val}  CUT ${pyz['pyz-cutoff'].val}`, 6, H - 16);
-  _pyzCtx.fillText(`FDEC ${pyz['pyz-fdec'].val}  ADEC ${pyz['pyz-adec'].val}`, 6, H - 5);
-}
-_drawPYZ();
-
-function _pyzUpdate(e) {
-  const r  = _pyzCv.getBoundingClientRect();
-  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
-  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
-  const nx = Math.max(0, Math.min(1, cx / r.width));
-  const ny = Math.max(0, Math.min(1, 1 - cy / r.height));
-
-  // X axis → FM index + cutoff
-  pyz['pyz-fmidx'].val  = Math.round(nx * 127);
-  pyz['pyz-cutoff'].val = Math.round(nx * 127);
-  // Y axis → filter decay + amp decay
-  pyz['pyz-fdec'].val = Math.round(ny * 127);
-  pyz['pyz-adec'].val = Math.round(ny * 127);
-
-  _drawPYZ();
-  sendBuchlaParams();
-}
-let _pyzDrag = false;
-_pyzCv.addEventListener('mousedown',  e => { _pyzDrag = true;  _pyzUpdate(e); });
-_pyzCv.addEventListener('mousemove',  e => { if (_pyzDrag) _pyzUpdate(e); });
-_pyzCv.addEventListener('mouseup',    () => _pyzDrag = false);
-_pyzCv.addEventListener('mouseleave', () => _pyzDrag = false);
-_pyzCv.addEventListener('touchstart', e => { e.preventDefault(); _pyzUpdate(e); }, { passive: false });
-_pyzCv.addEventListener('touchmove',  e => { e.preventDefault(); _pyzUpdate(e); }, { passive: false });
-
-
 function buchlaCC() {
-  return { 71: pyz['pyz-fmidx'].val, 74: pyz['pyz-cutoff'].val,
-           23: pyz['pyz-fdec'].val,  75: pyz['pyz-adec'].val };
+  return { 74: pfm.cutoff.val, 20: pfm.fold.val,
+           19: pfm.release.val, 21: pfm.filterMod.val };
 }
+
+const polyfmXY = new XYPad({
+  accentColor: '#00b4ff',
+  profiles: [
+    { name: 'TEXTURE',
+      x: { label: 'CUTOFF',  min: 0, max: 127, get: () => pfm.cutoff.val,
+           set: v => { pfm.cutoff.val = v;    sendBuchlaParams(); } },
+      y: { label: 'FOLD',    min: 0, max: 127, get: () => pfm.fold.val,
+           set: v => { pfm.fold.val = v;      sendBuchlaParams(); } } },
+    { name: 'EVOLVE',
+      x: { label: 'CUTOFF',  min: 0, max: 127, get: () => pfm.cutoff.val,
+           set: v => { pfm.cutoff.val = v;    sendBuchlaParams(); } },
+      y: { label: 'RELEASE', min: 0, max: 127, get: () => pfm.release.val,
+           set: v => { pfm.release.val = v;   sendBuchlaParams(); } } },
+    { name: 'SHAPE',
+      x: { label: 'FOLD',    min: 0, max: 127, get: () => pfm.fold.val,
+           set: v => { pfm.fold.val = v;      sendBuchlaParams(); } },
+      y: { label: 'FLT.MOD', min: 0, max: 127, get: () => pfm.filterMod.val,
+           set: v => { pfm.filterMod.val = v; sendBuchlaParams(); } } },
+  ],
+});
+document.getElementById('polyfm-xy-panel').appendChild(polyfmXY.render());
 
 function triggerBuchla(midi) {
   ensureReady().then(() => {
@@ -2146,7 +2061,7 @@ function triggerBuchla(midi) {
     buchlaNode.port.postMessage({ type: 'trigger', audioTime: ctx.currentTime,
                                   midiNote: midi, velocity: 0.85,
                                   holdSamples, ccJson });
-    log(`poly-fm midi=${midi} fm=${pyz['pyz-fmidx'].val} cut=${pyz['pyz-cutoff'].val} fdec=${pyz['pyz-fdec'].val} adec=${pyz['pyz-adec'].val}`);
+    log(`poly-fm midi=${midi} cut=${pfm.cutoff.val} fold=${pfm.fold.val} rel=${pfm.release.val}`);
   });
 }
 
@@ -2363,14 +2278,61 @@ function sendPadsParams() {
 }
 
 // Drum global knobs are wired via sendDrumsParams() above
-// Bass YZ wired via sendBassParams() called from _byzUpdate above
+// Bass YZ wired via sendBassParams() called from bassXY profiles above
 bassOctKnob.onChange = () => {
   sendBassParams();
   if (seq) seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
 };
-// Poly FM YZ wired via sendBuchlaParams() called from _pyzUpdate above
+// Poly FM wired via sendBuchlaParams() called from polyfmXY profiles above
+
 // Wire pads knobs
 for (const k of Object.values(pk)) k.onChange = sendPadsParams;
+
+const padsXY = new XYPad({
+  accentColor: '#8338ec',
+  profiles: [
+    { name: 'FILTER',
+      x: { label:'CUTOFF', min:0, max:127, get:()=>pk['p-cutoff'].val,
+           set: v => { pk['p-cutoff'].setVal(v); sendPadsParams(); } },
+      y: { label:'RES',    min:0, max:127, get:()=>pk['p-res'].val,
+           set: v => { pk['p-res'].setVal(v);    sendPadsParams(); } } },
+    { name: 'SPACE',
+      x: { label:'REVERB', min:0, max:127, get:()=>pk['p-rev'].val,
+           set: v => { pk['p-rev'].setVal(v);    sendPadsParams(); } },
+      y: { label:'CHORUS', min:0, max:127, get:()=>pk['p-cho'].val,
+           set: v => { pk['p-cho'].setVal(v);    sendPadsParams(); } } },
+    { name: 'EVOLVE',
+      x: { label:'CUTOFF', min:0, max:127, get:()=>pk['p-cutoff'].val,
+           set: v => { pk['p-cutoff'].setVal(v); sendPadsParams(); } },
+      y: { label:'ATTACK', min:0, max:127, get:()=>pk['p-atk'].val,
+           set: v => { pk['p-atk'].setVal(v);    sendPadsParams(); } } },
+  ],
+});
+document.getElementById('pads-xy-panel').appendChild(padsXY.render());
+
+// Wire rhodes knobs — they set via k.onChange = sendRhodesParams above.
+// Add XY pad after knobs are wired:
+const rhodesXY = new XYPad({
+  accentColor: '#e9c46a',
+  profiles: [
+    { name: 'TONE',
+      x: { label:'BRIGHT', min:0, max:127, get:()=>rk['r-bright'].val,
+           set: v => { rk['r-bright'].setVal(v); sendRhodesParams(); } },
+      y: { label:'DECAY',  min:0, max:127, get:()=>rk['r-decay'].val,
+           set: v => { rk['r-decay'].setVal(v);  sendRhodesParams(); } } },
+    { name: 'VIBE',
+      x: { label:'T.RATE', min:0, max:127, get:()=>rk['r-trate'].val,
+           set: v => { rk['r-trate'].setVal(v);  sendRhodesParams(); } },
+      y: { label:'T.DEPT', min:0, max:127, get:()=>rk['r-tdepth'].val,
+           set: v => { rk['r-tdepth'].setVal(v); sendRhodesParams(); } } },
+    { name: 'FEEL',
+      x: { label:'BRIGHT', min:0, max:127, get:()=>rk['r-bright'].val,
+           set: v => { rk['r-bright'].setVal(v); sendRhodesParams(); } },
+      y: { label:'BARK',   min:0, max:127, get:()=>rk['r-bark'].val,
+           set: v => { rk['r-bark'].setVal(v);   sendRhodesParams(); } } },
+  ],
+});
+document.getElementById('rhodes-xy-panel').appendChild(rhodesXY.render());
 
 // ─── Mute / Solo ──────────────────────────────────────────────────────────
 document.querySelectorAll('.ms-btn').forEach(btn => {
@@ -3567,28 +3529,36 @@ function revealFaces(sheet) {
 let _currentInst = null;
 let _movedNodes  = []; // { node, origParent, origNext } — for restoring on back
 
-// Collect the knob-group nodes to show in the room for a given instrument.
-// Skips XY pad wrappers (.buchla-xy-wrap). Moves actual DOM nodes (no clone)
-// so canvas pixel data and Knob event listeners are fully preserved.
+// Collect the nodes to show in the room for a given instrument.
+// Moves actual DOM nodes (no clone) so canvas pixel data and event listeners
+// are fully preserved. Instruments with the new inst-ctrl-wrap system are
+// moved as a single block (tabs + knobs panel + XY panel).
 function _gatherKnobNodes(instId) {
   const out = [];
 
+  // New unified system: buchla instrument uses data-inst="polyfm"
+  const dataInst = instId === 'buchla' ? 'polyfm' : instId;
+  const ctrlWrap = document.querySelector(`.inst-ctrl-wrap[data-inst="${dataInst}"]`);
+  if (ctrlWrap) {
+    out.push(ctrlWrap);
+    return out;
+  }
+
+  // Legacy fallback (should not be reached after full migration)
   const takeGroupsFrom = (container) => {
     if (!container) return;
     [...container.children].forEach(child => {
-      if (child.classList.contains('buchla-xy-wrap')) return; // skip XY axis pads
+      if (child.classList.contains('buchla-xy-wrap')) return;
       out.push(child);
     });
   };
 
   if (instId === 'drum') {
-    // knob-groups live inside _drumPanel (hidden div) — pull them out directly
     takeGroupsFrom(_drumPanel);
   } else {
     takeGroupsFrom(document.getElementById(`${instId}-knobs`));
   }
 
-  // sends knobs (→DLY / →SHP) — same skip rule, but sends never have XY wraps
   const sendsId = instId === 'drum' ? 'drum-sends' : `${instId}-sends`;
   takeGroupsFrom(document.getElementById(sendsId));
 

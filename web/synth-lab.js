@@ -19,6 +19,7 @@ import { buildClankersMeta } from './synth/core/ClankersBridge.js';
 import { ModulePanel }       from './synth/ui/ModulePanel.js';
 import { PianoKeys }         from './synth/ui/PianoKeys.js';
 import { LLMWizard }         from './synth/wizard/LLMWizard.js';
+import { XYPad }             from './synth/ui/XYPad.js';
 
 /** Track types for slots 0–4 (t:10 = drums, so skip it; t:12 = FM DRUMS slot 4) */
 export const SYNTH_SLOT_T = [7, 8, 9, 11, 12];
@@ -299,6 +300,14 @@ export class SynthLab {
       </div>`;
     ed.appendChild(hdr);
 
+    // KNOBS / XY toggle tabs
+    const ctrlTabs = document.createElement('div');
+    ctrlTabs.className = 'sle-ctrl-tabs';
+    ctrlTabs.innerHTML = `
+      <button class="sle-ctrl-tab ct-active">KNOBS</button>
+      <button class="sle-ctrl-tab">XY</button>`;
+    ed.appendChild(ctrlTabs);
+
     // Module rack
     const rackArea = document.createElement('div');
     rackArea.className = 'sle-rack-area';
@@ -307,6 +316,39 @@ export class SynthLab {
     rackArea.appendChild(rack);
     ed.appendChild(rackArea);
     slot.panels = this._renderPanels(slot, rack);
+
+    // XY pad area
+    const xyArea = document.createElement('div');
+    xyArea.className = 'sle-xy-area';
+    xyArea.style.cssText = 'display:none;padding:.6rem 1rem;';
+    const synthXY = new XYPad({
+      accentColor: '#2a9d8f',
+      profiles: [
+        { name: 'FILTER SWEEP',
+          x: { label:'CUTOFF', min:20, max:18000, scale:'log',
+               get: ()  => slot.bridge.get('modules.vcf.cutoff'),
+               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voice?.setVcfParam('cutoff', val); } },
+          y: { label:'RESO',   min:0.01, max:20, scale:'log',
+               get: ()  => slot.bridge.get('modules.vcf.resonance'),
+               set: val => { slot.bridge.set('modules.vcf.resonance', val); slot.voice?.setVcfParam('resonance', val); } } },
+        { name: 'TIMBRE',
+          x: { label:'CUTOFF', min:20, max:18000, scale:'log',
+               get: ()  => slot.bridge.get('modules.vcf.cutoff'),
+               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voice?.setVcfParam('cutoff', val); } },
+          y: { label:'LFO AMT', min:1, max:2000, scale:'log',
+               get: ()  => slot.bridge.get('modules.lfo.amount'),
+               set: val => { slot.bridge.set('modules.lfo.amount', val); slot.voice?.setLfoParam('amount', val); } } },
+        { name: 'ENVELOPE',
+          x: { label:'ATTACK',  min:0.001, max:4, scale:'log',
+               get: ()  => slot.bridge.get('modules.adsr_amp.attack'),
+               set: val => { slot.bridge.set('modules.adsr_amp.attack', val); slot.voice?.setAmpParam('attack', val); } },
+          y: { label:'RELEASE', min:0.01, max:8, scale:'log',
+               get: ()  => slot.bridge.get('modules.adsr_amp.release'),
+               set: val => { slot.bridge.set('modules.adsr_amp.release', val); slot.voice?.setAmpParam('release', val); } } },
+      ],
+    });
+    xyArea.appendChild(synthXY.render());
+    ed.appendChild(xyArea);
 
     // Piano
     const pianoArea = document.createElement('div');
@@ -322,6 +364,18 @@ export class SynthLab {
       octave: 3,
     });
     pianoArea.querySelector('.sle-piano-container').appendChild(piano.render());
+
+    // Wire KNOBS/XY toggle
+    const [kBtn, xBtn] = ctrlTabs.querySelectorAll('.sle-ctrl-tab');
+    kBtn.addEventListener('click', () => {
+      kBtn.classList.add('ct-active'); xBtn.classList.remove('ct-active');
+      rackArea.style.display = ''; xyArea.style.display = 'none';
+    });
+    xBtn.addEventListener('click', () => {
+      xBtn.classList.add('ct-active'); kBtn.classList.remove('ct-active');
+      rackArea.style.display = 'none'; xyArea.style.display = '';
+      synthXY.syncDot();
+    });
 
     // Wire action buttons
     hdr.querySelector('#sle-wizard-btn').addEventListener('click', () => this._openWizardForSlot(slotIndex));
