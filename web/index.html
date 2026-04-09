@@ -2585,7 +2585,7 @@ function bakeToJson() {
 document.getElementById('btn-bake').addEventListener('click', bakeToJson);
 
 // ─── Band Chat ─────────────────────────────────────────────────────────────
-const API = 'http://localhost:8000';
+const API = window.BAND_API_URL || '';
 let sessionId = null;
 
 const chatMsgs = document.getElementById('chat-messages');
