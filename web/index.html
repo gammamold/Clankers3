@@ -6631,6 +6631,32 @@
         document.getElementById('config-overlay').classList.add('open');
       }
     })();
+    // ── Global Keyboard Shortcuts ─────────────────────────────────────────────────
+    window.addEventListener('keydown', e => {
+      const activeTag = document.activeElement.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (seq?.isPlaying) document.getElementById('btn-stop').click();
+        else document.getElementById('btn-play').click();
+      }
+      else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        const onRoom = document.body.className === 'on-room' || document.body.className === 'on-synth-lab';
+        if (!onRoom || !_currentInst) return;
+
+        const validFaces = FACES.filter(f => f.face !== null);
+        if (validFaces.length < 2) return;
+
+        const curIdx = validFaces.findIndex(f => f.id === _currentInst.id);
+        if (curIdx >= 0) {
+          e.preventDefault();
+          const offset = e.code === 'ArrowRight' ? 1 : -1;
+          const nextIdx = (curIdx + offset + validFaces.length) % validFaces.length;
+          openRoom(validFaces[nextIdx]);
+        }
+      }
+    });
 
   </script>
 </body>
