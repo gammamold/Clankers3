@@ -70,6 +70,7 @@
       .inst-xy-panel    { display:block !important; }
       .ctrl-tab-knobs   { color:#444 !important; border-color:#222 !important; background:#111 !important; }
       .ctrl-tab-xy      { border-color:#00d4ff !important; color:#00d4ff !important; background:#00121a !important; }
+      .inst-ctrl-wrap > .knob-row { margin-top: .3rem; }
     }
 
     /* ── XYPad component ── */
@@ -1056,9 +1057,9 @@
     </div>
     <div class="inst-knobs-panel" id="drum-knobs-panel">
       <div class="knob-row" id="drum-knobs"></div>
-      <div class="knob-row" id="drum-sends"></div>
     </div>
     <div class="inst-xy-panel" id="drum-xy-panel" style="display:none"></div>
+    <div class="knob-row" id="drum-sends"></div>
   </div>
 </div>
 
@@ -1073,9 +1074,9 @@
     </div>
     <div class="inst-knobs-panel" id="bass-knobs-panel">
       <div class="knob-row" id="bass-knobs"></div>
-      <div class="knob-row" id="bass-sends"></div>
     </div>
     <div class="inst-xy-panel" id="bass-xy-panel" style="display:none"></div>
+    <div class="knob-row" id="bass-sends"></div>
   </div>
 </div>
 
@@ -1090,9 +1091,9 @@
     </div>
     <div class="inst-knobs-panel" id="polyfm-knobs-panel">
       <div class="buchla-ctrl" id="buchla-knobs"></div>
-      <div class="knob-row" id="buchla-sends"></div>
     </div>
     <div class="inst-xy-panel" id="polyfm-xy-panel" style="display:none"></div>
+    <div class="knob-row" id="buchla-sends"></div>
   </div>
 </div>
 
@@ -1107,9 +1108,9 @@
     </div>
     <div class="inst-knobs-panel" id="pads-knobs-panel">
       <div class="knob-row" id="pads-knobs"></div>
-      <div class="knob-row" id="pads-sends"></div>
     </div>
     <div class="inst-xy-panel" id="pads-xy-panel" style="display:none"></div>
+    <div class="knob-row" id="pads-sends"></div>
   </div>
 </div>
 
@@ -1124,9 +1125,9 @@
     </div>
     <div class="inst-knobs-panel" id="rhodes-knobs-panel">
       <div class="knob-row" id="rhodes-knobs"></div>
-      <div class="knob-row" id="rhodes-sends"></div>
     </div>
     <div class="inst-xy-panel" id="rhodes-xy-panel" style="display:none"></div>
+    <div class="knob-row" id="rhodes-sends"></div>
   </div>
 </div>
 
@@ -2193,6 +2194,19 @@ function sendRhodesParams() {
 
 for (const k of Object.values(rk)) k.onChange = sendRhodesParams;
 
+function padsCC() {
+  return { 74: pk['p-cutoff'].val, 71: pk['p-res'].val,
+           73: pk['p-atk'].val,    75: pk['p-dec'].val,    72: pk['p-rel'].val,
+           91: pk['p-rev'].val,    88: pk['p-revsize'].val,
+           29: pk['p-chorrate'].val, 30: pk['p-cho'].val,  31: pk['p-chomix'].val };
+}
+function rhodesCC() {
+  return { 74: rk['r-bright'].val, 72: rk['r-decay'].val,
+           73: rk['r-bark'].val,   20: rk['r-ratio'].val,
+           26: rk['r-trate'].val,  27: rk['r-tdepth'].val,
+           29: rk['r-chorrate'].val, 30: rk['r-chorus'].val };
+}
+
 // ─── Sequencer ─────────────────────────────────────────────────────────────
 let seq = null;
 
@@ -2200,7 +2214,7 @@ function getSeq() {
   if (!seq) {
     seq = new Sequencer(ctx, { drums: drumsNode, bass: bassNode,
                                buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode });
-    seq.liveCC = { bass: bassCC, buchla: buchlaCC };
+    seq.liveCC = { bass: bassCC, buchla: buchlaCC, pads: padsCC, rhodes: rhodesCC };
     seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
     seq.synthLab = synthLab;  // enable Synth Lab track playback
     synthLab._seq = seq;      // let SynthLab register note-routing overrides

@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "clankers-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["web/serve.js"],
+      "env": { "PORT": "5176" },
+      "port": 5176
+    },
+    {
+      "name": "clankers-api",
+      "runtimeExecutable": "uvicorn",
+      "runtimeArgs": ["api.main:app", "--reload", "--port", "8000"],
+      "port": 8000
+    }
+  ]
+}
