@@ -25,6 +25,11 @@ EVOLUTION RULES:
 
 Return ONLY valid JSON — the complete evolved sheet, same format as input.`;
 
+function callLLM(provider, apiKey, model, system, messages, maxTokens) {
+  if (provider === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
+  return callAnthropic(apiKey, model, system, messages, maxTokens);
+}
+
 function callAnthropic(apiKey, model, system, messages, maxTokens) {
   const payload = JSON.stringify({ model, max_tokens: maxTokens, system, messages });
   return new Promise((resolve, reject) => {
@@ -58,6 +63,39 @@ function callAnthropic(apiKey, model, system, messages, maxTokens) {
   });
 }
 
+function callOpenAI(apiKey, model, system, messages, maxTokens) {
+  const openaiMsgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
+  const payload = JSON.stringify({ model, max_tokens: maxTokens, messages: openaiMsgs });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.openai.com',
+      path:     '/v1/chat/completions',
+      method:   'POST',
+      headers: {
+        'Authorization':  `Bearer ${apiKey}`,
+        'content-type':   'application/json',
+        'content-length': Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode !== 200) {
+            reject(new Error(parsed.error?.message || `OpenAI ${res.statusCode}`));
+          } else {
+            resolve(parsed.choices[0].message.content);
+          }
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -67,6 +105,7 @@ module.exports = async function handler(req, res) {
     synth_context = '',
     apiKey,
     model = 'claude-haiku-4-5-20251001',
+    provider = 'anthropic',
   } = req.body || {};
 
   if (!apiKey)  return res.status(401).json({ error: 'Missing apiKey' });
@@ -80,8 +119,8 @@ module.exports = async function handler(req, res) {
   ].filter(Boolean).join('\n\n');
 
   try {
-    const response = await callAnthropic(
-      apiKey, model, EVOLVE_SYSTEM,
+    const response = await callLLM(
+      provider, apiKey, model, EVOLVE_SYSTEM,
       [{ role: 'user', content: userContent }],
       8192,
     );

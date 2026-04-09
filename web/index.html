@@ -2590,8 +2590,9 @@ let sessionId    = null;
 let currentSheet = null;  // live Music Sheet state — client is the source of truth
 let chatHistory  = [];    // last N turns for context window
 
-function _bandApiKey() { return sessionStorage.getItem('clankers_api_key') || ''; }
-function _bandModel()  { return sessionStorage.getItem('clankers_model')   || 'claude-haiku-4-5-20251001'; }
+function _bandApiKey()   { return sessionStorage.getItem('clankers_api_key')  || ''; }
+function _bandModel()    { return sessionStorage.getItem('clankers_model')    || 'claude-haiku-4-5-20251001'; }
+function _bandProvider() { return sessionStorage.getItem('clankers_provider') || 'anthropic'; }
 
 const chatMsgs = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
@@ -2687,7 +2688,7 @@ document.getElementById('btn-new-session').addEventListener('click', async () =>
     const res  = await fetch('/api/band/session-new', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brief, section: 'verse1', solo: sessionSolo,
-                             apiKey, model: _bandModel() }),
+                             apiKey, model: _bandModel(), provider: _bandProvider() }),
     });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
     const data = await res.json();
@@ -2776,6 +2777,7 @@ async function sendChat() {
         synth_context: _synthLabContext(),
         apiKey:        _bandApiKey(),
         model:         _bandModel(),
+        provider:      _bandProvider(),
       }),
     });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
@@ -2821,6 +2823,7 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
         synth_context: _synthLabContext(),
         apiKey:        _bandApiKey(),
         model:         _bandModel(),
+        provider:      _bandProvider(),
       }),
     });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
@@ -4027,10 +4030,10 @@ document.getElementById('cfg-save-btn').addEventListener('click', async () => {
   status.textContent = ''; status.className = 'cfg-status';
 
   try {
-    // Verify the key works against the Anthropic proxy
+    // Verify the key works against the LLM proxy (provider-aware)
     const probe = await fetch('/api/llm', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey: key, model, max_tokens: 1,
+      body: JSON.stringify({ apiKey: key, provider: _cfgProvider, model, max_tokens: 1,
                              messages: [{ role: 'user', content: 'hi' }] }),
     });
     if (probe.status === 401) throw new Error('Invalid API key');
