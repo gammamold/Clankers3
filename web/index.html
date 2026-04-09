@@ -3692,15 +3692,14 @@
   <div id="chat-overlay">
     <button id="btn-chat-close">× CLOSE</button>
     <div class="chat-section">
-      <h2>BAND CHAT <span id="session-badge"></span></h2>
-      <div class="input-row">
-        <input id="brief-input" type="text" placeholder="Describe your track (dark techno, 130 bpm…)" />
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h2 style="margin:0">BAND CHAT <span id="session-badge"></span></h2>
         <span style="display:flex;gap:.3rem;flex-shrink:0;">
           <button id="btn-session-solo" class="mode-btn mode-active" title="Single LLM pass — fast">SOLO</button>
           <button id="btn-session-band" class="mode-btn" title="Full 3-member debate — slower, richer">BAND</button>
+          <button id="btn-load-sheet" title="Load current JSON textarea as session (no LLM generation)">USE
+            SHEET</button>
         </span>
-        <button id="btn-new-session">START SESSION</button>
-        <button id="btn-load-sheet" title="Load current JSON textarea as session (no LLM generation)">USE SHEET</button>
       </div>
       <div id="chat-messages"><span class="msg-sys">Start a session to talk to the band, or hit USE SHEET to load the
           current JSON.</span></div>
@@ -3717,8 +3716,8 @@
         <button id="btn-autoplay" style="background:#0a1a0a;border-color:#1e3e1e;color:#383">▶ AUTO</button>
       </div>
       <div class="input-row">
-        <input id="chat-input" type="text" placeholder="Talk to the band…" disabled />
-        <button id="chat-send" disabled>SEND</button>
+        <input id="chat-input" type="text" placeholder="Describe your track or ask the band for changes…" />
+        <button id="chat-send">SEND</button>
       </div>
     </div>
   </div>
@@ -4991,47 +4990,7 @@
       document.getElementById('btn-session-solo').classList.remove('mode-active');
     });
 
-    document.getElementById('btn-new-session').addEventListener('click', async () => {
-      const brief = document.getElementById('brief-input').value.trim();
-      if (!brief) { chatAppend('Enter a track brief first.', 'msg-sys'); return; }
-      chatAppend(sessionSolo ? 'Starting session…' : 'Band is debating (this takes a moment)…', 'msg-sys');
-      document.getElementById('btn-new-session').disabled = true;
-      const apiKey = _bandApiKey();
-      if (!apiKey) {
-        chatAppend('Enter your API key in ⚙ LLM settings first.', 'msg-sys');
-        document.getElementById('btn-new-session').disabled = false;
-        return;
-      }
-      try {
-        const res = await fetch('/api/band/session-new', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            brief, section: 'verse1', solo: sessionSolo,
-            apiKey, model: _bandModel(), provider: _bandProvider()
-          }),
-        });
-        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
-        const data = await res.json();
-        sessionId = 'ses_' + Date.now().toString(36);
-        currentSheet = data.sheet;
-        chatHistory = [];
-        document.getElementById('session-badge').textContent = `[${sessionId.slice(0, 8)}]`;
-        chatInput.disabled = false; chatSend.disabled = false;
-        document.getElementById('evolve-row').style.display = '';
-        // Switch to song mode so new sections auto-fill the arrangement
-        if (!songMode) document.getElementById('btn-mode-song')?.click();
-        // Show band debate transcript (multi-LLM mode)
-        if (data.messages && data.messages.length) {
-          for (const m of data.messages) chatAppend(`${m.role}: ${m.content}`, 'msg-band');
-        }
-        chatAppend('Session started. The band is ready.', 'msg-sys');
-        sheetToSequencer(data.sheet, { autoStore: true, autoPlay: false });
-      } catch (e) {
-        chatAppend('Error: ' + e, 'msg-sys');
-      } finally {
-        document.getElementById('btn-new-session').disabled = false;
-      }
-    });
+
 
     document.getElementById('btn-load-sheet').addEventListener('click', async () => {
       let sheet;
@@ -5083,10 +5042,53 @@
 
     async function sendChat() {
       const msg = chatInput.value.trim();
-      if (!msg || !sessionId) return;
+      if (!msg) return;
       chatInput.value = '';
       chatAppend('You: ' + msg, 'msg-user');
       chatSend.disabled = true;
+      chatInput.disabled = true;
+
+      const apiKey = _bandApiKey();
+      if (!apiKey) {
+        chatAppend('Enter your API key in ⚙ LLM settings first.', 'msg-sys');
+        chatSend.disabled = false; chatInput.disabled = false; chatInput.focus();
+        return;
+      }
+
+      if (!sessionId) {
+        // Start a brand new session using the prompt natively
+        chatAppend(sessionSolo ? 'Starting session…' : 'Band is debating (this takes a moment)…', 'msg-sys');
+        try {
+          const res = await fetch('/api/band/session-new', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              brief: msg, section: 'verse1', solo: sessionSolo,
+              apiKey, model: _bandModel(), provider: _bandProvider()
+            }),
+          });
+          if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+          const data = await res.json();
+          sessionId = 'ses_' + Date.now().toString(36);
+          currentSheet = data.sheet;
+          chatHistory = [];
+          document.getElementById('session-badge').textContent = `[${sessionId.slice(0, 8)}]`;
+          document.getElementById('evolve-row').style.display = '';
+          if (!songMode) document.getElementById('btn-mode-song')?.click();
+
+          if (data.messages && data.messages.length) {
+            for (const m of data.messages) chatAppend(`${m.role}: ${m.content}`, 'msg-band');
+          }
+          chatAppend('Session started. The band is ready.', 'msg-sys');
+          sheetToSequencer(data.sheet, { autoStore: true, autoPlay: false });
+        } catch (e) {
+          chatAppend('Error: ' + e, 'msg-sys');
+        } finally {
+          chatSend.disabled = false; chatInput.disabled = false; chatInput.focus();
+        }
+        return;
+      }
+
+      // If sessionId exists, evaluate as native modification chat request
       try {
         const res = await fetch('/api/band/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5095,7 +5097,7 @@
             history: chatHistory.slice(-4),
             message: msg,
             synth_context: _synthLabContext(),
-            apiKey: _bandApiKey(),
+            apiKey,
             model: _bandModel(),
             provider: _bandProvider(),
           }),
@@ -5110,7 +5112,7 @@
       } catch (e) {
         chatAppend('Error: ' + e, 'msg-sys');
       } finally {
-        chatSend.disabled = false; chatInput.focus();
+        chatSend.disabled = false; chatInput.disabled = false; chatInput.focus();
       }
     }
 
@@ -5540,6 +5542,8 @@
         this._dragState = null;
         this._sheet = null;
         this._tType = null;
+        this.selectedNotes = [];
+        this.marqueeBox = null;
       }
 
       load(sheet, instId, tType) {
@@ -5615,6 +5619,7 @@
 
         // notes
         this.notes.forEach(n => {
+          if (this._isHidden(n)) return;
           const ri = DRUM_ROWS.findIndex(r => r.midi === n.pitch);
           if (ri < 0) return;
           const x = KEY_W + n.beat * BEAT_W;
@@ -5626,6 +5631,7 @@
           ctx.fillRect(x, y, nw, RH - 4);
         });
 
+        this._drawDecorations(ctx);
         this._drawPlayhead(ctx, ph, W, H, HEADER, KEY_W, BEAT_W);
       }
 
@@ -5657,7 +5663,7 @@
         const hue = ROLL_COLORS[this.instId] ?? 185;
         const rollEnd = KEY_W + totalBeats * BEAT_W;
         this.notes.forEach(n => {
-          if (n.pitch < pitchMin || n.pitch > pitchMax) return;
+          if (n.pitch < pitchMin || n.pitch > pitchMax || this._isHidden(n)) return;
           const x = KEY_W + n.beat * BEAT_W;
           if (x >= rollEnd) return; // past loop end
           const row = pitchMax - n.pitch;
@@ -5670,6 +5676,7 @@
           ctx.beginPath(); ctx.roundRect(x, y, nw, RH - 2, 2); ctx.fill();
         });
 
+        this._drawDecorations(ctx);
         this._drawPlayhead(ctx, ph, W, H, HEADER, KEY_W, BEAT_W);
       }
 
@@ -5720,6 +5727,69 @@
 
       // ── Editing ──────────────────────────────────────────────────────────────────
       // ── Editing ──────────────────────────────────────────────────────────────────
+      _isHidden(n) {
+        const st = this._dragState;
+        if (st?.active && st.type === 'move') {
+          return this.selectedNotes.some(sn => sn.beat === n.beat && sn.pitch === n.pitch);
+        }
+        return false;
+      }
+
+      _drawDecorations(ctx) {
+        const { KEY_W, HEADER, BEAT_W } = this;
+        const st = this._dragState;
+        const isGhosting = st?.active && (st.type === 'move' || st.type === 'dup');
+        const hue = this.isDrum ? 20 : (ROLL_COLORS[this.instId] ?? 185);
+
+        ctx.lineWidth = 1.5;
+        this.selectedNotes.forEach(n => {
+          let beat = n.beat;
+          let pitch = n.pitch;
+          if (isGhosting) {
+            beat = Math.max(0, beat + st.deltaBeat);
+            pitch = this._getOffsetPitch(pitch, st.deltaPitch);
+          }
+          let ri = -1;
+          if (this.isDrum) {
+            ri = DRUM_ROWS.findIndex(r => r.midi === pitch);
+          } else {
+            if (pitch >= this.pitchMin && pitch <= this.pitchMax) ri = this.pitchMax - pitch;
+          }
+          if (ri < 0) return; // out of bounds
+
+          const x = KEY_W + beat * BEAT_W;
+          const RH = this.isDrum ? this.ROW_H_DRUM : this.ROW_H_PITCHED;
+          const y = HEADER + ri * RH + (this.isDrum ? 2 : 1);
+          const nw = this.isDrum ? Math.max(5, BEAT_W * 0.18) : Math.max(3, n.dur * BEAT_W - 2);
+
+          ctx.strokeStyle = `hsl(0,0%,100%)`; // white border
+          ctx.fillStyle = `hsl(${hue},72%,${10 + (n.vel / 127) * 40}%)`;
+          if (isGhosting) ctx.globalAlpha = 0.6;
+
+          if (this.isDrum) {
+            ctx.strokeRect(x, y, nw, RH - 4);
+            if (isGhosting) ctx.fillRect(x, y, nw, RH - 4);
+          } else {
+            ctx.beginPath(); ctx.roundRect(x, y, nw, RH - 2, 2);
+            ctx.stroke();
+            if (isGhosting) ctx.fill();
+          }
+          ctx.globalAlpha = 1.0;
+        });
+
+        if (this.marqueeBox) {
+          const { x0, y0, x1, y1 } = this.marqueeBox;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+          const x = Math.min(x0, x1);
+          const y = Math.min(y0, y1);
+          const w = Math.abs(x1 - x0);
+          const h = Math.abs(y1 - y0);
+          ctx.fillRect(x, y, w, h);
+          ctx.strokeRect(x, y, w, h);
+        }
+      }
+
       _getGridPos(e) {
         const r = this.cv.getBoundingClientRect();
         const cx = (e.clientX - r.left) * (this.cv.width / r.width);
@@ -5740,63 +5810,128 @@
         return { cx, cy, clickBeat, pitch };
       }
 
+      _getOffsetPitch(origPitch, dp) {
+        if (this.isDrum) {
+          const idx = DRUM_ROWS.findIndex(r => r.midi === origPitch);
+          if (idx < 0) return origPitch;
+          const nIdx = Math.max(0, Math.min(DRUM_ROWS.length - 1, idx + dp));
+          return DRUM_ROWS[nIdx].midi;
+        }
+        return Math.max(0, Math.min(127, origPitch + dp));
+      }
+
       _onPointerDown(e) {
         if (!this._sheet) return;
         this.cv.setPointerCapture(e.pointerId);
         const pos = this._getGridPos(e);
         if (!pos) return;
 
-        const dur = parseFloat(document.getElementById('room-resolution')?.value ?? '0.5');
+        const hit = this.notes.find(n => n.pitch === pos.pitch && pos.clickBeat >= n.beat && pos.clickBeat < n.beat + n.dur);
 
-        const hit = this.notes.find(n =>
-          n.pitch === pos.pitch &&
-          pos.clickBeat >= n.beat &&
-          pos.clickBeat < n.beat + n.dur
-        );
+        if (!hit) {
+          this._dragState = {
+            active: true, type: 'marquee',
+            startX: pos.cx, startY: pos.cy,
+            hasMoved: false,
+            clickBeat: pos.clickBeat, pitch: pos.pitch, dur: parseFloat(document.getElementById('room-resolution')?.value ?? '0.5')
+          };
+          if (!e.shiftKey) this.selectedNotes = [];
+          this.marqueeBox = { x0: pos.cx, y0: pos.cy, x1: pos.cx, y1: pos.cy };
+        } else {
+          const isSel = this.selectedNotes.some(sn => sn.beat === hit.beat && sn.pitch === hit.pitch);
+          if (!isSel) {
+            if (!e.shiftKey) this.selectedNotes = [hit];
+            else this.selectedNotes.push(hit);
+          }
 
-        this._dragState = {
-          active: true,
-          hitNote: hit || null,
-          pitch: pos.pitch,
-          clickBeat: pos.clickBeat,
-          dur: dur,
-          startY: e.clientY,
-          startVel: hit ? hit.vel : 80,
-          hasMoved: false,
-          targetTrack: null
-        };
+          let type = 'vel';
+          if (e.ctrlKey || e.metaKey) type = 'move';
+          else if (e.altKey) type = 'dup';
 
-        if (hit) {
-          let acc = 0;
-          for (const step of this._sheet.steps) {
-            if (Math.abs(acc - hit.beat) < 0.001) {
-              const tr = step.tracks?.find(x => x.t === this._tType);
-              if (tr && tr.n.includes(pos.pitch)) {
-                this._dragState.targetTrack = tr;
+          this._dragState = {
+            active: true, type,
+            hitNote: hit || null,
+            startX: pos.cx, startY: e.clientY,
+            startPosPitch: pos.pitch, startPosBeat: pos.clickBeat,
+            deltaBeat: 0, deltaPitch: 0,
+            hasMoved: false,
+            targetTrack: null, startVel: hit.vel
+          };
+
+          if (type === 'vel') {
+            let acc = 0;
+            for (const step of this._sheet.steps) {
+              if (Math.abs(acc - hit.beat) < 0.001) {
+                const tr = step.tracks?.find(x => x.t === this._tType);
+                if (tr && tr.n.includes(pos.pitch)) this._dragState.targetTrack = tr;
+                break;
               }
-              break;
+              acc += step.d ?? 0.25;
             }
-            acc += step.d ?? 0.25;
           }
         }
+        if (!this._raf) this.draw(-1);
       }
 
       _onPointerMove(e) {
         const st = this._dragState;
-        if (!st?.active || !st.hitNote || !st.targetTrack) return;
+        if (!st?.active) return;
+
+        const r = this.cv.getBoundingClientRect();
+        const cx = (e.clientX - r.left) * (this.cv.width / r.width);
+        const cy = (e.clientY - r.top) * (this.cv.height / r.height);
 
         const deltaY = e.clientY - st.startY;
-        if (Math.abs(deltaY) > 5) st.hasMoved = true;
+        const deltaX = cx - st.startX;
+        if (Math.abs(deltaY) > 5 || Math.abs(deltaX) > 5) st.hasMoved = true;
 
-        let newVel = Math.round(st.startVel - deltaY * 1.5);
-        newVel = Math.max(1, Math.min(127, newVel));
+        if (st.type === 'marquee') {
+          this.marqueeBox.x1 = cx;
+          this.marqueeBox.y1 = cy;
 
-        if (st.targetTrack.v !== newVel) {
-          st.targetTrack.v = newVel;
-          document.getElementById('sheet-json').value = JSON.stringify(this._sheet, null, 2);
-          this.notes = this._extract(this._sheet, this._tType);
-          if (seq) seq.load(this._sheet);
+          const xmin = Math.min(this.marqueeBox.x0, this.marqueeBox.x1);
+          const xmax = Math.max(this.marqueeBox.x0, this.marqueeBox.x1);
+          const ymin = Math.min(this.marqueeBox.y0, this.marqueeBox.y1);
+          const ymax = Math.max(this.marqueeBox.y0, this.marqueeBox.y1);
+
+          this.selectedNotes = this.notes.filter(n => {
+            const nx = this.KEY_W + n.beat * this.BEAT_W;
+            const nw = Math.max(3, n.dur * this.BEAT_W - 2);
+            const ri = this.isDrum ? DRUM_ROWS.findIndex(r => r.midi === n.pitch) : (this.pitchMax - n.pitch);
+            if (ri < 0) return false;
+            const RH = this.isDrum ? this.ROW_H_DRUM : this.ROW_H_PITCHED;
+            const ny = this.HEADER + ri * RH + 1;
+            return (nx < xmax && nx + nw > xmin && ny < ymax && ny + RH - 2 > ymin);
+          });
           if (!this._raf) this.draw(-1);
+          return;
+        }
+
+        if (st.type === 'move' || st.type === 'dup') {
+          const res = parseFloat(document.getElementById('room-resolution')?.value ?? '0.25');
+          const pos = this._getGridPos(e);
+          if (pos) {
+            st.deltaBeat = Math.round((pos.clickBeat - st.startPosBeat) / res) * res;
+            if (this.isDrum) {
+              const startIdx = DRUM_ROWS.findIndex(r => r.midi === st.startPosPitch);
+              const curIdx = DRUM_ROWS.findIndex(r => r.midi === pos.pitch);
+              if (startIdx >= 0 && curIdx >= 0) st.deltaPitch = curIdx - startIdx;
+            } else {
+              st.deltaPitch = pos.pitch - st.startPosPitch;
+            }
+          }
+          if (!this._raf) this.draw(-1);
+          return;
+        }
+
+        if (st.type === 'vel' && st.targetTrack) {
+          let newVel = Math.round(st.startVel - deltaY * 1.5);
+          newVel = Math.max(1, Math.min(127, newVel));
+          if (st.targetTrack.v !== newVel) {
+            st.targetTrack.v = newVel;
+            this.notes = this._extract(this._sheet, this._tType);
+            this._compileAndUpload(false);
+          }
         }
       }
 
@@ -5805,61 +5940,84 @@
         const st = this._dragState;
         if (!st || !st.active) return;
 
-        if (!st.hasMoved) {
-          this._toggleNote(st.clickBeat, st.pitch, st.dur, 80);
+        if (st.type === 'marquee') {
+          this.marqueeBox = null;
+          if (!st.hasMoved) this._toggleNote(st.clickBeat, st.pitch, st.dur, 80);
+        } else if ((st.type === 'move' || st.type === 'dup') && st.hasMoved) {
+          this._commitDraggedNotes();
+        } else if (!st.hasMoved && (st.type === 'vel' || st.type === 'move' || st.type === 'dup')) {
+          this._deleteNote(st.startPosBeat, st.startPosPitch);
+          this._compileAndUpload(false);
         }
         this._dragState = null;
+        if (!this._raf) this.draw(-1);
+      }
+
+      _commitDraggedNotes() {
+        const st = this._dragState;
+        if (!st || (st.deltaBeat === 0 && st.deltaPitch === 0)) return;
+        if (st.type === 'move') this.selectedNotes.forEach(sn => this._deleteNote(sn.beat, sn.pitch));
+
+        this.selectedNotes.forEach(sn => {
+          const newBeat = Math.max(0, sn.beat + st.deltaBeat);
+          const newPitch = this._getOffsetPitch(sn.pitch, st.deltaPitch);
+          this._insertNote(newBeat, newPitch, sn.dur, sn.vel);
+        });
+
+        this.selectedNotes = this.selectedNotes.map(sn => ({
+          beat: Math.max(0, sn.beat + st.deltaBeat),
+          pitch: this._getOffsetPitch(sn.pitch, st.deltaPitch), dur: sn.dur, vel: sn.vel
+        }));
+        this._compileAndUpload(true);
+      }
+
+      _deleteNote(beat, pitch) {
+        const steps = this._sheet.steps;
+        let acc = 0;
+        for (const step of steps) {
+          if (Math.abs(acc - beat) < 0.001) {
+            const tr = step.tracks?.find(x => x.t === this._tType);
+            if (tr) {
+              const ni = tr.n.indexOf(pitch);
+              if (ni >= 0) {
+                tr.n.splice(ni, 1);
+                if (!tr.n.length) step.tracks.splice(step.tracks.indexOf(tr), 1);
+              }
+            }
+            break;
+          }
+          acc += step.d ?? 0.25;
+        }
+      }
+
+      _insertNote(beat, pitch, dur, vel) {
+        const steps = this._sheet.steps;
+        let acc = 0, bestIdx = 0, bestDist = Infinity;
+        for (let i = 0; i < steps.length; i++) {
+          const d = Math.abs(acc - beat);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+          acc += steps[i].d ?? 0.25;
+        }
+        const step = steps[bestIdx];
+        if (!step) return;
+        if (!step.tracks) step.tracks = [];
+        const tr = step.tracks.find(x => x.t === this._tType);
+        if (tr) {
+          if (!tr.n.includes(pitch)) tr.n.push(pitch);
+        } else step.tracks.push({ t: this._tType, n: [pitch], v: vel, dur: dur });
       }
 
       _toggleNote(clickBeat, pitch, defaultDur, defaultVel) {
-        const steps = this._sheet.steps;
-        const t = this._tType;
+        const hit = this.notes.find(n => n.pitch === pitch && clickBeat >= n.beat && clickBeat < n.beat + n.dur);
+        if (hit) this._deleteNote(hit.beat, hit.pitch);
+        else this._insertNote(clickBeat, pitch, defaultDur, defaultVel);
+        this._compileAndUpload(false);
+      }
 
-        // Check if click lands on an existing note (within its time span)
-        const hit = this.notes.find(n =>
-          n.pitch === pitch &&
-          clickBeat >= n.beat &&
-          clickBeat < n.beat + n.dur
-        );
-
-        if (hit) {
-          // Remove — find the step that owns this note by matching beat position
-          let acc = 0;
-          for (const step of steps) {
-            if (Math.abs(acc - hit.beat) < 0.001) {
-              const tr = step.tracks?.find(x => x.t === t);
-              if (tr) {
-                const ni = tr.n.indexOf(pitch);
-                if (ni >= 0) {
-                  tr.n.splice(ni, 1);
-                  if (!tr.n.length) step.tracks.splice(step.tracks.indexOf(tr), 1);
-                }
-              }
-              break;
-            }
-            acc += step.d ?? 0.25;
-          }
-        } else {
-          // Add — snap to nearest step start
-          let acc = 0, bestIdx = 0, bestDist = Infinity;
-          for (let i = 0; i < steps.length; i++) {
-            const d = Math.abs(acc - clickBeat);
-            if (d < bestDist) { bestDist = d; bestIdx = i; }
-            acc += steps[i].d ?? 0.25;
-          }
-          const step = steps[bestIdx];
-          if (!step.tracks) step.tracks = [];
-          const tr = step.tracks.find(x => x.t === t);
-          if (tr) {
-            if (!tr.n.includes(pitch)) tr.n.push(pitch);
-          } else {
-            step.tracks.push({ t, n: [pitch], v: defaultVel, dur: defaultDur });
-          }
-        }
-
+      _compileAndUpload(recalcTotal) {
         document.getElementById('sheet-json').value = JSON.stringify(this._sheet, null, 2);
-        this.notes = this._extract(this._sheet, t);
-        // Hot-reload the sequencer so the change is heard on the next loop step
+        this.notes = this._extract(this._sheet, this._tType);
+        if (recalcTotal) this.totalBeats = Math.round(this._sheet.steps.reduce((s, st) => s + (st.d ?? 0.25), 0) * 1e6) / 1e6;
         if (seq) seq.load(this._sheet);
         if (!this._raf) this.draw(-1);
       }
