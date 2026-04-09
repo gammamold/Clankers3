@@ -6056,8 +6056,13 @@
     function buildFaces(sheet) {
       const row = document.getElementById('faces-row');
       row.innerHTML = '';
-      // assign a fresh random face per instrument per load
-      FACES.forEach(f => { f.face = randomFace(); });
+      // assign a fresh unique random face per instrument per load
+      let pool = [...FACE_POOL];
+      FACES.forEach(f => {
+        if (pool.length === 0) pool = [...FACE_POOL];
+        const idx = Math.floor(Math.random() * pool.length);
+        f.face = pool.splice(idx, 1)[0];
+      });
 
       // figure out which types appear in this sheet
       const usedTypes = new Set();
