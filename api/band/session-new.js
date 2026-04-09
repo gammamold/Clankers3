@@ -54,7 +54,12 @@ Return ONLY valid JSON — no prose, no markdown fences:
   ]
 }`;
 
-function callAnthropic(apiKey, model, system, messages, maxTokens) {
+function callLLM(provider, apiKey, model, system, messages, maxTokens) {
+  if (provider === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
+  return callLLM(provider, apiKey, model, system, messages, maxTokens);
+}
+
+function callLLM(provider, apiKey, model, system, messages, maxTokens) {
   const payload = JSON.stringify({ model, max_tokens: maxTokens, system, messages });
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -87,12 +92,45 @@ function callAnthropic(apiKey, model, system, messages, maxTokens) {
   });
 }
 
+function callOpenAI(apiKey, model, system, messages, maxTokens) {
+  const openaiMsgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
+  const payload = JSON.stringify({ model, max_tokens: maxTokens, messages: openaiMsgs });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.openai.com',
+      path:     '/v1/chat/completions',
+      method:   'POST',
+      headers: {
+        'Authorization':  `Bearer ${apiKey}`,
+        'content-type':   'application/json',
+        'content-length': Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode !== 200) {
+            reject(new Error(parsed.error?.message || `OpenAI ${res.statusCode}`));
+          } else {
+            resolve(parsed.choices[0].message.content);
+          }
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 const SECTION_TENSION = { verse1: 0.35, verse2: 0.45, bridge: 0.60, outro: 0.50 };
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { brief, section = 'verse1', solo = true, apiKey, model = 'claude-haiku-4-5-20251001' } = req.body || {};
+  const { brief, section = 'verse1', solo = true, apiKey, model = 'claude-haiku-4-5-20251001', provider = 'anthropic' } = req.body || {};
   if (!apiKey) return res.status(401).json({ error: 'Missing apiKey' });
   if (!brief)  return res.status(400).json({ error: 'Missing brief' });
 
@@ -102,7 +140,7 @@ module.exports = async function handler(req, res) {
 
     if (!solo) {
       // Two-pass: Bassist proposes → Conductor refines
-      const bassistReply = await callAnthropic(apiKey, model,
+      const bassistReply = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
         [{ role: 'user', content: `Brief: ${brief}\nSection: ${section}\n\nYou are The Bassist. Propose an opening Music Sheet that serves the groove. Output the full JSON.` }],
         8192,
@@ -113,7 +151,7 @@ module.exports = async function handler(req, res) {
       const m = bassistReply.match(/\{[\s\S]*\}/);
       const bassistSheet = m ? bassistReply : '(no sheet yet)';
 
-      const conductorReply = await callAnthropic(apiKey, model,
+      const conductorReply = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
         [
           { role: 'user', content: `Brief: ${brief}\nSection: ${section}\n\nYou are The Bassist. Propose an opening Music Sheet that serves the groove. Output the full JSON.` },
@@ -131,7 +169,7 @@ module.exports = async function handler(req, res) {
 
     } else {
       // Solo mode: single pass
-      const response = await callAnthropic(apiKey, model,
+      const response = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
         [{ role: 'user', content: `Brief: ${brief}\nSection: ${section}\n\nGenerate the opening ClankerBoy JSON Music Sheet.` }],
         8192,
