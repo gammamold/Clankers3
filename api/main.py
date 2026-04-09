@@ -33,7 +33,7 @@ from pydantic import BaseModel
 
 import config
 import llm_clients
-from chatroom.chatroom import Chatroom
+from chatroom.chatroom import Chatroom, _enforce_clean_bars
 from conductor.conductor import evolve, _SECTION_TENSION
 from api.session_store import (
     create_session, get_session, update_sheet, append_history,
@@ -325,8 +325,11 @@ def _chat_evolve(sheet: dict, message: str, history: list, synth_context: str = 
     if m:
         try:
             data = json.loads(m.group())
+            new_sheet = data.get("sheet", sheet)
+            if new_sheet is not sheet:
+                _enforce_clean_bars(new_sheet)
             return (
-                data.get("sheet", sheet),
+                new_sheet,
                 data.get("reply", ""),
                 data.get("companion", "Conductor"),
             )

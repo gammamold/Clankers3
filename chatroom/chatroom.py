@@ -417,6 +417,21 @@ def _strip_json_comments(s: str) -> str:
     return '\n'.join(cleaned)
 
 
+def _enforce_clean_bars(sheet: dict) -> None:
+    """Pad the sheet steps with empty steps so the total duration is a neat multiple of 4 beats (1 bar)."""
+    if "steps" not in sheet or not isinstance(sheet["steps"], list):
+        return
+    
+    total_beats = sum(step.get("d", 0.5) for step in sheet["steps"])
+    remainder = total_beats % 4.0
+    
+    # Due to floating point math, use a loose check
+    if remainder > 0.001 and remainder < 3.999:
+        pad_beats = 4.0 - remainder
+        # Add a single empty step to fill out the bar
+        sheet["steps"].append({"d": round(pad_beats, 3), "tracks": []})
+
+
 def _extract_sheet_json(text: str) -> dict | None:
     """
     Extract a Music Sheet JSON dict from a message.
@@ -428,7 +443,9 @@ def _extract_sheet_json(text: str) -> dict | None:
     if m:
         raw = _strip_json_comments(m.group(1))
         try:
-            return json.loads(raw)
+            obj = json.loads(raw)
+            _enforce_clean_bars(obj)
+            return obj
         except json.JSONDecodeError:
             pass
 
@@ -460,6 +477,7 @@ def _extract_sheet_json(text: str) -> dict | None:
                 try:
                     obj = json.loads(candidate)
                     if "bpm" in obj or "steps" in obj or "agents" in obj:
+                        _enforce_clean_bars(obj)
                         return obj
                 except json.JSONDecodeError:
                     pass
