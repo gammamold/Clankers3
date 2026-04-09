@@ -5925,7 +5925,7 @@
       rm.dataset.type = faceObj.id;
       rs.dataset.type = faceObj.id;
       if (seq) {
-        rm.classList.toggle('active-m', seq._muted.has(faceObj.id));
+        rm.classList.toggle('active-m', !!seq.getMuteState()[faceObj.id]);
         rs.classList.toggle('active-s', !!seq.getSoloState()[faceObj.id]);
       }
 
