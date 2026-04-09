@@ -3159,8 +3159,8 @@
       </div>
       <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem;">
         <span id="song-pat-label" style="font-family:monospace;font-size:.72rem;color:#00d4ff;">P1</span>
-        <button id="song-btn-store" class="mode-btn">← STORE</button>
-        <button id="song-btn-loop" class="mode-btn mode-active">LOOP</button>
+        <button id="song-btn-store" class="mode-btn"> STORE</button>
+        <button id="song-btn-loop" class="mode-btn mode-active">1 PTN</button>
         <button id="song-btn-song" class="mode-btn">SONG</button>
       </div>
       <div id="song-pat-bank" class="pat-bank" style="margin-bottom:1.2rem;"></div>
@@ -3671,7 +3671,7 @@
         PATTERNS <span id="pat-slot-label">P1</span>
         <button id="btn-pat-store">← STORE</button>
         <span style="margin-left:auto;display:flex;gap:.3rem;">
-          <button id="btn-mode-loop" class="mode-btn mode-active">LOOP</button>
+          <button id="btn-mode-loop" class="mode-btn mode-active">1 PTN</button>
           <button id="btn-mode-song" class="mode-btn">SONG</button>
         </span>
       </div>
@@ -4682,7 +4682,7 @@
     let songArrangement = [];   // ordered list of bank indices
     let songMode = false;
     let songRepeat = false;
-    let arrStepOffsets = [];    // cumulative step index per arrangement position
+    let arrBeatOffsets = [];    // cumulative beat offset per arrangement position
     let arrPlayTimer = null;
 
     // Build pattern slot buttons
@@ -4793,16 +4793,20 @@
     // Build concatenated song sheet from arrangement
     function buildSongSheet() {
       const steps = [];
-      arrStepOffsets = [];
+      arrBeatOffsets = [];
+      let totalBeats = 0;
       let bpm = null;
       for (const si of songArrangement) {
         const pat = patternBank[si];
         if (!pat) continue;
-        arrStepOffsets.push(steps.length);
+        arrBeatOffsets.push(totalBeats);
         bpm = bpm ?? pat.sheet.bpm;
+        for (const step of pat.sheet.steps || []) {
+          totalBeats += step.d ?? 0.25;
+        }
         steps.push(...pat.sheet.steps);
       }
-      return { bpm: bpm ?? 120, steps };
+      return { bpm: bpm ?? 120, steps, loopBeats: totalBeats };
     }
 
     // Highlight current arrangement position while song plays
@@ -4810,10 +4814,10 @@
       stopArrIndicator();
       arrPlayTimer = setInterval(() => {
         if (!seq?.isPlaying || !songMode) return;
-        const idx = seq._stepIdx;
-        let playing = arrStepOffsets.length - 1;
-        for (let i = 0; i < arrStepOffsets.length - 1; i++) {
-          if (idx < arrStepOffsets[i + 1]) { playing = i; break; }
+        const currentBeat = seq.getCurrentBeat();
+        let playing = arrBeatOffsets.length - 1;
+        for (let i = 0; i < arrBeatOffsets.length - 1; i++) {
+          if (currentBeat < arrBeatOffsets[i + 1]) { playing = i; break; }
         }
         arrSlots.forEach((s, i) => s.classList.toggle('arr-playing', i === playing && i < songArrangement.length));
       }, 80);
@@ -4913,7 +4917,7 @@
       chatMsgs.scrollTop = chatMsgs.scrollHeight;
     }
 
-    function sheetToSequencer(sheet, { autoStore = false, autoStoreNext = false, autoPlay = false } = {}) {
+    function sheetToSequencer(sheet, { autoStore = false, autoStoreNext = false, autoPlay = false, focusMain = true } = {}) {
       try {
         const steps = sheet.steps;
         if (!steps || !steps.length) return;
@@ -4968,7 +4972,7 @@
         if (autoPlay) document.getElementById('btn-play')?.click();
 
         // Trigger face reveal / transition to main screen
-        if (typeof revealFaces === 'function') revealFaces(sheet);
+        if (typeof revealFaces === 'function') revealFaces(sheet, focusMain);
       } catch (e) {
         chatAppend('[sheet parse error: ' + e + ']', 'msg-sys');
       }
@@ -5102,7 +5106,7 @@
         chatHistory.push({ role: 'user', content: msg });
         chatHistory.push({ role: data.companion, content: data.reply });
         currentSheet = data.sheet;
-        sheetToSequencer(data.sheet);
+        sheetToSequencer(data.sheet, { focusMain: false });
       } catch (e) {
         chatAppend('Error: ' + e, 'msg-sys');
       } finally {
@@ -5146,7 +5150,7 @@
         const data = await res.json();
         currentSheet = data.sheet;
         if (data.reply) chatAppend(`Conductor: ${data.reply}`, 'msg-band');
-        sheetToSequencer(data.sheet, { autoStoreNext: true, autoPlay: autoPlayOnEvolve });
+        sheetToSequencer(data.sheet, { autoStoreNext: true, autoPlay: autoPlayOnEvolve, focusMain: false });
         // Advance section selector to next in arc
         const arcOrder = ['instrumental', 'verse2', 'bridge', 'verse3', 'outro'];
         const sel = document.getElementById('evolve-section');
@@ -5525,12 +5529,15 @@
         this.ROW_H_DRUM = 22;
         this.ROW_H_PITCHED = 12;
 
-        canvas.addEventListener('click', e => this._onClick(e));
-        canvas.addEventListener('touchend', e => {
-          e.preventDefault();
-          const t = e.changedTouches[0];
-          this._onClick({ clientX: t.clientX, clientY: t.clientY });
-        }, { passive: false });
+        this.ROW_H_PITCHED = 12;
+
+        canvas.style.touchAction = 'none'; // prevent scroll when vertically sweeping velocity
+        canvas.addEventListener('pointerdown', e => this._onPointerDown(e));
+        canvas.addEventListener('pointermove', e => this._onPointerMove(e));
+        canvas.addEventListener('pointerup', e => this._onPointerUp(e));
+        canvas.addEventListener('pointercancel', e => this._onPointerUp(e));
+
+        this._dragState = null;
         this._sheet = null;
         this._tType = null;
       }
@@ -5712,30 +5719,96 @@
       }
 
       // ── Editing ──────────────────────────────────────────────────────────────────
-      _onClick(e) {
-        if (!this._sheet) return;
+      // ── Editing ──────────────────────────────────────────────────────────────────
+      _getGridPos(e) {
         const r = this.cv.getBoundingClientRect();
         const cx = (e.clientX - r.left) * (this.cv.width / r.width);
         const cy = (e.clientY - r.top) * (this.cv.height / r.height);
         const { KEY_W, HEADER, BEAT_W } = this;
-        if (cx < KEY_W) return;
+        if (cx < KEY_W) return null;
 
         const clickBeat = (cx - KEY_W) / BEAT_W;
+        let pitch = -1;
+        if (this.isDrum) {
+          const row = Math.floor((cy - HEADER) / this.ROW_H_DRUM);
+          if (row >= 0 && row < DRUM_ROWS.length) pitch = DRUM_ROWS[row].midi;
+        } else {
+          const row = Math.floor((cy - HEADER) / this.ROW_H_PITCHED);
+          if (row >= 0) pitch = this.pitchMax - row;
+        }
+        if (pitch < 0 || pitch > 127) return null;
+        return { cx, cy, clickBeat, pitch };
+      }
+
+      _onPointerDown(e) {
+        if (!this._sheet) return;
+        this.cv.setPointerCapture(e.pointerId);
+        const pos = this._getGridPos(e);
+        if (!pos) return;
+
         const dur = parseFloat(document.getElementById('room-resolution')?.value ?? '0.5');
 
-        if (this.isDrum) {
-          const RH = this.ROW_H_DRUM;
-          const row = Math.floor((cy - HEADER) / RH);
-          if (row < 0 || row >= DRUM_ROWS.length) return;
-          this._toggleNote(clickBeat, DRUM_ROWS[row].midi, dur, 80);
-        } else {
-          const RH = this.ROW_H_PITCHED;
-          const row = Math.floor((cy - HEADER) / RH);
-          if (row < 0) return;
-          const pitch = this.pitchMax - row;
-          if (pitch < 0 || pitch > 127) return;
-          this._toggleNote(clickBeat, pitch, dur, 80);
+        const hit = this.notes.find(n =>
+          n.pitch === pos.pitch &&
+          pos.clickBeat >= n.beat &&
+          pos.clickBeat < n.beat + n.dur
+        );
+
+        this._dragState = {
+          active: true,
+          hitNote: hit || null,
+          pitch: pos.pitch,
+          clickBeat: pos.clickBeat,
+          dur: dur,
+          startY: e.clientY,
+          startVel: hit ? hit.vel : 80,
+          hasMoved: false,
+          targetTrack: null
+        };
+
+        if (hit) {
+          let acc = 0;
+          for (const step of this._sheet.steps) {
+            if (Math.abs(acc - hit.beat) < 0.001) {
+              const tr = step.tracks?.find(x => x.t === this._tType);
+              if (tr && tr.n.includes(pos.pitch)) {
+                this._dragState.targetTrack = tr;
+              }
+              break;
+            }
+            acc += step.d ?? 0.25;
+          }
         }
+      }
+
+      _onPointerMove(e) {
+        const st = this._dragState;
+        if (!st?.active || !st.hitNote || !st.targetTrack) return;
+
+        const deltaY = e.clientY - st.startY;
+        if (Math.abs(deltaY) > 5) st.hasMoved = true;
+
+        let newVel = Math.round(st.startVel - deltaY * 1.5);
+        newVel = Math.max(1, Math.min(127, newVel));
+
+        if (st.targetTrack.v !== newVel) {
+          st.targetTrack.v = newVel;
+          document.getElementById('sheet-json').value = JSON.stringify(this._sheet, null, 2);
+          this.notes = this._extract(this._sheet, this._tType);
+          if (seq) seq.load(this._sheet);
+          if (!this._raf) this.draw(-1);
+        }
+      }
+
+      _onPointerUp(e) {
+        this.cv.releasePointerCapture(e.pointerId);
+        const st = this._dragState;
+        if (!st || !st.active) return;
+
+        if (!st.hasMoved) {
+          this._toggleNote(st.clickBeat, st.pitch, st.dur, 80);
+        }
+        this._dragState = null;
       }
 
       _toggleNote(clickBeat, pitch, defaultDur, defaultVel) {
@@ -5848,19 +5921,19 @@
     }
 
     // Reveal faces one by one then transition to main screen
-    function revealFaces(sheet) {
+    function revealFaces(sheet, focusMain = true) {
       buildFaces(sheet);
-      showScreen('main');
+      if (focusMain) showScreen('main');
 
       const cards = document.querySelectorAll('.face-card');
       cards.forEach((card, i) => {
         setTimeout(() => {
           card.classList.add('revealed');
           // start playing when first face appears
-          if (i === 0) {
+          if (focusMain && i === 0) {
             document.getElementById('btn-play')?.click();
           }
-        }, i * 600);
+        }, focusMain ? i * 600 : 0);
       });
     }
 

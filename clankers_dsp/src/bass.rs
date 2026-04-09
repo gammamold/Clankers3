@@ -37,6 +37,7 @@ pub struct BassVoice {
     amp_env:        Envelope,
     flt_env:        Envelope,
     freq:           f32,
+    vel:            f32,
     hold_remaining: usize,
     active:         bool,
 }
@@ -50,13 +51,15 @@ impl BassVoice {
             amp_env:        Envelope::new(SR),
             flt_env:        Envelope::new(SR),
             freq:           110.0,
+            vel:            1.0,
             hold_remaining: 0,
             active:         false,
         }
     }
 
-    pub fn trigger(&mut self, midi_note: u8, _velocity: f32, hold_samples: usize, p: &BassParams) {
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &BassParams) {
         self.freq          = midi_to_hz(midi_note);
+        self.vel           = velocity;
         self.carrier_phase = 0.0;
         self.mod_phase     = 0.0;
         self.filter.reset();
@@ -120,7 +123,7 @@ impl BassVoice {
                 self.active = false;
             }
 
-            *s += filtered * amp_val * 0.7;
+            *s += filtered * amp_val * self.vel * 0.7;
         }
     }
 
