@@ -50,7 +50,11 @@ Return ONLY valid JSON -- no prose, no markdown fences:
 }`;
 
 function callLLM(provider, apiKey, model, system, messages, maxTokens) {
-  if (provider === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
+  const m = model || '';
+  const p = (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3'))
+    ? 'openai'
+    : (provider || 'anthropic');
+  if (p === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
   return callAnthropic(apiKey, model, system, messages, maxTokens);
 }
 

@@ -55,11 +55,16 @@ Return ONLY valid JSON — no prose, no markdown fences:
 }`;
 
 function callLLM(provider, apiKey, model, system, messages, maxTokens) {
-  if (provider === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
-  return callLLM(provider, apiKey, model, system, messages, maxTokens);
+  // Auto-detect from model name so routing works even if provider field is missing
+  const m = model || '';
+  const p = (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3'))
+    ? 'openai'
+    : (provider || 'anthropic');
+  if (p === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
+  return callAnthropic(apiKey, model, system, messages, maxTokens);
 }
 
-function callLLM(provider, apiKey, model, system, messages, maxTokens) {
+function callAnthropic(apiKey, model, system, messages, maxTokens) {
   const payload = JSON.stringify({ model, max_tokens: maxTokens, system, messages });
   return new Promise((resolve, reject) => {
     const req = https.request({
