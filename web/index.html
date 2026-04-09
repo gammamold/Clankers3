@@ -2586,7 +2586,12 @@ document.getElementById('btn-bake').addEventListener('click', bakeToJson);
 
 // ─── Band Chat ─────────────────────────────────────────────────────────────
 const API = window.BAND_API_URL || '';
-let sessionId = null;
+let sessionId    = null;
+let currentSheet = null;  // live Music Sheet state — client is the source of truth
+let chatHistory  = [];    // last N turns for context window
+
+function _bandApiKey() { return sessionStorage.getItem('clankers_api_key') || ''; }
+function _bandModel()  { return sessionStorage.getItem('clankers_model')   || 'claude-haiku-4-5-20251001'; }
 
 const chatMsgs = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
@@ -2672,14 +2677,23 @@ document.getElementById('btn-new-session').addEventListener('click', async () =>
   if (!brief) { chatAppend('Enter a track brief first.', 'msg-sys'); return; }
   chatAppend(sessionSolo ? 'Starting session…' : 'Band is debating (this takes a moment)…', 'msg-sys');
   document.getElementById('btn-new-session').disabled = true;
+  const apiKey = _bandApiKey();
+  if (!apiKey) {
+    chatAppend('Enter your API key in ⚙ LLM settings first.', 'msg-sys');
+    document.getElementById('btn-new-session').disabled = false;
+    return;
+  }
   try {
-    const res  = await fetch(`${API}/session/new`, {
+    const res  = await fetch('/api/band/session-new', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief, section: 'verse1', solo: sessionSolo }),
+      body: JSON.stringify({ brief, section: 'verse1', solo: sessionSolo,
+                             apiKey, model: _bandModel() }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
     const data = await res.json();
-    sessionId = data.session_id;
+    sessionId    = 'ses_' + Date.now().toString(36);
+    currentSheet = data.sheet;
+    chatHistory  = [];
     document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
     chatInput.disabled = false; chatSend.disabled = false;
     document.getElementById('evolve-row').style.display = '';
@@ -2692,7 +2706,7 @@ document.getElementById('btn-new-session').addEventListener('click', async () =>
     chatAppend('Session started. The band is ready.', 'msg-sys');
     sheetToSequencer(data.sheet, { autoStore: true, autoPlay: false });
   } catch (e) {
-    chatAppend('Error: ' + e + ' — is the API running? (uvicorn api.main:app --port 8000)', 'msg-sys');
+    chatAppend('Error: ' + e, 'msg-sys');
   } finally {
     document.getElementById('btn-new-session').disabled = false;
   }
@@ -2709,26 +2723,15 @@ document.getElementById('btn-load-sheet').addEventListener('click', async () => 
   // Trigger face reveal immediately — don't wait for the API
   sheetToSequencer(sheet, { autoStore: true });
 
-  const btn = document.getElementById('btn-load-sheet');
-  btn.disabled = true;
-  try {
-    const res = await fetch(`${API}/session/load`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sheet }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    sessionId = data.session_id;
-    document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
-    chatInput.disabled = false; chatSend.disabled = false;
-    document.getElementById('evolve-row').style.display = '';
-    const steps = sheet.steps?.length ?? 0;
-    chatAppend(`Session ready (${steps} steps @ ${sheet.bpm ?? '?'} BPM). Ask the band to modify it.`, 'msg-sys');
-  } catch (e) {
-    chatAppend('Session error: ' + e + ' — chat disabled, playback still works.', 'msg-sys');
-  } finally {
-    btn.disabled = false;
-  }
+  // Load is fully client-side — no network call needed
+  sessionId    = 'ses_' + Date.now().toString(36);
+  currentSheet = sheet;
+  chatHistory  = [];
+  document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
+  chatInput.disabled = false; chatSend.disabled = false;
+  document.getElementById('evolve-row').style.display = '';
+  const steps = sheet.steps?.length ?? 0;
+  chatAppend(`Session ready (${steps} steps @ ${sheet.bpm ?? '?'} BPM). Ask the band to modify it.`, 'msg-sys');
 });
 
 /**
@@ -2764,20 +2767,26 @@ async function sendChat() {
   chatAppend('You: ' + msg, 'msg-user');
   chatSend.disabled = true;
   try {
-    const res  = await fetch(`${API}/chat`, {
+    const res  = await fetch('/api/band/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, message: msg,
-                             synth_context: _synthLabContext() }),
+      body: JSON.stringify({
+        sheet:         currentSheet,
+        history:       chatHistory.slice(-4),
+        message:       msg,
+        synth_context: _synthLabContext(),
+        apiKey:        _bandApiKey(),
+        model:         _bandModel(),
+      }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
     const data = await res.json();
     chatAppend(`${data.companion}: ${data.reply}`, 'msg-band');
+    chatHistory.push({ role: 'user',         content: msg });
+    chatHistory.push({ role: data.companion, content: data.reply });
+    currentSheet = data.sheet;
     sheetToSequencer(data.sheet);
   } catch (e) {
-    const msg = String(e).includes('404')
-      ? 'Session expired (server restarted) — please start a new session.'
-      : 'Error: ' + e;
-    chatAppend(msg, 'msg-sys');
+    chatAppend('Error: ' + e, 'msg-sys');
   } finally {
     chatSend.disabled = false; chatInput.focus();
   }
@@ -2803,14 +2812,20 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
   btn.textContent = 'thinking…';
   chatAppend(`Conductor: evolving to ${section}…`, 'msg-sys');
   try {
-    const res = await fetch(`${API}/sheet/evolve`, {
+    const res = await fetch('/api/band/sheet-evolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, section,
-                             synth_context: _synthLabContext() }),
+      body: JSON.stringify({
+        sheet:         currentSheet,
+        section,
+        synth_context: _synthLabContext(),
+        apiKey:        _bandApiKey(),
+        model:         _bandModel(),
+      }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
     const data = await res.json();
+    currentSheet = data.sheet;
     if (data.reply) chatAppend(`Conductor: ${data.reply}`, 'msg-band');
     sheetToSequencer(data.sheet, { autoStore: true, autoPlay: autoPlayOnEvolve });
     // Advance section selector to next in arc
@@ -2819,10 +2834,7 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
     const idx = arcOrder.indexOf(section);
     if (idx !== -1 && idx + 1 < arcOrder.length) sel.value = arcOrder[idx + 1];
   } catch (e) {
-    const msg = String(e).includes('404')
-      ? 'Session expired (server restarted) — please start a new session.'
-      : 'Evolve error: ' + e;
-    chatAppend(msg, 'msg-sys');
+    chatAppend('Evolve error: ' + e, 'msg-sys');
   } finally {
     btn.disabled = false;
     btn.textContent = 'EVOLVE →';
@@ -4015,11 +4027,19 @@ document.getElementById('cfg-save-btn').addEventListener('click', async () => {
   status.textContent = ''; status.className = 'cfg-status';
 
   try {
-    const res = await fetch(`${API}/config`, {
+    // Verify the key works against the Anthropic proxy
+    const probe = await fetch('/api/llm', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: _cfgProvider, model, api_key: key }),
+      body: JSON.stringify({ apiKey: key, model, max_tokens: 1,
+                             messages: [{ role: 'user', content: 'hi' }] }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (probe.status === 401) throw new Error('Invalid API key');
+    if (!probe.ok && probe.status !== 400) throw new Error(`Server error ${probe.status}`);
+
+    sessionStorage.setItem('clankers_api_key',  key);
+    sessionStorage.setItem('clankers_model',     model);
+    sessionStorage.setItem('clankers_provider',  _cfgProvider);
+
     status.textContent = '✓ Connected! Ready to compose.';
     status.className = 'cfg-status ok';
     document.getElementById('btn-settings').classList.add('configured');
@@ -4032,21 +4052,22 @@ document.getElementById('cfg-save-btn').addEventListener('click', async () => {
   }
 });
 
-// On load: check server config status — auto-open if no key is set yet
-(async () => {
-  try {
-    const res = await fetch(`${API}/config/status`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.configured) {
-      document.getElementById('btn-settings').classList.add('configured');
-      _cfgSetProvider(data.provider);
-      const sel = document.getElementById('cfg-model');
-      if ([...sel.options].some(o => o.value === data.model)) sel.value = data.model;
-    } else {
-      document.getElementById('config-overlay').classList.add('open');
-    }
-  } catch (_) { /* server not ready yet — user can open manually via ⚙ */ }
+// On load: restore config from sessionStorage, open settings if no key saved
+(function() {
+  const key   = sessionStorage.getItem('clankers_api_key');
+  const model = sessionStorage.getItem('clankers_model');
+  const prov  = sessionStorage.getItem('clankers_provider');
+  if (key) {
+    document.getElementById('btn-settings').classList.add('configured');
+    if (prov && _PROVIDER_MODELS[prov]) _cfgSetProvider(prov);
+    const sel = document.getElementById('cfg-model');
+    if (model && [...sel.options].some(o => o.value === model)) sel.value = model;
+    // Pre-populate the key field
+    const keyInput = document.getElementById('cfg-key');
+    if (keyInput) keyInput.value = key;
+  } else {
+    document.getElementById('config-overlay').classList.add('open');
+  }
 })();
 
 </script>
