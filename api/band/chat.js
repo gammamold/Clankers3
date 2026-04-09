@@ -64,13 +64,13 @@ function callAnthropic(apiKey, model, system, messages, maxTokens) {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.anthropic.com',
-      path:     '/v1/messages',
-      method:   'POST',
+      path: '/v1/messages',
+      method: 'POST',
       headers: {
-        'x-api-key':         apiKey,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
-        'content-type':      'application/json',
-        'content-length':    Buffer.byteLength(payload),
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload),
       },
     }, (res) => {
       let data = '';
@@ -98,11 +98,11 @@ function callOpenAI(apiKey, model, system, messages, maxTokens) {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.openai.com',
-      path:     '/v1/chat/completions',
-      method:   'POST',
+      path: '/v1/chat/completions',
+      method: 'POST',
       headers: {
-        'Authorization':  `Bearer ${apiKey}`,
-        'content-type':   'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'content-type': 'application/json',
         'content-length': Buffer.byteLength(payload),
       },
     }, (res) => {
@@ -125,6 +125,41 @@ function callOpenAI(apiKey, model, system, messages, maxTokens) {
   });
 }
 
+function extractAndRepairJSON(response) {
+  const match = response.match(/\{[\s\S]*\}/s);
+  if (!match) throw new Error('No JSON in response');
+  let s = match[0].trim();
+  if (s.endsWith(',')) s = s.slice(0, -1);
+  try { return JSON.parse(s); } catch (e) { }
+
+  let braces = 0, brackets = 0, inStr = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (!inStr) {
+      if (c === '{') braces++;
+      if (c === '}') braces--;
+      if (c === '[') brackets++;
+      if (c === ']') brackets--;
+    }
+  }
+  while (brackets > 0) { s += ']'; brackets--; }
+  while (braces > 0) { s += '}'; braces--; }
+  return JSON.parse(s);
+}
+
+function enforceCleanBars(sheet) {
+  if (!sheet || !sheet.steps || !sheet.steps.length) return;
+  const totalDur = sheet.steps.reduce((acc, s) => acc + (s.d ?? 0.5), 0);
+  const remainder = totalDur % 4.0;
+  if (remainder > 0.001) {
+    const pad = 4.0 - remainder;
+    sheet.steps.push({ d: Math.round(pad * 1000) / 1000, tracks: [] });
+  }
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -138,8 +173,8 @@ module.exports = async function handler(req, res) {
     provider = 'anthropic',
   } = req.body || {};
 
-  if (!apiKey)  return res.status(401).json({ error: 'Missing apiKey' });
-  if (!sheet)   return res.status(400).json({ error: 'Missing sheet' });
+  if (!apiKey) return res.status(401).json({ error: 'Missing apiKey' });
+  if (!sheet) return res.status(400).json({ error: 'Missing sheet' });
   if (!message) return res.status(400).json({ error: 'Missing message' });
 
   // Build context from recent history
@@ -160,19 +195,21 @@ module.exports = async function handler(req, res) {
       8192,
     );
 
-    const match = response.match(/\{[\s\S]*\}/s);
-    if (!match) {
-      // Fallback: return original sheet with raw reply
+    let data;
+    try {
+      data = extractAndRepairJSON(response);
+    } catch (e) {
+      console.error('Failed to parse chat JSON:', e.message);
       return res.status(200).json({
         sheet,
         diff: {},
-        reply: response.slice(0, 500),
+        reply: "Sorry, I lost my train of thought. Let's try that again.",
         companion: 'Conductor',
       });
     }
 
-    const data = JSON.parse(match[0]);
     const updatedSheet = data.sheet || sheet;
+    enforceCleanBars(updatedSheet);
 
     // Ensure minimum step count for playable loop
     if (updatedSheet.steps && updatedSheet.steps.length < 16) {
@@ -188,9 +225,9 @@ module.exports = async function handler(req, res) {
     }
 
     return res.status(200).json({
-      sheet:     updatedSheet,
+      sheet: updatedSheet,
       diff,
-      reply:     data.reply || '',
+      reply: data.reply || '',
       companion: data.companion || 'Conductor',
     });
   } catch (err) {

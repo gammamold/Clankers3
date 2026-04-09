@@ -37,7 +37,7 @@
  */
 
 const LOOKAHEAD_MS = 100;
-const INTERVAL_MS  = 25;
+const INTERVAL_MS = 25;
 
 /**
  * Evaluate all automation curves for a given track at a beat position.
@@ -47,11 +47,11 @@ function _evalAutomation(curveMap, beat) {
   const out = {};
   for (const [cc, pts] of Object.entries(curveMap)) {
     if (!pts.length) continue;
-    if (beat <= pts[0][0])               { out[cc] = pts[0][1]; continue; }
-    if (beat >= pts[pts.length-1][0])    { out[cc] = pts[pts.length-1][1]; continue; }
+    if (beat <= pts[0][0]) { out[cc] = pts[0][1]; continue; }
+    if (beat >= pts[pts.length - 1][0]) { out[cc] = pts[pts.length - 1][1]; continue; }
     for (let i = 1; i < pts.length; i++) {
       if (beat <= pts[i][0]) {
-        const [b0, v0] = pts[i-1];
+        const [b0, v0] = pts[i - 1];
         const [b1, v1] = pts[i];
         const t = (beat - b0) / (b1 - b0);
         out[cc] = Math.round(v0 + t * (v1 - v0));
@@ -64,40 +64,40 @@ function _evalAutomation(curveMap, beat) {
 
 export class Sequencer {
   constructor(ctx, nodes = {}) {
-    this.ctx    = ctx;
+    this.ctx = ctx;
 
     // AudioWorkletNode references (for audio graph wiring)
     this._nodes = {
-      drum:   nodes.drums   ?? null,
-      bass:   nodes.bass    ?? null,
-      buchla: nodes.buchla  ?? null,
-      pads:   nodes.pads    ?? null,
-      rhodes: nodes.rhodes  ?? null,
+      drum: nodes.drums ?? null,
+      bass: nodes.bass ?? null,
+      buchla: nodes.buchla ?? null,
+      pads: nodes.pads ?? null,
+      rhodes: nodes.rhodes ?? null,
     };
 
     // Worklet message ports (for trigger / setParams messages)
     this._ports = {
-      drum:   nodes.drums?.port   ?? null,
-      bass:   nodes.bass?.port    ?? null,
-      buchla: nodes.buchla?.port  ?? null,
-      pads:   nodes.pads?.port    ?? null,
-      rhodes: nodes.rhodes?.port  ?? null,
+      drum: nodes.drums?.port ?? null,
+      bass: nodes.bass?.port ?? null,
+      buchla: nodes.buchla?.port ?? null,
+      pads: nodes.pads?.port ?? null,
+      rhodes: nodes.rhodes?.port ?? null,
     };
 
-    this.sheet  = null;
+    this.sheet = null;
     this._timer = null;
 
-    this._bpm       = 120;
-    this._steps     = [];   // compiled event list (no audioBuffer)
+    this._bpm = 120;
+    this._steps = [];   // compiled event list (no audioBuffer)
     this._loopBeats = 0;
     this._startTime = 0;
-    this._nextBeat  = 0;
-    this._stepIdx   = 0;
+    this._nextBeat = 0;
+    this._stepIdx = 0;
 
     // Per-instrument mute/solo/volume
-    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
-    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
-    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,  synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0,  synth4: 1.0  };
+    this._mute = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._solo = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._volumes = { drum: 1.0, bass: 1.0, buchla: 1.0, pads: 1.0, rhodes: 1.0, synth0: 1.0, synth1: 1.0, synth2: 1.0, synth3: 1.0, synth4: 1.0 };
 
     /**
      * SynthLab instance — set externally to enable Synth Lab playback.
@@ -112,7 +112,8 @@ export class Sequencer {
      */
     this.synthOverrides = {}; // { trackType: slotIndex }
 
-    this.loop  = true;
+    this.loop = true;
+    this.swing = 0;   // 0.0 to 1.0. Applied dynamically in _tick() to upbeat 16ths.
     this.onEnd = null;
 
     this._stepBeats = [];  // beat positions for the step visualizer
@@ -130,9 +131,10 @@ export class Sequencer {
   // ── Public API ─────────────────────────────────────────────────────────────
 
   load(sheet) {
-    this.sheet      = sheet;
+    this.sheet = sheet;
     this._lastSheet = sheet;
-    this._bpm       = sheet.bpm ?? 120;
+    this._bpm = sheet.bpm ?? 120;
+    this.swing = sheet.swing ?? this.swing ?? 0;
     this._compile(sheet);
   }
 
@@ -149,13 +151,13 @@ export class Sequencer {
     // Per-instrument gain nodes — reconnect worklet nodes each start()
     if (this._instrGains) {
       for (const g of Object.values(this._instrGains)) {
-        try { g.disconnect(); } catch (_) {}
+        try { g.disconnect(); } catch (_) { }
       }
     }
     this._instrGains = {};
     for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
       const node = this._nodes[type];
-      if (node) { try { node.disconnect(); } catch (_) {} }
+      if (node) { try { node.disconnect(); } catch (_) { } }
       const g = this.ctx.createGain();
       g.connect(this._masterGain);
       this._instrGains[type] = g;
@@ -164,18 +166,29 @@ export class Sequencer {
     this._updateGains();
 
     this._startTime = this.ctx.currentTime + 0.05;
-    this._nextBeat  = 0;
-    this._stepIdx   = 0;
+    this._nextBeat = 0;
+    this._stepIdx = 0;
     this._timer = setInterval(() => this._tick(), INTERVAL_MS);
     this._tick();
   }
 
   stop() {
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
-    // Clear queued triggers in all worklets
+    // Clear queued triggers and silence active envelopes in all worklets
     for (const port of Object.values(this._ports)) {
-      if (port) port.postMessage({ type: 'stop' });
+      if (port) {
+        port.postMessage({ type: 'stop' });
+        port.postMessage({ type: 'trigger', audioTime: 0, midiNote: 0, velocity: 0, holdSamples: 0, voiceId: 0, ccJson: '{}' });
+      }
     }
+
+    // Silence any active SynthLab instances
+    if (this.synthLab) {
+      for (let i = 0; i < 5; i++) {
+        this.synthLab.scheduleNote(i, 0, 0, this.ctx.currentTime, 0); // Fast note off
+      }
+    }
+
     if (this._masterGain) this._masterGain.disconnect();
   }
 
@@ -291,8 +304,8 @@ export class Sequencer {
 
       for (const track of step.tracks ?? []) {
         const notes = track.n ?? [];
-        const vel   = (track.v ?? 100) / 127;
-        const cc    = Object.assign({}, track.cc ?? {}, _evalAutomation(autoMap[track.t], beat));
+        const vel = (track.v ?? 100) / 127;
+        const cc = Object.assign({}, track.cc ?? {}, _evalAutomation(autoMap[track.t], beat));
 
         if (track.t === 10) {
           for (const note of notes) {
@@ -304,32 +317,40 @@ export class Sequencer {
         if (track.t === 2) {
           const durBeats = track.dur ?? d;
           for (const note of notes) {
-            raw.push({ beatTime: beat, type: 'bass', midiNote: note, velocity: vel,
-                       ccJson: JSON.stringify(cc), durBeats });
+            raw.push({
+              beatTime: beat, type: 'bass', midiNote: note, velocity: vel,
+              ccJson: JSON.stringify(cc), durBeats
+            });
           }
         }
 
         if (track.t === 1) {
           const durBeats = track.dur ?? d;
           for (const note of notes) {
-            raw.push({ beatTime: beat, type: 'buchla', midiNote: note, velocity: vel,
-                       ccJson: JSON.stringify(cc), durBeats });
+            raw.push({
+              beatTime: beat, type: 'buchla', midiNote: note, velocity: vel,
+              ccJson: JSON.stringify(cc), durBeats
+            });
           }
         }
 
         if (track.t === 6) {
           const durBeats = track.dur ?? step.d ?? 0.5;
           for (const note of notes) {
-            raw.push({ beatTime: beat, type: 'pads', midiNote: note, velocity: vel,
-                       ccJson: JSON.stringify(cc), durBeats });
+            raw.push({
+              beatTime: beat, type: 'pads', midiNote: note, velocity: vel,
+              ccJson: JSON.stringify(cc), durBeats
+            });
           }
         }
 
         if (track.t === 3) {
           const durBeats = track.dur ?? step.d ?? 0.5;
           for (const note of notes) {
-            raw.push({ beatTime: beat, type: 'rhodes', midiNote: note, velocity: vel,
-                       ccJson: JSON.stringify(cc), durBeats });
+            raw.push({
+              beatTime: beat, type: 'rhodes', midiNote: note, velocity: vel,
+              ccJson: JSON.stringify(cc), durBeats
+            });
           }
         }
 
@@ -337,20 +358,24 @@ export class Sequencer {
         const SYNTH_T_SLOT = { 7: 0, 8: 1, 9: 2, 11: 3, 12: 4 };
         if (track.t in SYNTH_T_SLOT) {
           const slotIndex = SYNTH_T_SLOT[track.t];
-          const durBeats  = track.dur ?? step.d ?? 0.5;
+          const durBeats = track.dur ?? step.d ?? 0.5;
           for (const note of notes) {
-            raw.push({ beatTime: beat, type: `synth${slotIndex}`, midiNote: note,
-                       velocity: vel, durBeats });
+            raw.push({
+              beatTime: beat, type: `synth${slotIndex}`, midiNote: note,
+              velocity: vel, durBeats
+            });
           }
         }
 
         // SynthLab override — if a slot replaces a legacy track type, mirror notes to it
         if (track.t in this.synthOverrides) {
           const slotIndex = this.synthOverrides[track.t];
-          const durBeats  = track.dur ?? step.d ?? 0.5;
+          const durBeats = track.dur ?? step.d ?? 0.5;
           for (const note of notes) {
-            raw.push({ beatTime: beat, type: `synth${slotIndex}`, midiNote: note,
-                       velocity: vel, durBeats });
+            raw.push({
+              beatTime: beat, type: `synth${slotIndex}`, midiNote: note,
+              velocity: vel, durBeats
+            });
           }
         }
       }
@@ -359,9 +384,9 @@ export class Sequencer {
     }
 
     raw.sort((a, b) => a.beatTime - b.beatTime);
-    this._steps     = raw;
-    this._loopBeats = beat;
-    console.log(`[seq] compiled ${raw.length} events (${beat} beats @ ${this._bpm} BPM) — streaming`);
+    this._steps = raw;
+    this._loopBeats = sheet.loopBeats ?? beat;
+    console.log(`[seq] compiled ${raw.length} events (${this._loopBeats} beats @ ${this._bpm} BPM) — streaming`);
   }
 
   _beatsToSeconds(beats) { return beats * (60 / this._bpm); }
@@ -377,13 +402,26 @@ export class Sequencer {
           return;
         }
         this._nextBeat += this._loopBeats;
-        this._stepIdx   = 0;
+        this._stepIdx = 0;
       }
 
-      const ev     = this._steps[this._stepIdx];
-      const loopN  = Math.floor(this._nextBeat / this._loopBeats) || 0;
+      const ev = this._steps[this._stepIdx];
+      const loopN = Math.floor(this._nextBeat / this._loopBeats) || 0;
       const evBeat = loopN * this._loopBeats + ev.beatTime;
-      const evTime = this._startTime + this._beatsToSeconds(evBeat);
+
+      // Calculate Swing directly in _tick so it can be changed live
+      let swingOffsetBeats = 0;
+      if (this.swing > 0) {
+        // Is this an upbeat 16th note? (beat 0.25, 0.75, 1.25...)
+        const beatInBar = ev.beatTime % 1.0;
+        const isUpbeat = Math.abs((beatInBar % 0.5) - 0.25) < 0.01;
+        if (isUpbeat) {
+          // Push beat back by a percentage (e.g. max swing = 0.125 beats)
+          swingOffsetBeats = this.swing * 0.125;
+        }
+      }
+
+      const evTime = this._startTime + this._beatsToSeconds(evBeat + swingOffsetBeats);
 
       if (evTime > scheduleUntil) break;
 
@@ -410,45 +448,55 @@ export class Sequencer {
     if (!port) return;
 
     if (ev.type === 'drum') {
-      port.postMessage({ type: 'trigger', audioTime,
-                         voiceId: ev.voiceId, velocity: ev.velocity });
+      port.postMessage({
+        type: 'trigger', audioTime,
+        voiceId: ev.voiceId, velocity: ev.velocity
+      });
 
     } else if (ev.type === 'bass') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC  = this.liveCC?.bass?.() ?? {};
-      const noteCC  = JSON.parse(ev.ccJson || '{}');
-      const merged  = Object.assign({}, noteCC, liveCC);
-      const midi    = Math.max(0, Math.min(127, ev.midiNote + (this.bassOctaveOffset ?? 0)));
-      port.postMessage({ type: 'trigger', audioTime,
-                         midiNote: midi, velocity: ev.velocity,
-                         holdSamples, ccJson: JSON.stringify(merged) });
+      const liveCC = this.liveCC?.bass?.() ?? {};
+      const noteCC = JSON.parse(ev.ccJson || '{}');
+      const merged = Object.assign({}, noteCC, liveCC);
+      const midi = Math.max(0, Math.min(127, ev.midiNote + (this.bassOctaveOffset ?? 0)));
+      port.postMessage({
+        type: 'trigger', audioTime,
+        midiNote: midi, velocity: ev.velocity,
+        holdSamples, ccJson: JSON.stringify(merged)
+      });
 
     } else if (ev.type === 'buchla') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC  = this.liveCC?.buchla?.() ?? {};
-      const noteCC  = JSON.parse(ev.ccJson || '{}');
-      const merged  = Object.assign({}, noteCC, liveCC);
-      port.postMessage({ type: 'trigger', audioTime,
-                         midiNote: ev.midiNote, velocity: ev.velocity,
-                         holdSamples, ccJson: JSON.stringify(merged) });
+      const liveCC = this.liveCC?.buchla?.() ?? {};
+      const noteCC = JSON.parse(ev.ccJson || '{}');
+      const merged = Object.assign({}, noteCC, liveCC);
+      port.postMessage({
+        type: 'trigger', audioTime,
+        midiNote: ev.midiNote, velocity: ev.velocity,
+        holdSamples, ccJson: JSON.stringify(merged)
+      });
 
     } else if (ev.type === 'pads') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC  = this.liveCC?.pads?.() ?? {};
-      const noteCC  = JSON.parse(ev.ccJson || '{}');
-      const merged  = Object.assign({}, noteCC, liveCC);
-      port.postMessage({ type: 'trigger', audioTime,
-                         midiNote: ev.midiNote, velocity: ev.velocity,
-                         holdSamples, ccJson: JSON.stringify(merged) });
+      const liveCC = this.liveCC?.pads?.() ?? {};
+      const noteCC = JSON.parse(ev.ccJson || '{}');
+      const merged = Object.assign({}, noteCC, liveCC);
+      port.postMessage({
+        type: 'trigger', audioTime,
+        midiNote: ev.midiNote, velocity: ev.velocity,
+        holdSamples, ccJson: JSON.stringify(merged)
+      });
 
     } else if (ev.type === 'rhodes') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC  = this.liveCC?.rhodes?.() ?? {};
-      const noteCC  = JSON.parse(ev.ccJson || '{}');
-      const merged  = Object.assign({}, noteCC, liveCC);
-      port.postMessage({ type: 'trigger', audioTime,
-                         midiNote: ev.midiNote, velocity: ev.velocity,
-                         holdSamples, ccJson: JSON.stringify(merged) });
+      const liveCC = this.liveCC?.rhodes?.() ?? {};
+      const noteCC = JSON.parse(ev.ccJson || '{}');
+      const merged = Object.assign({}, noteCC, liveCC);
+      port.postMessage({
+        type: 'trigger', audioTime,
+        midiNote: ev.midiNote, velocity: ev.velocity,
+        holdSamples, ccJson: JSON.stringify(merged)
+      });
     }
   }
 }
@@ -456,12 +504,12 @@ export class Sequencer {
 // ── Drum note → voice ID ──────────────────────────────────────────────────────
 
 function drumNoteToVoice(note) {
-  if (note === 36)                           return 0; // KICK
-  if (note === 38 || note === 40)            return 1; // SNARE
-  if ([42,49,50,51,52,53].includes(note))   return 2; // HH CL
-  if ([46,54,55,56,57].includes(note))      return 3; // HH OP
-  if (note === 41 || note === 43)            return 4; // TOM L
-  if (note === 45 || note === 47)            return 5; // TOM M/H
-  if (note === 48 || note === 50)            return 6; // CLAP/TOM-H/CYMBAL
+  if (note === 36) return 0; // KICK
+  if (note === 38 || note === 40) return 1; // SNARE
+  if ([42, 49, 50, 51, 52, 53].includes(note)) return 2; // HH CL
+  if ([46, 54, 55, 56, 57].includes(note)) return 3; // HH OP
+  if (note === 41 || note === 43) return 4; // TOM L
+  if (note === 45 || note === 47) return 5; // TOM M/H
+  if (note === 48 || note === 50) return 6; // CLAP/TOM-H/CYMBAL
   return 0;
 }

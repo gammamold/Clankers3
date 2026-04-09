@@ -20,10 +20,10 @@
 
 > The Vercel band functions replace this for web deployment. The Python backend is kept for local/CLI use but requires the missing modules below to start.
 
-- [ ] **`config.py`** — missing; defines `BAND`, API keys, model names. Required for `api/main.py` to import.
-- [ ] **`llm_clients.py`** — missing; LLM client factory (`get_client(provider)`). Required for `api/main.py`.
-- [ ] **`chatroom/chatroom.py`** — missing; multi-LLM negotiation engine (`Chatroom.negotiate_section()`).
-- [ ] **`conductor/conductor.py`** — missing; section evolution logic (`evolve()`, `_SECTION_TENSION`).
+- [x] **`config.py`** — missing; defines `BAND`, API keys, model names. Required for `api/main.py` to import.
+- [x] **`llm_clients.py`** — missing; LLM client factory (`get_client(provider)`). Required for `api/main.py`.
+- [x] **`chatroom/chatroom.py`** — missing; multi-LLM negotiation engine (`Chatroom.negotiate_section()`).
+- [x] **`conductor/conductor.py`** — missing; section evolution logic (`evolve()`, `_SECTION_TENSION`).
 
 ---
 
@@ -38,11 +38,11 @@
 
 ## Sequencer (`web/sequencer.js`)
 
-- [ ] **Swing** — grid is straight 16th notes; no swing offset implemented.
+- [x] **Swing** — grid is straight 16th notes; no swing offset implemented.
 - [ ] **Portamento / slide** — bass SH-101 slide flag in sheet not wired to worklet.
 - [ ] **Accent** — velocity boost for accented steps not propagated to worklets.
-- [ ] **Loop point control** — currently loops the full sheet; no way to set a shorter loop region.
-- [ ] **STOP cleans up** — verify that stopping also silences any held notes in all worklets.
+- [x] **Loop point control** — currently loops the full sheet; no way to set a shorter loop region.
+- [x] **STOP cleans up** — verify that stopping also silences any held notes in all worklets.
 
 ---
 

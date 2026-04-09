@@ -2619,7 +2619,7 @@ function chatAppend(text, cls) {
   chatMsgs.scrollTop = chatMsgs.scrollHeight;
 }
 
-function sheetToSequencer(sheet, { autoStore = true, autoPlay = false } = {}) {
+function sheetToSequencer(sheet, { autoStore = false, autoStoreNext = false, autoPlay = false } = {}) {
   try {
     const steps = sheet.steps;
     if (!steps || !steps.length) return;
@@ -2633,8 +2633,14 @@ function sheetToSequencer(sheet, { autoStore = true, autoPlay = false } = {}) {
     // Apply FX params if sheet carries them
     if (sheet.fx && rack) applyFxParams(sheet.fx);
 
-    // Auto-store to current active slot
-    if (autoStore) {
+    // Auto-store routing
+    if (autoStore || autoStoreNext) {
+      if (autoStoreNext && patternBank[activeSlot]) {
+        // If current slot has data, cleanly jump to next empty slot before saving
+        const nextFree = patternBank.findIndex(p => !p);
+        if (nextFree !== -1) selectSlot(nextFree);
+      }
+
       const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
       const stored = Object.assign({}, sheet);
       if (rack) stored.fx = rack.getParams();
@@ -2844,7 +2850,7 @@ document.getElementById('btn-evolve').addEventListener('click', async () => {
     const data = await res.json();
     currentSheet = data.sheet;
     if (data.reply) chatAppend(`Conductor: ${data.reply}`, 'msg-band');
-    sheetToSequencer(data.sheet, { autoStore: true, autoPlay: autoPlayOnEvolve });
+    sheetToSequencer(data.sheet, { autoStoreNext: true, autoPlay: autoPlayOnEvolve });
     // Advance section selector to next in arc
     const arcOrder = ['instrumental','verse2','bridge','verse3','outro'];
     const sel = document.getElementById('evolve-section');

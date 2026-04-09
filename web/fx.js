@@ -20,9 +20,11 @@
 
 export function divToSec(div, bpm) {
   const beat = 60 / bpm;
-  const map = { '1/32': beat/8, '1/16': beat/4, '1/8': beat/2,
-                '1/8d': beat*0.75, '1/4': beat, '1/4d': beat*1.5, '1/2': beat*2 };
-  return map[div] ?? beat/2;
+  const map = {
+    '1/32': beat / 8, '1/16': beat / 4, '1/8': beat / 2,
+    '1/8d': beat * 0.75, '1/4': beat, '1/4d': beat * 1.5, '1/2': beat * 2
+  };
+  return map[div] ?? beat / 2;
 }
 
 // ── Waveshaper curve generator ────────────────────────────────────────────────
@@ -62,8 +64,8 @@ export function makeCurve(type, amount, n = 4096) {
 
 export class DelayFx {
   constructor(ctx) {
-    this.ctx    = ctx;
-    this.input  = ctx.createGain();
+    this.ctx = ctx;
+    this.input = ctx.createGain();
     this.output = ctx.createGain();
 
     this._dry = ctx.createGain();
@@ -79,14 +81,17 @@ export class DelayFx {
     this._dcBlock = ctx.createBiquadFilter();
     this._dcBlock.type = 'highpass';
     this._dcBlock.frequency.value = 20;
+    this._dcBlock.Q.value = 0.5;
 
     this._fbHp = ctx.createBiquadFilter();
     this._fbHp.type = 'highpass';
     this._fbHp.frequency.value = 80;
+    this._fbHp.Q.value = 0.5;
 
     this._fbLp = ctx.createBiquadFilter();
     this._fbLp.type = 'lowpass';
     this._fbLp.frequency.value = 6000;
+    this._fbLp.Q.value = 0.5;
 
     this._fbShape = ctx.createWaveShaper();
     this._fbShape.curve = makeCurve('none', 0);
@@ -96,7 +101,7 @@ export class DelayFx {
     this._fbGain.gain.value = 0.45;
 
     // LFO
-    this._lfo      = ctx.createOscillator();
+    this._lfo = ctx.createOscillator();
     this._lfoDepth = ctx.createGain();
     this._lfo.type = 'sine';
     this._lfo.frequency.value = 0.3;
@@ -106,15 +111,17 @@ export class DelayFx {
     this._lfo.start();
 
     // Chaos LFO state
-    this._chaosMode   = false;
-    this._chaosTimer  = 0;
+    this._chaosMode = false;
+    this._chaosTimer = 0;
     this._chaosPeriod = 0.2;
-    this._baseDelay   = 0.375;
-    this._chaosDepth  = 0.05;
+    this._baseDelay = 0.375;
+    this._chaosDepth = 0.05;
 
     // Serialisable param cache
-    this._p = { time: '1/8', feedback: 0.45, wet: 0, lfo: 'sine',
-                lfo_rate: 0.3, lfo_depth: 0.002, fb_shape: 'none', hp: 80, lp: 6000 };
+    this._p = {
+      time: '1/8', feedback: 0.45, wet: 0, lfo: 'sine',
+      lfo_rate: 0.3, lfo_depth: 0.002, fb_shape: 'none', hp: 80, lp: 6000
+    };
 
     // Wire
     this.input.connect(this._dry);
@@ -173,14 +180,15 @@ export class DelayFx {
       this._lfoDepth.gain.value = 0;
     } else {
       this._chaosMode = false;
-      this._lfo.type  = type;
+      this._lfo.type = type;
       this._lfoDepth.gain.setTargetAtTime(this._chaosDepth, this.ctx.currentTime, 0.01);
     }
   }
 
   setFbShape(type, amount) {
     this._p.fb_shape = type;
-    this._fbShape.curve = type === 'none' ? null : makeCurve(type, amount);
+    // Provide a baseline curve so WaveShaper correctly hard-limits values > 1.0 (preventing blowout)
+    this._fbShape.curve = type === 'none' ? makeCurve('none', 0) : makeCurve(type, amount);
   }
 
   setFbHp(hz) { this._p.hp = hz; this._fbHp.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
@@ -189,15 +197,15 @@ export class DelayFx {
   getParams() { return { ...this._p }; }
 
   _applyParams(p, bpm) {
-    if (p.time)              this.setDelayTime(divToSec(p.time, bpm ?? 120), p.time);
-    if (p.feedback != null)  this.setFeedback(p.feedback);
-    if (p.wet != null)       this.setWet(p.wet);
-    if (p.lfo)               this.setLfoType(p.lfo);
-    if (p.lfo_rate != null)  this.setLfoRate(p.lfo_rate);
+    if (p.time) this.setDelayTime(divToSec(p.time, bpm ?? 120), p.time);
+    if (p.feedback != null) this.setFeedback(p.feedback);
+    if (p.wet != null) this.setWet(p.wet);
+    if (p.lfo) this.setLfoType(p.lfo);
+    if (p.lfo_rate != null) this.setLfoRate(p.lfo_rate);
     if (p.lfo_depth != null) this.setLfoDepth(p.lfo_depth);
-    if (p.fb_shape)          this.setFbShape(p.fb_shape, 0.5);
-    if (p.hp != null)        this.setFbHp(p.hp);
-    if (p.lp != null)        this.setFbLp(p.lp);
+    if (p.fb_shape) this.setFbShape(p.fb_shape, 0.5);
+    if (p.hp != null) this.setFbHp(p.hp);
+    if (p.lp != null) this.setFbLp(p.lp);
   }
 
   tick() {
@@ -221,8 +229,8 @@ export class DelayFx {
 
 export class WaveShapeFx {
   constructor(ctx) {
-    this.ctx    = ctx;
-    this.input  = ctx.createGain();
+    this.ctx = ctx;
+    this.input = ctx.createGain();
     this.output = ctx.createGain();
 
     this._dry = ctx.createGain();
@@ -256,8 +264,8 @@ export class WaveShapeFx {
   }
 
   setCurve(type, amount) {
-    this._p.type      = type;
-    this._p.drive     = amount;
+    this._p.type = type;
+    this._p.drive = amount;
     this._shaper.curve = makeCurve(type, amount);
   }
 
@@ -268,18 +276,18 @@ export class WaveShapeFx {
   }
 
   setTone(hz) { this._p.tone = hz; this._tone.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
-  setWet(v)   { this._p.wet  = v;  this._wet.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
-  setDry(v)   { this._dry.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
+  setWet(v) { this._p.wet = v; this._wet.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
+  setDry(v) { this._dry.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
 
   getParams() { return { ...this._p }; }
 
   _applyParams(p) {
     if (p.type || p.drive != null) this.setCurve(p.type ?? this._p.type, p.drive ?? this._p.drive);
     if (p.tone != null) this.setTone(p.tone);
-    if (p.wet  != null) this.setWet(p.wet);
+    if (p.wet != null) this.setWet(p.wet);
   }
 
-  tick() {}
+  tick() { }
 
   disconnect() {
     this.input.disconnect();
@@ -303,7 +311,7 @@ export class WaveShapeFx {
 
 export class MasterFx {
   constructor(ctx) {
-    this.ctx    = ctx;
+    this.ctx = ctx;
     this._delay = new DelayFx(ctx);
     this._shape = new WaveShapeFx(ctx);
 
@@ -312,7 +320,7 @@ export class MasterFx {
     this._shape.setDry(0);
 
     // Per-instrument send gain nodes (populated in attach())
-    this._delaySends  = {};
+    this._delaySends = {};
     this._shaperSends = {};
 
     // Send values persist across seq.start() reconnects
@@ -322,7 +330,7 @@ export class MasterFx {
     ];
   }
 
-  delay()  { return this._delay; }
+  delay() { return this._delay; }
   shaper() { return this._shape; }
 
   /**
@@ -334,14 +342,14 @@ export class MasterFx {
 
     // Tear down old send nodes
     for (const instr of INSTRS) {
-      if (this._delaySends[instr])  { try { this._delaySends[instr].disconnect();  } catch (_) {} }
-      if (this._shaperSends[instr]) { try { this._shaperSends[instr].disconnect(); } catch (_) {} }
+      if (this._delaySends[instr]) { try { this._delaySends[instr].disconnect(); } catch (_) { } }
+      if (this._shaperSends[instr]) { try { this._shaperSends[instr].disconnect(); } catch (_) { } }
     }
-    this._delaySends  = {};
+    this._delaySends = {};
     this._shaperSends = {};
 
     for (const instr of INSTRS) {
-      const ds = this._delaySends[instr]  = this.ctx.createGain();
+      const ds = this._delaySends[instr] = this.ctx.createGain();
       const ss = this._shaperSends[instr] = this.ctx.createGain();
 
       // Restore stored send amounts
@@ -355,8 +363,8 @@ export class MasterFx {
     }
 
     // FX returns → destination (parallel, independent of master chain)
-    try { this._delay.output.disconnect(); } catch (_) {}
-    try { this._shape.output.disconnect(); } catch (_) {}
+    try { this._delay.output.disconnect(); } catch (_) { }
+    try { this._shape.output.disconnect(); } catch (_) { }
     this._delay.output.connect(destination);
     this._shape.output.connect(destination);
   }
@@ -372,13 +380,13 @@ export class MasterFx {
 
   getParams() {
     return {
-      delay:      this._delay.getParams(),
+      delay: this._delay.getParams(),
       waveshaper: this._shape.getParams(),
     };
   }
 
   setParams(json, bpm = 120) {
-    if (json?.delay)      this._delay._applyParams(json.delay, bpm);
+    if (json?.delay) this._delay._applyParams(json.delay, bpm);
     if (json?.waveshaper) this._shape._applyParams(json.waveshaper);
   }
 

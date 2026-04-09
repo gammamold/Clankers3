@@ -71,13 +71,13 @@ function callAnthropic(apiKey, model, system, messages, maxTokens) {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.anthropic.com',
-      path:     '/v1/messages',
-      method:   'POST',
+      path: '/v1/messages',
+      method: 'POST',
       headers: {
-        'x-api-key':         apiKey,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
-        'content-type':      'application/json',
-        'content-length':    Buffer.byteLength(payload),
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload),
       },
     }, (res) => {
       let data = '';
@@ -105,11 +105,11 @@ function callOpenAI(apiKey, model, system, messages, maxTokens) {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.openai.com',
-      path:     '/v1/chat/completions',
-      method:   'POST',
+      path: '/v1/chat/completions',
+      method: 'POST',
       headers: {
-        'Authorization':  `Bearer ${apiKey}`,
-        'content-type':   'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'content-type': 'application/json',
         'content-length': Buffer.byteLength(payload),
       },
     }, (res) => {
@@ -132,6 +132,41 @@ function callOpenAI(apiKey, model, system, messages, maxTokens) {
   });
 }
 
+function extractAndRepairJSON(response) {
+  const match = response.match(/\{[\s\S]*\}/s);
+  if (!match) throw new Error('No JSON in response');
+  let s = match[0].trim();
+  if (s.endsWith(',')) s = s.slice(0, -1);
+  try { return JSON.parse(s); } catch (e) { }
+
+  let braces = 0, brackets = 0, inStr = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (!inStr) {
+      if (c === '{') braces++;
+      if (c === '}') braces--;
+      if (c === '[') brackets++;
+      if (c === ']') brackets--;
+    }
+  }
+  while (brackets > 0) { s += ']'; brackets--; }
+  while (braces > 0) { s += '}'; braces--; }
+  return JSON.parse(s);
+}
+
+function enforceCleanBars(sheet) {
+  if (!sheet || !sheet.steps || !sheet.steps.length) return;
+  const totalDur = sheet.steps.reduce((acc, s) => acc + (s.d ?? 0.5), 0);
+  const remainder = totalDur % 4.0;
+  if (remainder > 0.001) {
+    const pad = 4.0 - remainder;
+    sheet.steps.push({ d: Math.round(pad * 1000) / 1000, tracks: [] });
+  }
+}
+
 const SECTION_TENSION = { verse1: 0.35, verse2: 0.45, bridge: 0.60, outro: 0.50 };
 
 module.exports = async function handler(req, res) {
@@ -139,7 +174,7 @@ module.exports = async function handler(req, res) {
 
   const { brief, section = 'verse1', solo = true, apiKey, model = 'claude-haiku-4-5-20251001', provider = 'anthropic' } = req.body || {};
   if (!apiKey) return res.status(401).json({ error: 'Missing apiKey' });
-  if (!brief)  return res.status(400).json({ error: 'Missing brief' });
+  if (!brief) return res.status(400).json({ error: 'Missing brief' });
 
   try {
     const messages = [];
@@ -168,10 +203,16 @@ module.exports = async function handler(req, res) {
         8192,
       );
       messages.push(...transcript);
-      const finalMatch = conductorReply.match(/\{[\s\S]*\}/s);
-      if (!finalMatch) throw new Error('No JSON in conductor response');
-      const sheet = JSON.parse(finalMatch[0]);
+      let sheet;
+      try {
+        sheet = extractAndRepairJSON(conductorReply);
+      } catch (err) {
+        throw new Error('Failed to parse conductor JSON');
+      }
       if (!sheet.tension) sheet.tension = SECTION_TENSION[section] ?? 0.35;
+
+      enforceCleanBars(sheet);
+
       // Ensure minimum step count for playable loop
       if (sheet.steps && sheet.steps.length < 16) {
         while (sheet.steps.length < 64) sheet.steps.push({ d: 0.25, tracks: [] });
@@ -186,10 +227,16 @@ module.exports = async function handler(req, res) {
         8192,
       );
 
-      const match = response.match(/\{[\s\S]*\}/s);
-      if (!match) throw new Error('No JSON in response');
-      const sheet = JSON.parse(match[0]);
+      let sheet;
+      try {
+        sheet = extractAndRepairJSON(response);
+      } catch (err) {
+        throw new Error('Failed to parse generation JSON');
+      }
       if (!sheet.tension) sheet.tension = SECTION_TENSION[section] ?? 0.35;
+
+      enforceCleanBars(sheet);
+
       // Ensure minimum step count for playable loop
       if (sheet.steps && sheet.steps.length < 16) {
         while (sheet.steps.length < 64) sheet.steps.push({ d: 0.25, tracks: [] });
