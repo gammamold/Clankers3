@@ -2,13 +2,28 @@
 
 ---
 
-## Backend (`api/`)
+## Vercel / LLM API (`api/`)
 
-- [ ] **Add `/api/llm` proxy route** — `LLMWizard.js` POSTs here for Claude patch generation but the endpoint doesn't exist in `main.py`. Without it, the Synth Lab wizard is broken.
-- [ ] **Session persistence** — sessions are currently an in-memory dict; they vanish on server restart. Add SQLite or a simple file-based store.
-- [ ] **Authentication** — no auth on any endpoint. Anyone with the URL can read/write sessions.
-- [ ] **`/session/load` endpoint** — defined in WEBPLAN but not implemented; needed to reload a saved composition.
-- [ ] **Sheet diff on `/chat` response** — the backend returns a full updated sheet; the frontend should diff it and only push changed params to worklets instead of reloading everything.
+- [x] **Add `/api/llm` proxy route** — Vercel serverless function proxying to Anthropic (and OpenAI) API. Synth Lab wizard works on Vercel. (`api/llm.js`)
+- [x] **Band chat as Vercel serverless functions** — `api/band/session-new.js`, `api/band/chat.js`, `api/band/sheet-evolve.js`; stateless design (client owns the sheet).
+- [x] **Multi-provider support** — Anthropic and OpenAI supported in all LLM calls; provider auto-detected from model name or explicit field.
+- [x] **Settings overlay uses sessionStorage** — API key/model/provider stored client-side; no Python backend required for config. Key verified against `/api/llm` proxy on save.
+- [x] **COEP/COOP headers in `vercel.json`** — `Cross-Origin-Opener-Policy` + `Cross-Origin-Embedder-Policy` added for SharedArrayBuffer / WASM audio worklet support.
+- [x] **Remove hardcoded `localhost:8000`** — frontend API URL now reads `window.BAND_API_URL || ''`; band requests go to `/api/band/*`.
+- [ ] **Google / Gemini provider** — `api/llm.js` detects `gemini-*` models but has no proxy implementation yet.
+- [ ] **Authentication** — no auth on any endpoint. Anyone with the URL can call the band functions (though they need their own API key in the request body).
+- [ ] **Session persistence** — `api/band/*.js` are fully stateless; no server-side session history. History is sent by the client (last 4 turns). Long sessions lose older context.
+
+---
+
+## Python FastAPI backend (`api/main.py`)
+
+> The Vercel band functions replace this for web deployment. The Python backend is kept for local/CLI use but requires the missing modules below to start.
+
+- [ ] **`config.py`** — missing; defines `BAND`, API keys, model names. Required for `api/main.py` to import.
+- [ ] **`llm_clients.py`** — missing; LLM client factory (`get_client(provider)`). Required for `api/main.py`.
+- [ ] **`chatroom/chatroom.py`** — missing; multi-LLM negotiation engine (`Chatroom.negotiate_section()`).
+- [ ] **`conductor/conductor.py`** — missing; section evolution logic (`evolve()`, `_SECTION_TENSION`).
 
 ---
 
@@ -33,7 +48,7 @@
 
 ## Synth Lab (`web/synth-lab.js`, `web/synth/`)
 
-- [ ] **`/api/llm` backend needed** — see Backend section above. LLMWizard currently calls it directly.
+- [x] **`/api/llm` backend** — Vercel serverless function exists; LLMWizard works on Vercel.
 - [ ] **Preset save to server** — patches only persist to `localStorage`. No server-side save/load.
 - [ ] **Arpeggiator** — not implemented in `SynthVoice.js`.
 - [ ] **Full MIDI learn** — `PianoKeys.js` has partial MIDI support; no full MIDI CC learn for knobs.
@@ -66,7 +81,6 @@
 ## Infrastructure / Deployment
 
 - [ ] **Update `WEBPLAN.md`** — still says `Status: Planning — no implementation yet`. Rewrite to reflect current architecture.
-- [ ] **Vercel deployment** — `vercel.json` exists but environment variables (API keys, backend URL) are not documented. FastAPI needs separate hosting (Render, Railway, Fly.io, etc.).
 - [ ] **`clankers3-web` local repo** — created at `C:\Users\gamma\clankers3-web\` but not pushed to GitHub (gh auth was not set up). Either push it or delete it.
 - [ ] **Delete stale Claude branches** on GitHub:
   - `claude/improve-music-composition-w71Zv`
@@ -111,7 +125,7 @@
 
 ## Testing
 
-- [ ] **E2E test: full session flow** — start FastAPI → `POST /session/new` with brief → load returned sheet into sequencer → play → verify audio.
+- [ ] **E2E test: Vercel band flow** — deploy to Vercel → enter API key → POST `/api/band/session-new` with brief → load sheet into sequencer → play → verify audio.
 - [ ] **Unit tests for DSP** — Rust unit tests for each synth engine (kick, snare, bass FM, etc.).
-- [ ] **API integration tests** — `pytest` tests for all FastAPI routes with a real in-memory session.
+- [ ] **API integration tests** — `pytest` tests for Python FastAPI routes (once missing modules are implemented).
 - [ ] **Sequencer timing test** — verify lookahead scheduler fires notes within ±2ms.
