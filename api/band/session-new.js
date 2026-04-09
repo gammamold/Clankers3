@@ -17,7 +17,9 @@ STEP RULES:
   - Pads (t:6) and Rhodes (t:3): always include "dur" (note duration in beats, e.g. 4.0 or 8.0)
   - Bass (t:2) first note per phrase must include full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   - Bass MIDI range primarily 0–23
-  - Generate 32–64 steps for a complete 2–4 bar loop
+  - ALWAYS generate 32–64 steps (2–4 bars at d:0.25) regardless of style or instrumentation
+  - Even ambient/minimal styles MUST have 32+ steps — use sparse tracks, not fewer steps
+  - NEVER output fewer than 32 steps
 
 FX RACK (optional "fx" top-level key — include when the style needs it):
 {
@@ -170,6 +172,10 @@ module.exports = async function handler(req, res) {
       if (!finalMatch) throw new Error('No JSON in conductor response');
       const sheet = JSON.parse(finalMatch[0]);
       if (!sheet.tension) sheet.tension = SECTION_TENSION[section] ?? 0.35;
+      // Ensure minimum step count for playable loop
+      if (sheet.steps && sheet.steps.length < 16) {
+        while (sheet.steps.length < 64) sheet.steps.push({ d: 0.25, tracks: [] });
+      }
       return res.status(200).json({ sheet, messages: transcript });
 
     } else {
@@ -184,6 +190,10 @@ module.exports = async function handler(req, res) {
       if (!match) throw new Error('No JSON in response');
       const sheet = JSON.parse(match[0]);
       if (!sheet.tension) sheet.tension = SECTION_TENSION[section] ?? 0.35;
+      // Ensure minimum step count for playable loop
+      if (sheet.steps && sheet.steps.length < 16) {
+        while (sheet.steps.length < 64) sheet.steps.push({ d: 0.25, tracks: [] });
+      }
       return res.status(200).json({ sheet, messages: [] });
     }
   } catch (err) {

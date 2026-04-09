@@ -142,6 +142,7 @@ export class XYPad {
     cv.addEventListener('mouseleave', ()  => { this._drag = false; });
     cv.addEventListener('touchstart', e => { e.preventDefault(); this._update(e); }, { passive: false });
     cv.addEventListener('touchmove',  e => { e.preventDefault(); this._update(e); }, { passive: false });
+    cv.addEventListener('touchend',   e => { e.preventDefault(); }, { passive: false });
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

@@ -41,6 +41,7 @@ RULES when editing steps:
   - Pads (t:6) and Rhodes (t:3) always use dur.
   - Bass first note per phrase needs full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   - Bass MIDI 0-23 primarily.
+  - The steps array MUST contain at least 32 steps (2 bars). Sparse music = fewer tracks per step, NOT fewer steps.
 
 Return ONLY valid JSON -- no prose, no markdown fences:
 {
@@ -172,6 +173,11 @@ module.exports = async function handler(req, res) {
 
     const data = JSON.parse(match[0]);
     const updatedSheet = data.sheet || sheet;
+
+    // Ensure minimum step count for playable loop
+    if (updatedSheet.steps && updatedSheet.steps.length < 16) {
+      while (updatedSheet.steps.length < 64) updatedSheet.steps.push({ d: 0.25, tracks: [] });
+    }
 
     // Compute diff: top-level keys that changed
     const diff = {};

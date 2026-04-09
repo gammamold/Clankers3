@@ -417,7 +417,7 @@ export class Sequencer {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
       const liveCC  = this.liveCC?.bass?.() ?? {};
       const noteCC  = JSON.parse(ev.ccJson || '{}');
-      const merged  = Object.assign({}, liveCC, noteCC);
+      const merged  = Object.assign({}, noteCC, liveCC);
       const midi    = Math.max(0, Math.min(127, ev.midiNote + (this.bassOctaveOffset ?? 0)));
       port.postMessage({ type: 'trigger', audioTime,
                          midiNote: midi, velocity: ev.velocity,
@@ -427,22 +427,28 @@ export class Sequencer {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
       const liveCC  = this.liveCC?.buchla?.() ?? {};
       const noteCC  = JSON.parse(ev.ccJson || '{}');
-      const merged  = Object.assign({}, liveCC, noteCC);
+      const merged  = Object.assign({}, noteCC, liveCC);
       port.postMessage({ type: 'trigger', audioTime,
                          midiNote: ev.midiNote, velocity: ev.velocity,
                          holdSamples, ccJson: JSON.stringify(merged) });
 
     } else if (ev.type === 'pads') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
+      const liveCC  = this.liveCC?.pads?.() ?? {};
+      const noteCC  = JSON.parse(ev.ccJson || '{}');
+      const merged  = Object.assign({}, noteCC, liveCC);
       port.postMessage({ type: 'trigger', audioTime,
                          midiNote: ev.midiNote, velocity: ev.velocity,
-                         holdSamples, ccJson: ev.ccJson });
+                         holdSamples, ccJson: JSON.stringify(merged) });
 
     } else if (ev.type === 'rhodes') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
+      const liveCC  = this.liveCC?.rhodes?.() ?? {};
+      const noteCC  = JSON.parse(ev.ccJson || '{}');
+      const merged  = Object.assign({}, noteCC, liveCC);
       port.postMessage({ type: 'trigger', audioTime,
                          midiNote: ev.midiNote, velocity: ev.velocity,
-                         holdSamples, ccJson: ev.ccJson });
+                         holdSamples, ccJson: JSON.stringify(merged) });
     }
   }
 }
