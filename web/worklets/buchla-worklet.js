@@ -1,8 +1,8 @@
 /**
- * Buchla 259/292 AudioWorkletProcessor — Clankers 3  [t:1]
+ * Poly FM AudioWorkletProcessor — Clankers 3  [t:1]
  *
- * Percussive LPG arp with FM + wavefolding (ClankersBuchla engine).
- * Registered under 'buchla-worklet'.
+ * Polyphonic FM bass using the ClankersBass engine.
+ * Registered under 'buchla-worklet' to preserve node name references.
  *
  * Messages IN:
  *   { type:'trigger', audioTime, midiNote, velocity, holdSamples, ccJson? }
@@ -14,9 +14,9 @@
  *   { type:'error', message }
  */
 
-import { initSync, ClankersBuchla } from '../wasm/clankers_dsp.js';
+import { initSync, ClankersBass } from '../wasm/clankers_dsp.js';
 
-class BuchlaWorkletProcessor extends AudioWorkletProcessor {
+class PolyFMWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {
         super();
         this._engine    = null;
@@ -24,9 +24,9 @@ class BuchlaWorkletProcessor extends AudioWorkletProcessor {
         this._errCount  = 0;
 
         try {
-            const { wasmModule } = options?.processorOptions ?? {};
+            const { wasmModule, seed = 0xb455b456 } = options?.processorOptions ?? {};
             if (wasmModule) initSync({ module: wasmModule });
-            this._engine = new ClankersBuchla();
+            this._engine = new ClankersBass(seed);
             this.port.postMessage({ type: 'ready' });
         } catch (e) {
             this.port.postMessage({ type: 'error', message: String(e) });
@@ -61,11 +61,11 @@ class BuchlaWorkletProcessor extends AudioWorkletProcessor {
             const blockEnd = currentTime + out.length / sampleRate;
             while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
                 const ev = this._queue.shift();
-                if (ev.ccJson) this._engine.set_params(ev.ccJson);
-                this._engine.trigger(ev.midiNote, ev.velocity);
+                this._engine.trigger(ev.midiNote, ev.velocity,
+                                     ev.holdSamples ?? 22050, ev.ccJson ?? '{}');
             }
 
-            const buf = this._engine.process(out.length);
+            const buf = this._engine.render(out.length);
             out.set(buf.length <= out.length ? buf : buf.subarray(0, out.length));
         } catch (e) {
             out.fill(0);
@@ -78,4 +78,4 @@ class BuchlaWorkletProcessor extends AudioWorkletProcessor {
     }
 }
 
-registerProcessor('buchla-worklet', BuchlaWorkletProcessor);
+registerProcessor('buchla-worklet', PolyFMWorkletProcessor);
