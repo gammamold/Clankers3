@@ -5832,6 +5832,7 @@
           this._dragState = {
             active: true, type: 'marquee',
             startX: pos.cx, startY: pos.cy,
+            startClientX: e.clientX, startClientY: e.clientY,
             hasMoved: false,
             clickBeat: pos.clickBeat, pitch: pos.pitch, dur: parseFloat(document.getElementById('room-resolution')?.value ?? '0.5')
           };
@@ -5852,6 +5853,7 @@
             active: true, type,
             hitNote: hit || null,
             startX: pos.cx, startY: e.clientY,
+            startClientX: e.clientX, startClientY: e.clientY,
             startPosPitch: pos.pitch, startPosBeat: pos.clickBeat,
             deltaBeat: 0, deltaPitch: 0,
             hasMoved: false,
@@ -5883,7 +5885,12 @@
 
         const deltaY = e.clientY - st.startY;
         const deltaX = cx - st.startX;
-        if (Math.abs(deltaY) > 5 || Math.abs(deltaX) > 5) st.hasMoved = true;
+        // Use CSS client-pixel deltas for the hasMoved guard so mobile touch
+        // jitter (which gets magnified when canvas is wider than its display
+        // width) doesn't swallow taps and prevent note add/delete.
+        const clientDeltaX = e.clientX - (st.startClientX ?? e.clientX);
+        const clientDeltaY = e.clientY - (st.startClientY ?? e.clientY);
+        if (Math.abs(clientDeltaX) > 8 || Math.abs(clientDeltaY) > 8) st.hasMoved = true;
 
         if (st.type === 'marquee') {
           this.marqueeBox.x1 = cx;
