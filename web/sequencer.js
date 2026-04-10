@@ -106,6 +106,12 @@ export class Sequencer {
     this.synthLab = null;
 
     /**
+     * MidiOutput instance — set externally to enable MIDI output from triggers.
+     * @type {import('./midi-output.js').MidiOutput|null}
+     */
+    this.midiOut = null;
+
+    /**
      * When a SynthLab slot is active, mirror old-track-type notes to it.
      * e.g. { 2: 0 } means t:2 (Bass FM) notes ALSO trigger synth slot 0.
      * Set by SynthLab.loadPatch() / clearSlot() via seq.setSynthOverride().
@@ -437,10 +443,11 @@ export class Sequencer {
     // Synth Lab events are handled separately below (no worklet port)
     const SYNTH_TYPE_SLOT = { synth0: 0, synth1: 1, synth2: 2, synth3: 3, synth4: 4 };
     if (ev.type in SYNTH_TYPE_SLOT) {
+      const holdMs = ev.durBeats * (60 / this._bpm) * 1000;
       if (this.synthLab) {
-        const holdMs = ev.durBeats * (60 / this._bpm) * 1000;
         this.synthLab.scheduleNote(SYNTH_TYPE_SLOT[ev.type], ev.midiNote, ev.velocity, audioTime, holdMs);
       }
+      this.midiOut?.scheduleNote(ev.type, ev.midiNote, ev.velocity, audioTime, this.ctx, holdMs);
       return;
     }
 
@@ -452,6 +459,7 @@ export class Sequencer {
         type: 'trigger', audioTime,
         voiceId: ev.voiceId, velocity: ev.velocity
       });
+      this.midiOut?.scheduleNote('drum', ev.voiceId, ev.velocity, audioTime, this.ctx, 100);
 
     } else if (ev.type === 'bass') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
@@ -464,6 +472,7 @@ export class Sequencer {
         midiNote: midi, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
       });
+      this.midiOut?.scheduleNote('bass', midi, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
 
     } else if (ev.type === 'buchla') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
@@ -475,6 +484,7 @@ export class Sequencer {
         midiNote: ev.midiNote, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
       });
+      this.midiOut?.scheduleNote('buchla', ev.midiNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
 
     } else if (ev.type === 'pads') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
@@ -486,6 +496,7 @@ export class Sequencer {
         midiNote: ev.midiNote, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
       });
+      this.midiOut?.scheduleNote('pads', ev.midiNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
 
     } else if (ev.type === 'rhodes') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
@@ -497,6 +508,7 @@ export class Sequencer {
         midiNote: ev.midiNote, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
       });
+      this.midiOut?.scheduleNote('rhodes', ev.midiNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
     }
   }
 }

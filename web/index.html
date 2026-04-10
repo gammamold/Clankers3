@@ -130,6 +130,63 @@
       color: #444;
     }
 
+    /* ── MIDI channel selector (per-instrument) ── */
+    .midi-ch-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: .25rem;
+      margin-left: .3rem;
+    }
+
+    .midi-ch-wrap label {
+      font-size: .58rem;
+      color: #444;
+    }
+
+    .midi-ch-sel {
+      background: #0e0e0e;
+      color: #666;
+      border: 1px solid #222;
+      font-family: monospace;
+      font-size: .6rem;
+      padding: .05rem .2rem;
+      border-radius: 2px;
+      cursor: pointer;
+      width: 3.4rem;
+    }
+
+    .midi-ch-sel.midi-ch-active {
+      color: #00d4ff;
+      border-color: #004060;
+    }
+
+    /* ── Global MIDI port selector ── */
+    .midi-port-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .75rem;
+      color: #555;
+      margin-left: .2rem;
+    }
+
+    #midi-port-sel {
+      background: #0e0e0e;
+      color: #00d4ff;
+      border: 1px solid #004060;
+      font-family: monospace;
+      font-size: .72rem;
+      padding: .2rem .35rem;
+      border-radius: 2px;
+      cursor: pointer;
+      max-width: 180px;
+    }
+
+    #midi-status {
+      font-size: .6rem;
+      color: #3a7d44;
+    }
+
     .vol-slider {
       width: 56px;
       height: 3px;
@@ -1638,6 +1695,138 @@
       color: #ffff70;
     }
 
+    /* ── REACH THE OUTSIDE — MIDI settings panel ── */
+    #btn-reach-outside {
+      position: fixed;
+      bottom: 8.2rem;
+      right: 1.5rem;
+      z-index: 160;
+      background: #000d1a;
+      border: 1px solid #003060;
+      color: #00d4ff;
+      font-family: monospace;
+      font-size: .78rem;
+      padding: .5rem .9rem;
+      cursor: pointer;
+      border-radius: 4px;
+      display: none;
+      letter-spacing: .05em;
+    }
+
+    body.on-main #btn-reach-outside,
+    body.on-song #btn-reach-outside,
+    body.on-room #btn-reach-outside,
+    body.on-seq  #btn-reach-outside {
+      display: block;
+    }
+
+    #btn-reach-outside:hover {
+      border-color: #00d4ff;
+      background: #001830;
+    }
+
+    #btn-reach-outside.rto-active {
+      background: #002040;
+      border-color: #00d4ff;
+      color: #00ffff;
+      box-shadow: 0 0 8px #00d4ff44;
+    }
+
+    #panel-reach-outside {
+      display: none;
+      position: fixed;
+      bottom: 11.5rem;
+      right: 1.5rem;
+      z-index: 159;
+      background: #060e14;
+      border: 1px solid #003060;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      width: 300px;
+      box-shadow: 0 4px 24px #000c;
+      font-family: monospace;
+      font-size: .75rem;
+      color: #aaa;
+    }
+
+    #panel-reach-outside.rto-open {
+      display: block;
+    }
+
+    #panel-reach-outside h3 {
+      margin: 0 0 .8rem;
+      font-size: .72rem;
+      letter-spacing: .12em;
+      color: #00d4ff;
+    }
+
+    .rto-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .3rem 0;
+      border-bottom: 1px solid #0d1e2a;
+    }
+
+    .rto-row:last-child { border-bottom: none; }
+
+    .rto-label {
+      font-size: .68rem;
+      color: #556;
+      letter-spacing: .06em;
+    }
+
+    .rto-label span {
+      color: #335;
+      font-size: .6rem;
+    }
+
+    .rto-ch-sel {
+      background: #05101a;
+      color: #00d4ff;
+      border: 1px solid #004060;
+      font-family: monospace;
+      font-size: .68rem;
+      padding: .15rem .3rem;
+      border-radius: 3px;
+      cursor: pointer;
+      width: 5rem;
+    }
+
+    .rto-ch-sel:focus { outline: 1px solid #00d4ff44; }
+
+    #rto-device-row {
+      margin-bottom: .7rem;
+      padding-bottom: .7rem;
+      border-bottom: 1px solid #0d1e2a;
+    }
+
+    #rto-device-row label {
+      font-size: .68rem;
+      color: #448;
+      letter-spacing: .06em;
+    }
+
+    #rto-port-sel {
+      display: block;
+      width: 100%;
+      margin-top: .35rem;
+      background: #05101a;
+      color: #00d4ff;
+      border: 1px solid #004060;
+      font-family: monospace;
+      font-size: .7rem;
+      padding: .25rem .4rem;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    #rto-status {
+      font-size: .6rem;
+      color: #3a7d44;
+      margin-top: .3rem;
+    }
+
     /* Screen */
     #screen-synth-lab {
       padding: 0;
@@ -3072,6 +3261,79 @@
   </div>
   <button id="btn-synth-lab">SYNTH LAB →</button>
 
+  <!-- ─── REACH THE OUTSIDE — MIDI output settings ───────────────── -->
+  <button id="btn-reach-outside" title="MIDI Output Settings">⬡ REACH THE OUTSIDE</button>
+  <div id="panel-reach-outside">
+    <h3>⬡ REACH THE OUTSIDE</h3>
+    <div id="rto-device-row">
+      <label>MIDI OUTPUT DEVICE</label>
+      <select id="rto-port-sel">
+        <option value="">— none —</option>
+      </select>
+      <div id="rto-status"></div>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">DRUMS <span>[t:10]</span></span>
+      <select class="rto-ch-sel" data-rto-type="drum">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">BASS FM <span>[t:2]</span></span>
+      <select class="rto-ch-sel" data-rto-type="bass">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">POLY FM <span>[t:1]</span></span>
+      <select class="rto-ch-sel" data-rto-type="buchla">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">HYBRID PADS <span>[t:6]</span></span>
+      <select class="rto-ch-sel" data-rto-type="pads">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">RHODES EP <span>[t:3]</span></span>
+      <select class="rto-ch-sel" data-rto-type="rhodes">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">SYNTH SLOT 1 <span>[t:7]</span></span>
+      <select class="rto-ch-sel" data-rto-type="synth0">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">SYNTH SLOT 2 <span>[t:8]</span></span>
+      <select class="rto-ch-sel" data-rto-type="synth1">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">SYNTH SLOT 3 <span>[t:9]</span></span>
+      <select class="rto-ch-sel" data-rto-type="synth2">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">SYNTH SLOT 4 <span>[t:11]</span></span>
+      <select class="rto-ch-sel" data-rto-type="synth3">
+        <option value="">OFF</option>
+      </select>
+    </div>
+    <div class="rto-row">
+      <span class="rto-label">SYNTH SLOT 5 <span>[t:12]</span></span>
+      <select class="rto-ch-sel" data-rto-type="synth4">
+        <option value="">OFF</option>
+      </select>
+    </div>
+  </div>
+
   <!-- ─── Screen: Room (instrument drill-down) ───────────────────── -->
   <div id="screen-room" class="screen">
     <button id="btn-back" class="back-btn">← BACK</button>
@@ -3188,7 +3450,7 @@
         <div class="inst-hdr">DRUMS <span>[t:10]</span> <button class="ms-btn" data-type="drum"
             data-ms="m">M</button><button class="ms-btn" data-type="drum" data-ms="s">S</button><span
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="drum" min="0" max="100"
-              value="100"></span></div>
+              value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="drum"><option value="">—</option></select></span></div>
         <div class="drum-profile-row">
           <button class="profile-btn active" data-profile="0">808</button>
           <button class="profile-btn" data-profile="1">909</button>
@@ -3212,7 +3474,7 @@
         <div class="inst-hdr">BASS FM <span>[t:2]</span> <button class="ms-btn" data-type="bass"
             data-ms="m">M</button><button class="ms-btn" data-type="bass" data-ms="s">S</button><span
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100"
-              value="100"></span></div>
+              value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="bass"><option value="">—</option></select></span></div>
         <div class="pads bass" id="bass-notes"></div>
         <div class="inst-ctrl-wrap" data-inst="bass">
           <div class="inst-ctrl-tabs">
@@ -3232,7 +3494,7 @@
         <div class="inst-hdr">POLY FM <span>[t:1]</span> <button class="ms-btn" data-type="buchla"
             data-ms="m">M</button><button class="ms-btn" data-type="buchla" data-ms="s">S</button><span
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0"
-              max="100" value="100"></span></div>
+              max="100" value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="buchla"><option value="">—</option></select></span></div>
         <div class="pads buchla" id="buchla-notes"></div>
         <div class="inst-ctrl-wrap" data-inst="polyfm">
           <div class="inst-ctrl-tabs">
@@ -3252,7 +3514,7 @@
         <div class="inst-hdr">HYBRID PADS <span>[t:6]</span> <button class="ms-btn" data-type="pads"
             data-ms="m">M</button><button class="ms-btn" data-type="pads" data-ms="s">S</button><span
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="pads" min="0" max="100"
-              value="100"></span></div>
+              value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="pads"><option value="">—</option></select></span></div>
         <div class="pads chords" id="chord-pads"></div>
         <div class="inst-ctrl-wrap" data-inst="pads">
           <div class="inst-ctrl-tabs">
@@ -3272,7 +3534,7 @@
         <div class="inst-hdr">RHODES EP <span>[t:3]</span> <button class="ms-btn" data-type="rhodes"
             data-ms="m">M</button><button class="ms-btn" data-type="rhodes" data-ms="s">S</button><span
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="rhodes" min="0"
-              max="100" value="100"></span></div>
+              max="100" value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="rhodes"><option value="">—</option></select></span></div>
         <div class="pads chords" id="rhodes-pads"></div>
         <div class="inst-ctrl-wrap" data-inst="rhodes">
           <div class="inst-ctrl-tabs">
@@ -3379,6 +3641,13 @@
         <label style="display:inline-flex;align-items:center;gap:.4rem;margin:0;font-size:.78rem;">
           BPM <input type="range" id="seq-bpm" min="60" max="200" step="1" value="128" style="width:110px;">
           <span id="bpm-val">128</span>
+        </label>
+        <label class="midi-port-wrap" id="midi-port-label">
+          MIDI OUT
+          <select id="midi-port-sel" title="MIDI Output Device">
+            <option value="">— none —</option>
+          </select>
+          <span id="midi-status"></span>
         </label>
       </div>
       <div id="step-viz">
@@ -3772,6 +4041,7 @@
     import { offlineRender } from './render.js';
     import { SynthLab } from './synth-lab.js';
     import { XYPad } from './synth/ui/XYPad.js';
+    import { midiOut } from './midi-output.js';
 
     // ── Synth Lab singleton ───────────────────────────────────────────────────────
     const synthLab = new SynthLab();
@@ -4223,11 +4493,12 @@
         const bpm = +document.getElementById('seq-bpm').value;
         const holdSamples = Math.round(1.5 * (60 / bpm) * 44100);
         const ccJson = JSON.stringify(bassCC());
+        const actualNote = midi + bassOctKnob.val * 12;
         bassNode.port.postMessage({
           type: 'trigger', audioTime: ctx.currentTime,
-          midiNote: midi + bassOctKnob.val * 12,
-          velocity: 0.85, holdSamples, ccJson
+          midiNote: actualNote, velocity: 0.85, holdSamples, ccJson
         });
+        midiOut.scheduleNote('bass', Math.max(0, Math.min(127, actualNote + 48)), 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
         log(`bass midi=${midi} fm=${byz['byz-fmidx'].val} cut=${byz['byz-cutoff'].val}`);
       });
     }
@@ -4312,6 +4583,7 @@
           midiNote: midi, velocity: 0.85,
           holdSamples, ccJson
         });
+        midiOut.scheduleNote('buchla', midi, 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
         log(`poly-fm midi=${midi} cut=${pfm.cutoff.val} fold=${pfm.fold.val} rel=${pfm.release.val}`);
       });
     }
@@ -4366,11 +4638,13 @@
           29: pk['p-chorrate'].val, 30: pk['p-cho'].val, 31: pk['p-chomix'].val,
         });
         padsNode.port.postMessage({ type: 'setParams', ccJson });
+        const holdMs = holdSamples / ctx.sampleRate * 1000;
         for (const note of notes) {
           padsNode.port.postMessage({
             type: 'trigger', audioTime: ctx.currentTime,
             midiNote: note, velocity: 0.75, holdSamples
           });
+          midiOut.scheduleNote('pads', note, 0.75, ctx.currentTime, ctx, holdMs);
         }
         log(`pads [${notes.join(',')}] hold=${holdSamples}`);
       });
@@ -4423,6 +4697,7 @@
           type: 'trigger', audioTime: ctx.currentTime,
           midiNote: midi, velocity: 0.78, holdSamples
         });
+        midiOut.scheduleNote('rhodes', midi, 0.78, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
         log(`rhodes midi=${midi} bright=${rk['r-bright'].val} decay=${rk['r-decay'].val}`);
       });
     }
@@ -4470,6 +4745,7 @@
         seq.liveCC = { bass: bassCC, buchla: buchlaCC, pads: padsCC, rhodes: rhodesCC };
         seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
         seq.synthLab = synthLab;  // enable Synth Lab track playback
+        seq.midiOut   = midiOut;  // enable MIDI output (REACH THE OUTSIDE)
         synthLab._seq = seq;      // let SynthLab register note-routing overrides
         synthLab._reapplyOverrides(); // re-register any patches loaded before sequencer existed
       }
@@ -4832,6 +5108,126 @@
         if (seq) seq.setVolume(slider.dataset.type, slider.value / 100);
       });
     });
+
+    // ─── REACH THE OUTSIDE — MIDI output ──────────────────────────────────────
+
+    // Populate all channel selectors (inst-hdr compact ones + panel ones) with CH1-16
+    function _buildMidiChOptions(sel, defaultCh) {
+      sel.innerHTML = '<option value="">OFF</option>';
+      for (let i = 1; i <= 16; i++) {
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = `CH${i}`;
+        sel.appendChild(opt);
+      }
+      if (defaultCh) {
+        sel.value = String(defaultCh);
+        midiOut.setChannel(sel.dataset.type || sel.dataset.rtoType, defaultCh);
+      }
+    }
+
+    function _refreshRtoPorts() {
+      const sel = document.getElementById('rto-port-sel');
+      const status = document.getElementById('rto-status');
+      const cur = sel.value;
+      const ports = midiOut.getOutputs();
+      sel.innerHTML = '<option value="">— none —</option>' +
+        ports.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+      status.textContent = ports.length === 0 ? 'no devices found' : '';
+    }
+
+    // Init MIDI and set up UI
+    midiOut.init().then(ok => {
+      const label = document.getElementById('midi-port-label');
+      const portSel = document.getElementById('midi-port-sel');
+      const status = document.getElementById('midi-status');
+
+      if (!ok) {
+        // MIDI unavailable — hide compact port selector, keep panel button hidden
+        if (label) label.style.display = 'none';
+        document.getElementById('btn-reach-outside').style.display = 'none';
+        log('[MIDI] Web MIDI API not available in this browser');
+        return;
+      }
+
+      // Populate compact port selector in seq-controls
+      function _refreshCompactPorts() {
+        const cur = portSel.value;
+        const ports = midiOut.getOutputs();
+        portSel.innerHTML = '<option value="">— none —</option>' +
+          ports.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        if (cur && [...portSel.options].some(o => o.value === cur)) portSel.value = cur;
+      }
+
+      midiOut.onPortsChanged = () => {
+        _refreshCompactPorts();
+        _refreshRtoPorts();
+      };
+
+      _refreshCompactPorts();
+      _refreshRtoPorts();
+
+      portSel.addEventListener('change', () => {
+        midiOut.setOutput(portSel.value);
+        // Mirror selection to RTO panel
+        const rtoSel = document.getElementById('rto-port-sel');
+        rtoSel.value = portSel.value;
+        status.textContent = portSel.value ? 'connected' : '';
+      });
+
+      document.getElementById('rto-port-sel').addEventListener('change', function () {
+        midiOut.setOutput(this.value);
+        // Mirror to compact selector
+        portSel.value = this.value;
+        status.textContent = this.value ? 'connected' : '';
+        document.getElementById('rto-status').textContent = this.value ? 'connected' : '';
+      });
+
+      // Populate channel dropdowns (compact inst-hdr + panel)
+      // Drums default to CH10, others start OFF
+      document.querySelectorAll('.midi-ch-sel').forEach(sel => {
+        const type = sel.dataset.type;
+        _buildMidiChOptions(sel, type === 'drum' ? 10 : null);
+        sel.classList.toggle('midi-ch-active', !!sel.value);
+        sel.addEventListener('change', () => {
+          const ch = sel.value ? +sel.value : null;
+          midiOut.setChannel(type, ch);
+          sel.classList.toggle('midi-ch-active', !!ch);
+          // Mirror to RTO panel
+          const rto = document.querySelector(`.rto-ch-sel[data-rto-type="${type}"]`);
+          if (rto) rto.value = sel.value;
+        });
+      });
+
+      document.querySelectorAll('.rto-ch-sel').forEach(sel => {
+        const type = sel.dataset.rtoType;
+        _buildMidiChOptions(sel, type === 'drum' ? 10 : null);
+        sel.addEventListener('change', () => {
+          const ch = sel.value ? +sel.value : null;
+          midiOut.setChannel(type, ch);
+          // Mirror to compact inst-hdr selector if it exists
+          const compact = document.querySelector(`.midi-ch-sel[data-type="${type}"]`);
+          if (compact) {
+            compact.value = sel.value;
+            compact.classList.toggle('midi-ch-active', !!ch);
+          }
+        });
+      });
+
+      log('[MIDI] Web MIDI API ready');
+    });
+
+    // REACH THE OUTSIDE panel toggle
+    document.getElementById('btn-reach-outside').addEventListener('click', () => {
+      const btn = document.getElementById('btn-reach-outside');
+      const panel = document.getElementById('panel-reach-outside');
+      const open = panel.classList.toggle('rto-open');
+      btn.classList.toggle('rto-active', open);
+      if (open) _refreshRtoPorts();
+    });
+
+    // Re-populate on device plug/unplug
+    window.addEventListener('midi-ports-changed', _refreshRtoPorts);
 
     // ─── Bake knobs → JSON ────────────────────────────────────────────────────
     function bakeToJson() {

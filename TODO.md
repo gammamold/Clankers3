@@ -129,12 +129,13 @@
 >
 > Add MIDI output so each instrument can send note data to external hardware/software via the Web MIDI API, with per-instrument MIDI channel selection (1–16 or off) and a global output device picker.
 
-- [ ] **Create `web/midi-output.js`** — `MidiOutput` class: `init()`, `getOutputs()`, `setOutput(portId)`, `setChannel(instrType, ch)`, `scheduleNote(instrType, note, velocity, audioTime, ctx, durationMs)`; includes drum voiceId→MIDI-note mapping
-- [ ] **`web/sequencer.js`** — add `this.midiOut = null`; call `this.midiOut?.scheduleNote(...)` in `_sendTrigger` for every instrument type (drum, bass, buchla, pads, rhodes, synth0-4)
-- [ ] **`web/index.html` — global MIDI port selector** — add `<select id="midi-port-sel">` to `#seq-controls`; wire to `midiOut.setOutput()`; auto-refresh on device connect/disconnect
-- [ ] **`web/index.html` — per-instrument channel selectors** — add `<select class="midi-ch-sel" data-type="...">` to each `inst-hdr`; drums default to ch 10; wire to `midiOut.setChannel()`
-- [ ] **`web/index.html` — wire manual pads** — `triggerBass`, `triggerBuchla`, `triggerRhodes`, `triggerChord` also call `midiOut.scheduleNote(...)`
-- [ ] **`web/index.html` — `getSeq()`** — assign `seq.midiOut = midiOut` when sequencer is created
+- [x] **Create `web/midi-output.js`** — `MidiOutput` class: `init()`, `getOutputs()`, `setOutput(portId)`, `setChannel(instrType, ch)`, `scheduleNote(instrType, note, velocity, audioTime, ctx, durationMs)`; includes drum voiceId→MIDI-note mapping
+- [x] **`web/sequencer.js`** — add `this.midiOut = null`; call `this.midiOut?.scheduleNote(...)` in `_sendTrigger` for every instrument type (drum, bass, buchla, pads, rhodes, synth0-4)
+- [x] **`web/index.html` — "REACH THE OUTSIDE" panel** — fixed-position button + collapsible panel with MIDI device selector and per-instrument channel dropdowns (all 10 instruments including 5 Synth Lab slots); drums default to ch 10
+- [x] **`web/index.html` — compact MIDI port selector** — added to `#seq-controls` as quick-access device picker
+- [x] **`web/index.html` — per-instrument channel selectors** — `<select class="midi-ch-sel">` in each `inst-hdr`; synced bidirectionally with RTO panel selectors
+- [x] **`web/index.html` — wire manual pads** — `triggerBass`, `triggerBuchla`, `triggerRhodes`, `triggerChord` also call `midiOut.scheduleNote(...)`
+- [x] **`web/index.html` — `getSeq()`** — assign `seq.midiOut = midiOut` when sequencer is created
 
 ---
 
