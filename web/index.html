@@ -6481,9 +6481,19 @@
       }
 
       const CYAN_GLOWS = [
+        // cyans / teals
         '#00ffff', '#00d4ff', '#00e5ff', '#40e0d0',
         '#7fffd4', '#00ced1', '#1de9b6', '#4dd0e1',
-        '#00f5ff', '#80deea',
+        // neon greens
+        '#39ff14', '#00ff41', '#7fff00', '#ccff00',
+        // neon pinks / magentas
+        '#ff00ff', '#ff00c8', '#ff10f0', '#ff6fff',
+        // neon purples
+        '#bf5fff', '#9d00ff', '#c77dff', '#7b2fff',
+        // neon oranges / yellows
+        '#ff6600', '#ff9500', '#fff700', '#ffea00',
+        // neon reds / roses
+        '#ff073a', '#fe2060', '#ff1493',
       ];
 
       FACES.forEach(f => {
@@ -6498,7 +6508,7 @@
         card.addEventListener('mouseenter', () => {
           const c = CYAN_GLOWS[Math.floor(Math.random() * CYAN_GLOWS.length)];
           ascii.style.color = c;
-          ascii.style.textShadow = `0 0 8px ${c}, 0 0 18px ${c}80`;
+          ascii.style.textShadow = `0 0 6px ${c}, 0 0 14px ${c}, 0 0 30px ${c}99`;
         });
         card.addEventListener('mouseleave', () => {
           ascii.style.color = '';
