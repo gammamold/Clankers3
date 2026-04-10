@@ -815,15 +815,11 @@
       transform: translateY(0);
     }
 
-    .face-card:hover .face-ascii {
-      color: #00d4ff;
-    }
-
     .face-ascii {
       font-family: monospace;
       font-size: 1.6rem;
       color: #888;
-      transition: color .25s;
+      transition: color .25s, text-shadow .25s;
       user-select: none;
     }
 
@@ -6484,6 +6480,12 @@
             usedTypes.add(tr.t);
       }
 
+      const CYAN_GLOWS = [
+        '#00ffff', '#00d4ff', '#00e5ff', '#40e0d0',
+        '#7fffd4', '#00ced1', '#1de9b6', '#4dd0e1',
+        '#00f5ff', '#80deea',
+      ];
+
       FACES.forEach(f => {
         if (!usedTypes.has(f.t)) return; // skip instruments not in sheet
         const card = document.createElement('div');
@@ -6491,6 +6493,18 @@
         card.dataset.inst = f.id;
         card.innerHTML = `<div class="face-ascii">${f.face}</div><div class="face-label">${f.label}</div>`;
         card.addEventListener('click', () => openRoom(f));
+
+        const ascii = card.querySelector('.face-ascii');
+        card.addEventListener('mouseenter', () => {
+          const c = CYAN_GLOWS[Math.floor(Math.random() * CYAN_GLOWS.length)];
+          ascii.style.color = c;
+          ascii.style.textShadow = `0 0 8px ${c}, 0 0 18px ${c}80`;
+        });
+        card.addEventListener('mouseleave', () => {
+          ascii.style.color = '';
+          ascii.style.textShadow = '';
+        });
+
         row.appendChild(card);
       });
     }
