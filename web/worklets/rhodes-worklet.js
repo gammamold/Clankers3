@@ -18,11 +18,12 @@ import { initSync, ClankersRhodes } from '../wasm/clankers_dsp.js';
 class RhodesWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {
         super();
-        this._engine = null;
-        this._queue  = [];
+        this._engine    = null;
+        this._queue     = [];
+        this._errCount  = 0;
 
         try {
-            const wasmModule = options?.processorOptions?.wasmModule;
+            const { wasmModule } = options?.processorOptions ?? {};
             if (wasmModule) initSync({ module: wasmModule });
             this._engine = new ClankersRhodes();
             this.port.postMessage({ type: 'ready' });
@@ -32,12 +33,16 @@ class RhodesWorkletProcessor extends AudioWorkletProcessor {
 
         this.port.onmessage = ({ data }) => {
             if (!this._engine) return;
-            if (data.type === 'trigger') {
-                this._queue.push(data);
-            } else if (data.type === 'setParams') {
-                this._engine.set_params(data.ccJson);
-            } else if (data.type === 'stop') {
-                this._queue = [];
+            switch (data.type) {
+                case 'trigger':
+                    this._queue.push(data);
+                    break;
+                case 'setParams':
+                    try { this._engine.set_params(data.ccJson); } catch (_) {}
+                    break;
+                case 'stop':
+                    this._queue = [];
+                    break;
             }
         };
     }
@@ -45,21 +50,36 @@ class RhodesWorkletProcessor extends AudioWorkletProcessor {
     process(_inputs, outputs) {
         const outL = outputs[0]?.[0];
         const outR = outputs[0]?.[1];
-        if (!this._engine || !outL) return true;
+        if (!outL) return true;
 
-        const blockEnd = currentTime + outL.length / sampleRate;
-        while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
-            const ev = this._queue.shift();
-            if (ev.ccJson) this._engine.set_params(ev.ccJson);
-            this._engine.trigger(ev.midiNote, ev.velocity, ev.holdSamples ?? 0);
+        if (!this._engine) {
+            outL.fill(0);
+            if (outR) outR.fill(0);
+            return true;
         }
 
-        const interleaved = this._engine.process_stereo(outL.length);
-        const frames = outL.length;
-        for (let i = 0; i < frames; i++) {
-            outL[i] = interleaved[i * 2];
-            if (outR) outR[i] = interleaved[i * 2 + 1];
+        try {
+            const blockEnd = currentTime + outL.length / sampleRate;
+            while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
+                const ev = this._queue.shift();
+                if (ev.ccJson) this._engine.set_params(ev.ccJson);
+                this._engine.trigger(ev.midiNote, ev.velocity, ev.holdSamples ?? 0);
+            }
+
+            const interleaved = this._engine.process_stereo(outL.length);
+            const frames = outL.length;
+            for (let i = 0; i < frames; i++) {
+                outL[i] = interleaved[i * 2]     ?? 0;
+                if (outR) outR[i] = interleaved[i * 2 + 1] ?? 0;
+            }
+        } catch (e) {
+            outL.fill(0);
+            if (outR) outR.fill(0);
+            if (this._errCount++ < 3) {
+                this.port.postMessage({ type: 'error', message: `process: ${e}` });
+            }
         }
+
         return true;
     }
 }

@@ -19,13 +19,13 @@ import { initSync, ClankersDrums } from '../wasm/clankers_dsp.js';
 class DrumsWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {
         super();
-        this._engine = null;
-        this._queue  = [];
+        this._engine    = null;
+        this._queue     = [];
+        this._errCount  = 0;
 
         try {
-            const wasmModule = options?.processorOptions?.wasmModule;
+            const { wasmModule, seed = 0xd8d8d8 } = options?.processorOptions ?? {};
             if (wasmModule) initSync({ module: wasmModule });
-            const seed = options?.processorOptions?.seed ?? 0xd8d8d8;
             this._engine = new ClankersDrums(seed);
             this.port.postMessage({ type: 'ready' });
         } catch (e) {
@@ -39,16 +39,16 @@ class DrumsWorkletProcessor extends AudioWorkletProcessor {
                     this._queue.push(data);
                     break;
                 case 'setProfile':
-                    this._engine.set_profile(data.profileId);
+                    try { this._engine.set_profile(data.profileId); } catch (_) {}
                     break;
                 case 'setPitch':
-                    this._engine.set_pitch(data.semitones);
+                    try { this._engine.set_pitch(data.semitones); } catch (_) {}
                     break;
                 case 'setDecay':
-                    this._engine.set_decay(data.mult);
+                    try { this._engine.set_decay(data.mult); } catch (_) {}
                     break;
                 case 'setFilter':
-                    this._engine.set_filter(data.hz);
+                    try { this._engine.set_filter(data.hz); } catch (_) {}
                     break;
                 case 'stop':
                     this._queue = [];
@@ -59,15 +59,29 @@ class DrumsWorkletProcessor extends AudioWorkletProcessor {
 
     process(_inputs, outputs) {
         const out = outputs[0]?.[0];
-        if (!this._engine || !out) return true;
+        if (!out) return true;
 
-        const blockEnd = currentTime + out.length / sampleRate;
-        while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
-            const ev = this._queue.shift();
-            this._engine.trigger(ev.voiceId, ev.velocity);
+        if (!this._engine) {
+            out.fill(0);
+            return true;
         }
 
-        out.set(this._engine.process(out.length));
+        try {
+            const blockEnd = currentTime + out.length / sampleRate;
+            while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
+                const ev = this._queue.shift();
+                this._engine.trigger(ev.voiceId, ev.velocity);
+            }
+
+            const buf = this._engine.process(out.length);
+            out.set(buf.length <= out.length ? buf : buf.subarray(0, out.length));
+        } catch (e) {
+            out.fill(0);
+            if (this._errCount++ < 3) {
+                this.port.postMessage({ type: 'error', message: `process: ${e}` });
+            }
+        }
+
         return true;
     }
 }
