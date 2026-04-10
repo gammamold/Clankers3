@@ -18,13 +18,13 @@ import { initSync, ClankersBass } from '../wasm/clankers_dsp.js';
 class BassWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {
         super();
-        this._engine = null;
-        this._queue  = [];
+        this._engine    = null;
+        this._queue     = [];
+        this._errCount  = 0;
 
         try {
-            const wasmModule = options?.processorOptions?.wasmModule;
+            const { wasmModule, seed = 0xba55ba55 } = options?.processorOptions ?? {};
             if (wasmModule) initSync({ module: wasmModule });
-            const seed = options?.processorOptions?.seed ?? 0xba55ba55;
             this._engine = new ClankersBass(seed);
             this.port.postMessage({ type: 'ready' });
         } catch (e) {
@@ -33,29 +33,46 @@ class BassWorkletProcessor extends AudioWorkletProcessor {
 
         this.port.onmessage = ({ data }) => {
             if (!this._engine) return;
-            if (data.type === 'trigger') {
-                this._queue.push(data);
-            } else if (data.type === 'setParams') {
-                this._engine.set_params(data.ccJson);
-            } else if (data.type === 'stop') {
-                this._queue = [];
+            switch (data.type) {
+                case 'trigger':
+                    this._queue.push(data);
+                    break;
+                case 'setParams':
+                    try { this._engine.set_params(data.ccJson); } catch (_) {}
+                    break;
+                case 'stop':
+                    this._queue = [];
+                    break;
             }
         };
     }
 
     process(_inputs, outputs) {
         const out = outputs[0]?.[0];
-        if (!this._engine || !out) return true;
+        if (!out) return true;
 
-        const blockEnd = currentTime + out.length / sampleRate;
-        while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
-            const ev = this._queue.shift();
-            this._engine.trigger(ev.midiNote, ev.velocity,
-                                 ev.holdSamples ?? 0, ev.ccJson ?? '{}');
+        if (!this._engine) {
+            out.fill(0);
+            return true;
         }
 
-        const buf = this._engine.render(out.length);
-        out.set(buf);
+        try {
+            const blockEnd = currentTime + out.length / sampleRate;
+            while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
+                const ev = this._queue.shift();
+                this._engine.trigger(ev.midiNote, ev.velocity,
+                                     ev.holdSamples ?? 0, ev.ccJson ?? '{}');
+            }
+
+            const buf = this._engine.render(out.length);
+            out.set(buf.length <= out.length ? buf : buf.subarray(0, out.length));
+        } catch (e) {
+            out.fill(0);
+            if (this._errCount++ < 3) {
+                this.port.postMessage({ type: 'error', message: `process: ${e}` });
+            }
+        }
+
         return true;
     }
 }
