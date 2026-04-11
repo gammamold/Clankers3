@@ -3240,6 +3240,64 @@
         left: 1rem;
       }
     }
+
+    /* ══ Menu Button ═══════════════════════════════════════════════════════════ */
+
+    #btn-settings, #btn-synth-lab, #btn-reach-outside { display: none !important; }
+
+    #btn-menu {
+      position: fixed;
+      top: 1rem; right: 1rem;
+      z-index: 580;
+      background: transparent;
+      border: 1px solid #333;
+      color: #666;
+      font-family: monospace;
+      font-size: .75rem;
+      padding: .3rem .6rem;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    #btn-menu:hover, #btn-menu.menu-open { border-color: #666; color: #aaa; }
+
+    #panel-menu {
+      display: none;
+      position: fixed;
+      top: 2.8rem; right: 1rem;
+      z-index: 580;
+      background: #0d0f14;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: .25rem 0;
+      min-width: 160px;
+      box-shadow: 0 4px 16px #000a;
+    }
+    #panel-menu.menu-open { display: block; }
+
+    .menu-item {
+      display: block; width: 100%;
+      background: transparent; border: none;
+      border-bottom: 1px solid #1e1e1e;
+      color: #888; font-family: monospace; font-size: .72rem;
+      padding: .45rem .75rem;
+      cursor: pointer; text-align: left; letter-spacing: .05em;
+    }
+    .menu-item:last-child { border-bottom: none; }
+    .menu-item:hover { background: #1a1a1a; color: #ccc; }
+    #menu-item-synth-lab:hover { color: #ffe000; }
+    #menu-item-reach-outside:hover { color: #00d4ff; }
+    #menu-item-reach-outside.rto-active { color: #00ffff; background: #001830; }
+
+    #panel-reach-outside.rto-from-menu {
+      bottom: auto;
+      top: 6rem; right: 1rem;
+    }
+
+    @media (max-width: 640px) {
+      #btn-menu { right: .5rem; }
+      #panel-menu { right: .5rem; min-width: 140px; }
+      #panel-reach-outside.rto-from-menu { right: .5rem; width: calc(100vw - 1rem); }
+    }
   </style>
 </head>
 
@@ -3989,6 +4047,14 @@
   <button id="btn-chat-float">[CHAT]</button>
   <button id="btn-settings">⚙ LLM</button>
 
+  <button id="btn-menu">≡ MENU</button>
+
+  <div id="panel-menu">
+    <button class="menu-item" id="menu-item-llm">⚙ LLM</button>
+    <button class="menu-item" id="menu-item-synth-lab">SYNTH LAB →</button>
+    <button class="menu-item" id="menu-item-reach-outside">⬡ REACH THE OUTSIDE</button>
+  </div>
+
   <!-- ─── Config / Settings Overlay ──────────────────────────────── -->
   <div id="config-overlay">
     <div id="config-panel">
@@ -4012,6 +4078,15 @@
       </div>
       <button id="cfg-save-btn" class="cfg-save-btn">SAVE &amp; CONNECT</button>
       <div id="cfg-status" class="cfg-status"></div>
+      <div style="margin-top:1.2rem;text-align:center;">
+        <div style="font-size:.55rem;color:#444;letter-spacing:.08em;margin-bottom:.5rem;">— OR —</div>
+        <button id="cfg-skip-btn" class="cfg-save-btn" style="background:#1a1a2e;color:#00d4ff;border:1px solid #00d4ff;">
+          ▶ SKIP — PLAY DEMO
+        </button>
+        <div style="font-size:.5rem;color:#333;margin-top:.4rem;">
+          Listen to the built-in acid house track. No API key needed.
+        </div>
+      </div>
       <div style="margin-top:1rem;font-size:.6rem;color:#2a2a2a;text-align:center;">
         Your key is sent only to your local server — never stored to disk.
       </div>
@@ -4180,7 +4255,10 @@
         return;
       }
       if (_readyPromise) return _readyPromise;
-      _readyPromise = _doInit();
+      _readyPromise = _doInit().catch(err => {
+        _readyPromise = null;   // allow retry on next click
+        throw err;
+      });
       return _readyPromise;
     }
 
@@ -4192,6 +4270,30 @@
       const wasmBytes = await fetch('/wasm/clankers_dsp_bg.wasm').then(r => r.arrayBuffer());
       const wasmModule = await WebAssembly.compile(wasmBytes);
       _wasmModule = wasmModule;
+
+      // Load WASM glue into AudioWorkletGlobalScope as a classic script
+      // (static `import` in worklets is not supported in all Chromium builds)
+      let glue = await fetch('/wasm/clankers_dsp.js').then(r => r.text());
+      // Polyfill TextDecoder/TextEncoder for AudioWorkletGlobalScope (unavailable in some Chromium builds)
+      const polyfill = `
+if (typeof TextDecoder === 'undefined') {
+  globalThis.TextDecoder = class { decode(buf) { if (!buf || !buf.length) return ''; return String.fromCharCode.apply(null, new Uint8Array(buf.buffer || buf, buf.byteOffset, buf.byteLength)); } };
+}
+if (typeof TextEncoder === 'undefined') {
+  globalThis.TextEncoder = class { encode(s) { const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; } encodeInto(s, dest) { const a = this.encode(s); dest.set(a); return { read: s.length, written: a.length }; } };
+}
+`;
+      glue = polyfill + glue.replace(/^export\s+class\s/gm, 'class ')
+                  .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, '')
+                  .replace(/import\.meta\.url/g, "'unused'");
+      glue += `\nglobalThis.initSync = initSync;\n`
+            + `globalThis.ClankersBass = ClankersBass;\n`
+            + `globalThis.ClankersBuchla = ClankersBuchla;\n`
+            + `globalThis.ClankersDrums = ClankersDrums;\n`
+            + `globalThis.ClankersPads = ClankersPads;\n`
+            + `globalThis.ClankersRhodes = ClankersRhodes;\n`;
+      const glueBlob = new Blob([glue], { type: 'application/javascript' });
+      await ctx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
 
       await ctx.audioWorklet.addModule('/worklets/drums-worklet.js');
       await ctx.audioWorklet.addModule('/worklets/bass-worklet.js');
@@ -4785,6 +4887,9 @@
         startViz();
       } catch (e) {
         log('Seq error: ' + e);
+        console.error('[Clankers] Audio init/play failed:', e);
+        chatAppend('⚠ Audio error — tap PLAY to retry. (' + e.message + ')', 'msg-sys');
+        document.getElementById('btn-play').disabled = false;
       }
     });
 
@@ -6974,6 +7079,61 @@
       showScreen(_synthLabPrevScreen || 'main');
     });
 
+    // ── Global Menu Button ────────────────────────────────────────────────────
+    (function () {
+      const btnMenu   = document.getElementById('btn-menu');
+      const panelMenu = document.getElementById('panel-menu');
+
+      function openMenu() {
+        const rtoOrig = document.getElementById('btn-reach-outside');
+        document.getElementById('menu-item-reach-outside').style.display =
+          rtoOrig.style.display === 'none' ? 'none' : '';
+        panelMenu.classList.add('menu-open');
+        btnMenu.classList.add('menu-open');
+      }
+
+      function closeMenu() {
+        panelMenu.classList.remove('menu-open');
+        btnMenu.classList.remove('menu-open');
+      }
+
+      btnMenu.addEventListener('click', () => {
+        panelMenu.classList.contains('menu-open') ? closeMenu() : openMenu();
+      });
+
+      document.addEventListener('click', e => {
+        if (!panelMenu.contains(e.target) && e.target !== btnMenu) closeMenu();
+      });
+
+      document.getElementById('menu-item-llm').addEventListener('click', () => {
+        closeMenu();
+        document.getElementById('config-overlay').classList.toggle('open');
+      });
+
+      document.getElementById('menu-item-synth-lab').addEventListener('click', () => {
+        closeMenu();
+        const cur = document.body.className.replace('on-', '');
+        if (cur !== 'synth-lab') _synthLabPrevScreen = cur;
+        synthLab.buildUI();
+        if (!synthLab._ctx) {
+          const existingCtx = window._ctx || new (window.AudioContext || window.webkitAudioContext)();
+          synthLab.init(existingCtx);
+        }
+        showScreen('synth-lab');
+      });
+
+      document.getElementById('menu-item-reach-outside').addEventListener('click', () => {
+        closeMenu();
+        const panel = document.getElementById('panel-reach-outside');
+        const menuItem = document.getElementById('menu-item-reach-outside');
+        const isOpen = panel.classList.toggle('rto-open');
+        panel.classList.toggle('rto-from-menu', isOpen);
+        menuItem.classList.toggle('rto-active', isOpen);
+        document.getElementById('btn-reach-outside').classList.toggle('rto-active', isOpen);
+        if (isOpen) _refreshRtoPorts();
+      });
+    })();
+
     document.getElementById('btn-wizard-close').addEventListener('click', () => {
       document.getElementById('synth-wizard-overlay').classList.remove('open');
     });
@@ -7058,6 +7218,35 @@
       } finally {
         btn.disabled = false; btn.textContent = 'SAVE & CONNECT';
       }
+    });
+
+    // Skip LLM — load default sheet and play immediately
+    document.getElementById('cfg-skip-btn').addEventListener('click', () => {
+      document.getElementById('config-overlay').classList.remove('open');
+
+      let sheet;
+      try {
+        sheet = JSON.parse(document.getElementById('sheet-json').value);
+      } catch (e) {
+        chatAppend('Error parsing default sheet: ' + e.message, 'msg-sys');
+        return;
+      }
+
+      sessionId = 'ses_' + Date.now().toString(36);
+      currentSheet = sheet;
+      chatHistory = [];
+      document.getElementById('session-badge').textContent = `[${sessionId.slice(0, 8)}]`;
+      chatInput.disabled = false;
+      chatSend.disabled = false;
+      document.getElementById('evolve-row').style.display = '';
+
+      sheetToSequencer(sheet, { autoStore: true });
+
+      const steps = sheet.steps?.length ?? 0;
+      chatAppend(
+        `Demo loaded (${steps} steps @ ${sheet.bpm ?? '?'} BPM). Configure ⚙ LLM to chat with the band.`,
+        'msg-sys'
+      );
     });
 
     // On load: restore config from sessionStorage, open settings if no key saved
