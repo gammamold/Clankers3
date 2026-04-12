@@ -1,12 +1,13 @@
 /**
  * Poly FM AudioWorkletProcessor — Clankers 3  [t:1]
  *
- * Polyphonic FM bass using the ClankersBass engine.
- * Registered under 'buchla-worklet' to preserve node name references.
+ * Uses ClankersBuchla (vactrol LPG + wavefolder, self-releasing).
+ * CC19 = release time (0-127 → 5ms..3s) — the note decays naturally,
+ * no holdSamples needed.
  *
  * Messages IN:
- *   { type:'trigger', audioTime, midiNote, velocity, holdSamples, ccJson? }
- *   { type:'setParams', ccJson }   — live YZ-pad update
+ *   { type:'trigger', audioTime, midiNote, velocity, ccJson? }
+ *   { type:'setParams', ccJson }   — live param update
  *   { type:'stop' }
  *
  * Messages OUT:
@@ -14,19 +15,19 @@
  *   { type:'error', message }
  */
 
-const { initSync, ClankersBass } = globalThis;
+const { initSync, ClankersBuchla } = globalThis;
 
 class PolyFMWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {
         super();
-        this._engine    = null;
-        this._queue     = [];
-        this._errCount  = 0;
+        this._engine   = null;
+        this._queue    = [];
+        this._errCount = 0;
 
         try {
-            const { wasmModule, seed = 0xb455b456 } = options?.processorOptions ?? {};
+            const { wasmModule } = options?.processorOptions ?? {};
             if (wasmModule) initSync({ module: wasmModule });
-            this._engine = new ClankersBass(seed);
+            this._engine = new ClankersBuchla();
             this.port.postMessage({ type: 'ready' });
         } catch (e) {
             this.port.postMessage({ type: 'error', message: String(e) });
@@ -61,11 +62,15 @@ class PolyFMWorkletProcessor extends AudioWorkletProcessor {
             const blockEnd = currentTime + out.length / sampleRate;
             while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
                 const ev = this._queue.shift();
-                this._engine.trigger(ev.midiNote, ev.velocity,
-                                     ev.holdSamples ?? 22050, ev.ccJson ?? '{}');
+                // Apply CC params first so release/cutoff etc. are live at trigger time
+                if (ev.ccJson) {
+                    try { this._engine.set_params(ev.ccJson); } catch (_) {}
+                }
+                // ClankersBuchla is self-releasing — no holdSamples
+                this._engine.trigger(ev.midiNote, ev.velocity);
             }
 
-            const buf = this._engine.render(out.length);
+            const buf = this._engine.process(out.length);
             out.set(buf.length <= out.length ? buf : buf.subarray(0, out.length));
         } catch (e) {
             out.fill(0);
