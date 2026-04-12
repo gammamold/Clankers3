@@ -334,6 +334,35 @@
       }
     }
 
+    /* ── Octave strip ── */
+    .oct-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .35rem;
+      padding: .25rem 0 .1rem;
+    }
+    .oct-btn {
+      background: #111;
+      border: 1px solid #333;
+      color: #aaa;
+      font-size: .72rem;
+      padding: .18rem .55rem;
+      cursor: pointer;
+      border-radius: 3px;
+      line-height: 1;
+      touch-action: manipulation;
+    }
+    .oct-btn:active { background: #1a1a1a; color: #fff; border-color: #555; }
+    .oct-lbl {
+      font-size: .68rem;
+      color: #666;
+      min-width: 3rem;
+      text-align: center;
+      font-family: monospace;
+      letter-spacing: .04em;
+    }
+
     /* ── XYPad component ── */
     .xy-pad-wrap {
       display: flex;
@@ -3611,6 +3640,11 @@
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100"
               value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="bass"><option value="">—</option></select></span></div>
         <div class="pads bass" id="bass-notes"></div>
+        <div class="oct-strip" id="bass-oct-strip">
+          <button class="oct-btn" id="bass-oct-dn">▼</button>
+          <span class="oct-lbl" id="bass-oct-lbl">OCT 0</span>
+          <button class="oct-btn" id="bass-oct-up">▲</button>
+        </div>
         <div class="inst-ctrl-wrap" data-inst="bass">
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="bass">KNOBS</button>
@@ -3631,6 +3665,11 @@
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0"
               max="100" value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="buchla"><option value="">—</option></select></span></div>
         <div class="pads buchla" id="buchla-notes"></div>
+        <div class="oct-strip" id="buchla-oct-strip">
+          <button class="oct-btn" id="buchla-oct-dn">▼</button>
+          <span class="oct-lbl" id="buchla-oct-lbl">OCT 0</span>
+          <button class="oct-btn" id="buchla-oct-up">▲</button>
+        </div>
         <div class="inst-ctrl-wrap" data-inst="polyfm">
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="polyfm">KNOBS</button>
@@ -3651,6 +3690,11 @@
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="pads" min="0" max="100"
               value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="pads"><option value="">—</option></select></span></div>
         <div class="pads chords" id="chord-pads"></div>
+        <div class="oct-strip" id="pads-oct-strip">
+          <button class="oct-btn" id="pads-oct-dn">▼</button>
+          <span class="oct-lbl" id="pads-oct-lbl">OCT 0</span>
+          <button class="oct-btn" id="pads-oct-up">▲</button>
+        </div>
         <div class="inst-ctrl-wrap" data-inst="pads">
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="pads">KNOBS</button>
@@ -4314,6 +4358,8 @@
     let ctx = null;
     let _wasmModule = null; // cached compiled WebAssembly.Module — reused by offline renderer
     let _readyPromise = null; // singleton init promise — prevents concurrent ensureReady races
+    let buchlaOctave = 0;
+    let padsOctave = 0;
     let drumsNode = null;   // AudioWorkletNode — drums
     let bassNode = null;   // AudioWorkletNode — bass
     let buchlaNode = null;   // AudioWorkletNode — buchla
@@ -4764,12 +4810,13 @@ if (typeof TextEncoder === 'undefined') {
       ensureReady().then(() => {
         const holdSamples = Math.round(ctx.sampleRate * 1.0);
         const ccJson = JSON.stringify(buchlaCC());
+        const actualNote = Math.max(0, Math.min(127, midi + buchlaOctave * 12));
         buchlaNode.port.postMessage({
           type: 'trigger', audioTime: ctx.currentTime,
-          midiNote: midi, velocity: 0.85,
+          midiNote: actualNote, velocity: 0.85,
           holdSamples, ccJson
         });
-        midiOut.scheduleNote('buchla', midi, 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+        midiOut.scheduleNote('buchla', actualNote, 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
         log(`poly-fm midi=${midi} cut=${pfm.cutoff.val} fold=${pfm.fold.val} rel=${pfm.release.val}`);
       });
     }
@@ -4826,11 +4873,12 @@ if (typeof TextEncoder === 'undefined') {
         padsNode.port.postMessage({ type: 'setParams', ccJson });
         const holdMs = holdSamples / ctx.sampleRate * 1000;
         for (const note of notes) {
+          const actualNote = Math.max(0, Math.min(127, note + padsOctave * 12));
           padsNode.port.postMessage({
             type: 'trigger', audioTime: ctx.currentTime,
-            midiNote: note, velocity: 0.75, holdSamples
+            midiNote: actualNote, velocity: 0.75, holdSamples
           });
-          midiOut.scheduleNote('pads', note, 0.75, ctx.currentTime, ctx, holdMs);
+          midiOut.scheduleNote('pads', actualNote, 0.75, ctx.currentTime, ctx, holdMs);
         }
         log(`pads [${notes.join(',')}] hold=${holdSamples}`);
       });
@@ -5029,7 +5077,42 @@ if (typeof TextEncoder === 'undefined') {
     bassOctKnob.onChange = () => {
       sendBassParams();
       if (seq) seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
+      document.getElementById('bass-oct-lbl').textContent = 'OCT ' + bassOctKnob.val;
     };
+
+    // ─── Oct-strip wiring ──────────────────────────────────────────────────────
+    (function () {
+      // Bass — syncs with existing bassOctKnob
+      document.getElementById('bass-oct-dn').addEventListener('click', () => {
+        if (bassOctKnob.val > -2) bassOctKnob.setVal(bassOctKnob.val - 1);
+      });
+      document.getElementById('bass-oct-up').addEventListener('click', () => {
+        if (bassOctKnob.val < 2) bassOctKnob.setVal(bassOctKnob.val + 1);
+      });
+
+      // Poly FM
+      function updateBuchlaOctLbl() {
+        document.getElementById('buchla-oct-lbl').textContent = 'OCT ' + buchlaOctave;
+      }
+      document.getElementById('buchla-oct-dn').addEventListener('click', () => {
+        if (buchlaOctave > -2) { buchlaOctave--; updateBuchlaOctLbl(); }
+      });
+      document.getElementById('buchla-oct-up').addEventListener('click', () => {
+        if (buchlaOctave < 2) { buchlaOctave++; updateBuchlaOctLbl(); }
+      });
+
+      // Poly Synth
+      function updatePadsOctLbl() {
+        document.getElementById('pads-oct-lbl').textContent = 'OCT ' + padsOctave;
+      }
+      document.getElementById('pads-oct-dn').addEventListener('click', () => {
+        if (padsOctave > -2) { padsOctave--; updatePadsOctLbl(); }
+      });
+      document.getElementById('pads-oct-up').addEventListener('click', () => {
+        if (padsOctave < 2) { padsOctave++; updatePadsOctLbl(); }
+      });
+    })();
+
     // Poly FM wired via sendBuchlaParams() called from polyfmXY profiles above
 
     // Wire pads knobs
