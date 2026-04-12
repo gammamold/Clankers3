@@ -4680,7 +4680,7 @@ if (typeof TextEncoder === 'undefined') {
           type: 'trigger', audioTime: ctx.currentTime,
           midiNote: actualNote, velocity: 0.85, holdSamples, ccJson
         });
-        midiOut.scheduleNote('bass', Math.max(0, Math.min(127, actualNote + 48)), 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+        if (!seq || seq.isAudible('bass')) midiOut.scheduleNote('bass', Math.max(0, Math.min(127, actualNote + 48)), 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
         log(`bass midi=${midi} fm=${byz['byz-fmidx'].val} cut=${byz['byz-cutoff'].val}`);
       });
     }
@@ -4765,7 +4765,7 @@ if (typeof TextEncoder === 'undefined') {
           midiNote: midi, velocity: 0.85,
           holdSamples, ccJson
         });
-        midiOut.scheduleNote('buchla', midi, 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+        if (!seq || seq.isAudible('buchla')) midiOut.scheduleNote('buchla', midi, 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
         log(`poly-fm midi=${midi} cut=${pfm.cutoff.val} fold=${pfm.fold.val} rel=${pfm.release.val}`);
       });
     }
@@ -4826,7 +4826,7 @@ if (typeof TextEncoder === 'undefined') {
             type: 'trigger', audioTime: ctx.currentTime,
             midiNote: note, velocity: 0.75, holdSamples
           });
-          midiOut.scheduleNote('pads', note, 0.75, ctx.currentTime, ctx, holdMs);
+          if (!seq || seq.isAudible('pads')) midiOut.scheduleNote('pads', note, 0.75, ctx.currentTime, ctx, holdMs);
         }
         log(`pads [${notes.join(',')}] hold=${holdSamples}`);
       });
@@ -4879,7 +4879,7 @@ if (typeof TextEncoder === 'undefined') {
           type: 'trigger', audioTime: ctx.currentTime,
           midiNote: midi, velocity: 0.78, holdSamples
         });
-        midiOut.scheduleNote('rhodes', midi, 0.78, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+        if (!seq || seq.isAudible('rhodes')) midiOut.scheduleNote('rhodes', midi, 0.78, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
         log(`rhodes midi=${midi} bright=${rk['r-bright'].val} decay=${rk['r-decay'].val}`);
       });
     }
@@ -5465,7 +5465,7 @@ if (typeof TextEncoder === 'undefined') {
               type: 'trigger', audioTime: ctx.currentTime,
               voiceId, velocity
             });
-            midiOut.scheduleNote('drum', voiceId, velocity, ctx.currentTime, ctx, 100);
+            if (!seq || seq.isAudible('drum')) midiOut.scheduleNote('drum', voiceId, velocity, ctx.currentTime, ctx, 100);
           } else if (inst === 'bass') {
             const ccJson = JSON.stringify(bassCC());
             const actualNote = note + (bassOctKnob?.val ?? 0) * 12;
@@ -5473,14 +5473,14 @@ if (typeof TextEncoder === 'undefined') {
               type: 'trigger', audioTime: ctx.currentTime,
               midiNote: actualNote, velocity, holdSamples, ccJson
             });
-            midiOut.scheduleNote('bass', Math.max(0, Math.min(127, actualNote + 48)), velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+            if (!seq || seq.isAudible('bass')) midiOut.scheduleNote('bass', Math.max(0, Math.min(127, actualNote + 48)), velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
           } else if (inst === 'buchla') {
             const ccJson = JSON.stringify(buchlaCC());
             buchlaNode.port.postMessage({
               type: 'trigger', audioTime: ctx.currentTime,
               midiNote: note, velocity, holdSamples, ccJson
             });
-            midiOut.scheduleNote('buchla', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+            if (!seq || seq.isAudible('buchla')) midiOut.scheduleNote('buchla', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
           } else if (inst === 'pads') {
             const ccJson = JSON.stringify({
               74: pk['p-cutoff'].val, 71: pk['p-res'].val,
@@ -5493,7 +5493,7 @@ if (typeof TextEncoder === 'undefined') {
               type: 'trigger', audioTime: ctx.currentTime,
               midiNote: note, velocity, holdSamples
             });
-            midiOut.scheduleNote('pads', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+            if (!seq || seq.isAudible('pads')) midiOut.scheduleNote('pads', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
           } else if (inst === 'rhodes') {
             const ccJson = JSON.stringify({
               74: rk['r-bright'].val, 72: rk['r-decay'].val,
@@ -5506,7 +5506,7 @@ if (typeof TextEncoder === 'undefined') {
               type: 'trigger', audioTime: ctx.currentTime,
               midiNote: note, velocity, holdSamples
             });
-            midiOut.scheduleNote('rhodes', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+            if (!seq || seq.isAudible('rhodes')) midiOut.scheduleNote('rhodes', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
           }
         });
       };

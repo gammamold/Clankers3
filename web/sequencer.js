@@ -282,6 +282,8 @@ export class Sequencer {
     return !this._mute[type];
   }
 
+  isAudible(type) { return this._isAudible(type); }
+
   _updateGains() {
     for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
       if (this._instrGains?.[type]) {
