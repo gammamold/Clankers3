@@ -6656,6 +6656,7 @@ if (typeof TextEncoder === 'undefined') {
             startPosPitch: pos.pitch, startPosBeat: pos.clickBeat,
             deltaBeat: 0, deltaPitch: 0,
             hasMoved: false,
+            wasSelected: isSel,   // true = second click → delete; false = first click → just select
             targetTrack: null, startVel: hit.vel
           };
 
@@ -6752,8 +6753,15 @@ if (typeof TextEncoder === 'undefined') {
         } else if ((st.type === 'move' || st.type === 'dup') && st.hasMoved) {
           this._commitDraggedNotes();
         } else if (!st.hasMoved && (st.type === 'vel' || st.type === 'move' || st.type === 'dup')) {
-          this._deleteNote(st.startPosBeat, st.startPosPitch);
-          this._compileAndUpload(false);
+          if (st.wasSelected) {
+            // Second click on an already-selected step → delete it
+            this._deleteNote(st.startPosBeat, st.startPosPitch);
+            this.selectedNotes = this.selectedNotes.filter(
+              sn => !(sn.beat === st.startPosBeat && sn.pitch === st.startPosPitch)
+            );
+            this._compileAndUpload(false);
+          }
+          // First click (wasSelected=false) → already selected in pointerdown, nothing more to do
         }
         this._dragState = null;
         if (!this._raf) this.draw(-1);
