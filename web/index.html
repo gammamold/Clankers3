@@ -4758,6 +4758,8 @@ if (typeof TextEncoder === 'undefined') {
       release: { val: 40 },   // CC19 — release_s    (0-127 → 5ms..3s)
       filterMod: { val: 50 },   // CC21 — filter_mod   (0-127 → 0..1)
     };
+    // Populated after knobs are built — XY pad closures reference this by name
+    const pfmK = {};
 
     function buchlaCC() {
       return {
@@ -4773,38 +4775,51 @@ if (typeof TextEncoder === 'undefined') {
           name: 'TEXTURE',
           x: {
             label: 'CUTOFF', min: 0, max: 127, get: () => pfm.cutoff.val,
-            set: v => { pfm.cutoff.val = v; sendBuchlaParams(); }
+            set: v => { pfm.cutoff.val = v; pfmK['pf-cutoff']?.setVal(v); sendBuchlaParams(); }
           },
           y: {
             label: 'FOLD', min: 0, max: 127, get: () => pfm.fold.val,
-            set: v => { pfm.fold.val = v; sendBuchlaParams(); }
+            set: v => { pfm.fold.val = v; pfmK['pf-fold']?.setVal(v); sendBuchlaParams(); }
           }
         },
         {
           name: 'EVOLVE',
           x: {
             label: 'CUTOFF', min: 0, max: 127, get: () => pfm.cutoff.val,
-            set: v => { pfm.cutoff.val = v; sendBuchlaParams(); }
+            set: v => { pfm.cutoff.val = v; pfmK['pf-cutoff']?.setVal(v); sendBuchlaParams(); }
           },
           y: {
             label: 'RELEASE', min: 0, max: 127, get: () => pfm.release.val,
-            set: v => { pfm.release.val = v; sendBuchlaParams(); }
+            set: v => { pfm.release.val = v; pfmK['pf-release']?.setVal(v); sendBuchlaParams(); }
           }
         },
         {
           name: 'SHAPE',
           x: {
             label: 'FOLD', min: 0, max: 127, get: () => pfm.fold.val,
-            set: v => { pfm.fold.val = v; sendBuchlaParams(); }
+            set: v => { pfm.fold.val = v; pfmK['pf-fold']?.setVal(v); sendBuchlaParams(); }
           },
           y: {
             label: 'FLT.MOD', min: 0, max: 127, get: () => pfm.filterMod.val,
-            set: v => { pfm.filterMod.val = v; sendBuchlaParams(); }
+            set: v => { pfm.filterMod.val = v; pfmK['pf-filtermod']?.setVal(v); sendBuchlaParams(); }
           }
         },
       ],
     });
     document.getElementById('polyfm-xy-panel').appendChild(polyfmXY.render());
+
+    // ─── Poly FM knobs (knobs mode) ────────────────────────────────────────────
+    const _pfmContainer = document.getElementById('buchla-knobs');
+    Object.assign(pfmK, makeKnobGroup(_pfmContainer, 'TIMBRE', [
+      { id: 'pf-cutoff',    label: 'CUTOFF',  min: 0, max: 127, value: pfm.cutoff.val,    step: 1 },
+      { id: 'pf-fold',      label: 'FOLD',    min: 0, max: 127, value: pfm.fold.val,      step: 1 },
+      { id: 'pf-release',   label: 'RELEASE', min: 0, max: 127, value: pfm.release.val,   step: 1 },
+      { id: 'pf-filtermod', label: 'FLT.MOD', min: 0, max: 127, value: pfm.filterMod.val, step: 1 },
+    ]));
+    pfmK['pf-cutoff'].onChange    = v => { pfm.cutoff.val    = Math.round(v); sendBuchlaParams(); };
+    pfmK['pf-fold'].onChange      = v => { pfm.fold.val      = Math.round(v); sendBuchlaParams(); };
+    pfmK['pf-release'].onChange   = v => { pfm.release.val   = Math.round(v); sendBuchlaParams(); };
+    pfmK['pf-filtermod'].onChange = v => { pfm.filterMod.val = Math.round(v); sendBuchlaParams(); };
 
     function triggerBuchla(midi) {
       ensureReady().then(() => {
@@ -7723,10 +7738,14 @@ if (typeof TextEncoder === 'undefined') {
              sendBassParams();
           }
           if (p.pfm) {
-             Object.assign(pfm.cutoff, { val: p.pfm.cutoff });
-             Object.assign(pfm.fold, { val: p.pfm.fold });
-             Object.assign(pfm.release, { val: p.pfm.release });
+             Object.assign(pfm.cutoff,    { val: p.pfm.cutoff });
+             Object.assign(pfm.fold,      { val: p.pfm.fold });
+             Object.assign(pfm.release,   { val: p.pfm.release });
              Object.assign(pfm.filterMod, { val: p.pfm.filterMod });
+             pfmK['pf-cutoff']?.setVal(p.pfm.cutoff);
+             pfmK['pf-fold']?.setVal(p.pfm.fold);
+             pfmK['pf-release']?.setVal(p.pfm.release);
+             pfmK['pf-filtermod']?.setVal(p.pfm.filterMod);
              if (typeof polyfmXY !== 'undefined') polyfmXY.syncDot();
              sendBuchlaParams();
           }
