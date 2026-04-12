@@ -16,17 +16,6 @@
 
 ---
 
-## Python FastAPI backend (`api/main.py`)
-
-> The Vercel band functions replace this for web deployment. The Python backend is kept for local/CLI use but requires the missing modules below to start.
-
-- [x] **`config.py`** — missing; defines `BAND`, API keys, model names. Required for `api/main.py` to import.
-- [x] **`llm_clients.py`** — missing; LLM client factory (`get_client(provider)`). Required for `api/main.py`.
-- [x] **`chatroom/chatroom.py`** — missing; multi-LLM negotiation engine (`Chatroom.negotiate_section()`).
-- [x] **`conductor/conductor.py`** — missing; section evolution logic (`evolve()`, `_SECTION_TENSION`).
-
----
-
 ## DSP / WASM (`clankers_dsp/`)
 
 - [ ] **Voder (formant synth) in WASM** — still Python-only. Port `agents/voder/` DSP to Rust so it can run in the browser.
@@ -143,5 +132,4 @@
 
 - [ ] **E2E test: Vercel band flow** — deploy to Vercel → enter API key → POST `/api/band/session-new` with brief → load sheet into sequencer → play → verify audio.
 - [ ] **Unit tests for DSP** — Rust unit tests for each synth engine (kick, snare, bass FM, etc.).
-- [ ] **API integration tests** — `pytest` tests for Python FastAPI routes (once missing modules are implemented).
 - [ ] **Sequencer timing test** — verify lookahead scheduler fires notes within ±2ms.
