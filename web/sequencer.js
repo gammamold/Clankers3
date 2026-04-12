@@ -458,9 +458,7 @@ export class Sequencer {
 
       if (evTime > scheduleUntil) break;
 
-      if (this._isAudible(ev.type)) {
-        this._sendTrigger(ev, evTime);
-      }
+      this._sendTrigger(ev, evTime);
 
       this._stepIdx++;
     }
@@ -469,9 +467,11 @@ export class Sequencer {
   _sendTrigger(ev, audioTime) {
     // Synth Lab events are handled separately below (no worklet port)
     const SYNTH_TYPE_SLOT = { synth0: 0, synth1: 1, synth2: 2, synth3: 3, synth4: 4 };
+    const audible = this._isAudible(ev.type);
+
     if (ev.type in SYNTH_TYPE_SLOT) {
       const holdMs = ev.durBeats * (60 / this._bpm) * 1000;
-      if (this.synthLab) {
+      if (audible && this.synthLab) {
         this.synthLab.scheduleNote(SYNTH_TYPE_SLOT[ev.type], ev.midiNote, ev.velocity, audioTime, holdMs);
       }
       this.midiOut?.scheduleNote(ev.type, ev.midiNote, ev.velocity, audioTime, this.ctx, holdMs);
@@ -482,7 +482,7 @@ export class Sequencer {
     if (!port) return;
 
     if (ev.type === 'drum') {
-      port.postMessage({
+      if (audible) port.postMessage({
         type: 'trigger', audioTime,
         voiceId: ev.voiceId, velocity: ev.velocity
       });
@@ -494,7 +494,7 @@ export class Sequencer {
       const noteCC = JSON.parse(ev.ccJson || '{}');
       const merged = Object.assign({}, noteCC, liveCC);
       const midi = Math.max(0, Math.min(127, ev.midiNote + (this.bassOctaveOffset ?? 0)));
-      port.postMessage({
+      if (audible) port.postMessage({
         type: 'trigger', audioTime,
         midiNote: midi, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
@@ -506,7 +506,7 @@ export class Sequencer {
       const liveCC = this.liveCC?.buchla?.() ?? {};
       const noteCC = JSON.parse(ev.ccJson || '{}');
       const merged = Object.assign({}, noteCC, liveCC);
-      port.postMessage({
+      if (audible) port.postMessage({
         type: 'trigger', audioTime,
         midiNote: ev.midiNote, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
@@ -518,7 +518,7 @@ export class Sequencer {
       const liveCC = this.liveCC?.pads?.() ?? {};
       const noteCC = JSON.parse(ev.ccJson || '{}');
       const merged = Object.assign({}, noteCC, liveCC);
-      port.postMessage({
+      if (audible) port.postMessage({
         type: 'trigger', audioTime,
         midiNote: ev.midiNote, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
@@ -530,7 +530,7 @@ export class Sequencer {
       const liveCC = this.liveCC?.rhodes?.() ?? {};
       const noteCC = JSON.parse(ev.ccJson || '{}');
       const merged = Object.assign({}, noteCC, liveCC);
-      port.postMessage({
+      if (audible) port.postMessage({
         type: 'trigger', audioTime,
         midiNote: ev.midiNote, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
