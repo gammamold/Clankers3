@@ -506,12 +506,13 @@ export class Sequencer {
       const liveCC = this.liveCC?.buchla?.() ?? {};
       const noteCC = JSON.parse(ev.ccJson || '{}');
       const merged = Object.assign({}, noteCC, liveCC);
+      const buchlaNote = Math.max(0, Math.min(127, ev.midiNote + (this.buchlaOctaveOffset ?? 0)));
       if (audible) port.postMessage({
         type: 'trigger', audioTime,
-        midiNote: ev.midiNote, velocity: ev.velocity,
+        midiNote: buchlaNote, velocity: ev.velocity,
         holdSamples, ccJson: JSON.stringify(merged)
       });
-      this.midiOut?.scheduleNote('buchla', ev.midiNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
+      this.midiOut?.scheduleNote('buchla', buchlaNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
 
     } else if (ev.type === 'pads') {
       const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);

@@ -283,10 +283,6 @@
       flex-wrap: wrap;
       align-items: center;
     }
-    .inst-ctrl-tabs .oct-strip {
-      margin-left: auto;
-      padding: 0;
-    }
 
     .ctrl-tab {
       font-family: monospace;
@@ -3649,11 +3645,6 @@
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="bass">KNOBS</button>
             <button class="ctrl-tab ctrl-tab-xy" data-inst="bass">XY</button>
-            <div class="oct-strip" id="bass-oct-strip">
-              <button class="oct-btn" id="bass-oct-dn">▼</button>
-              <span class="oct-lbl" id="bass-oct-lbl">OCT 0</span>
-              <button class="oct-btn" id="bass-oct-up">▲</button>
-            </div>
           </div>
           <div class="inst-knobs-panel" id="bass-knobs-panel">
             <div class="knob-row" id="bass-knobs"></div>
@@ -3674,11 +3665,6 @@
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="polyfm">KNOBS</button>
             <button class="ctrl-tab ctrl-tab-xy" data-inst="polyfm">XY</button>
-            <div class="oct-strip" id="buchla-oct-strip">
-              <button class="oct-btn" id="buchla-oct-dn">▼</button>
-              <span class="oct-lbl" id="buchla-oct-lbl">OCT 0</span>
-              <button class="oct-btn" id="buchla-oct-up">▲</button>
-            </div>
           </div>
           <div class="inst-knobs-panel" id="polyfm-knobs-panel">
             <div class="knob-row" id="buchla-knobs"></div>
@@ -3699,11 +3685,6 @@
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="pads">KNOBS</button>
             <button class="ctrl-tab ctrl-tab-xy" data-inst="pads">XY</button>
-            <div class="oct-strip" id="pads-oct-strip">
-              <button class="oct-btn" id="pads-oct-dn">▼</button>
-              <span class="oct-lbl" id="pads-oct-lbl">OCT 0</span>
-              <button class="oct-btn" id="pads-oct-up">▲</button>
-            </div>
           </div>
           <div class="inst-knobs-panel" id="pads-knobs-panel">
             <div class="knob-row" id="pads-knobs"></div>
@@ -4365,6 +4346,8 @@
     let _readyPromise = null; // singleton init promise — prevents concurrent ensureReady races
     let buchlaOctave = 0;
     let padsOctave = 0;
+    let buchlaOctSend = null;   // set after sends row is built — knob in buchla-sends
+    let padsOctSend   = null;   // set after sends row is built — knob in pads-sends
     let drumsNode = null;   // AudioWorkletNode — drums
     let bassNode = null;   // AudioWorkletNode — bass
     let buchlaNode = null;   // AudioWorkletNode — buchla
@@ -4830,14 +4813,13 @@ if (typeof TextEncoder === 'undefined') {
       ensureReady().then(() => {
         const holdSamples = Math.round(ctx.sampleRate * 1.0);
         const ccJson = JSON.stringify(buchlaCC());
-        const actualNote = Math.max(0, Math.min(127, midi + buchlaOctave * 12));
+        const actualNote = Math.max(0, Math.min(127, midi + (buchlaOctSend?.val ?? buchlaOctave) * 12));
         buchlaNode.port.postMessage({
           type: 'trigger', audioTime: ctx.currentTime,
           midiNote: actualNote, velocity: 0.85,
           holdSamples, ccJson
         });
         midiOut.scheduleNote('buchla', actualNote, 0.85, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
-        log(`poly-fm midi=${midi} cut=${pfm.cutoff.val} fold=${pfm.fold.val} rel=${pfm.release.val}`);
       });
     }
 
@@ -4998,6 +4980,7 @@ if (typeof TextEncoder === 'undefined') {
         });
         seq.liveCC = { bass: bassCC, buchla: buchlaCC, pads: padsCC, rhodes: rhodesCC };
         seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
+        seq.buchlaOctaveOffset = buchlaOctave * 12;
         seq.synthLab = synthLab;  // enable Synth Lab track playback
         seq.midiOut   = midiOut;  // enable MIDI output (REACH THE OUTSIDE)
         // Init modular sync (CV/Gate) and connect to audio output
@@ -5097,41 +5080,7 @@ if (typeof TextEncoder === 'undefined') {
     bassOctKnob.onChange = () => {
       sendBassParams();
       if (seq) seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
-      document.getElementById('bass-oct-lbl').textContent = 'OCT ' + bassOctKnob.val;
     };
-
-    // ─── Oct-strip wiring ──────────────────────────────────────────────────────
-    (function () {
-      // Bass — syncs with existing bassOctKnob
-      document.getElementById('bass-oct-dn').addEventListener('click', () => {
-        if (bassOctKnob.val > -2) bassOctKnob.setVal(bassOctKnob.val - 1);
-      });
-      document.getElementById('bass-oct-up').addEventListener('click', () => {
-        if (bassOctKnob.val < 2) bassOctKnob.setVal(bassOctKnob.val + 1);
-      });
-
-      // Poly FM
-      function updateBuchlaOctLbl() {
-        document.getElementById('buchla-oct-lbl').textContent = 'OCT ' + buchlaOctave;
-      }
-      document.getElementById('buchla-oct-dn').addEventListener('click', () => {
-        if (buchlaOctave > -2) { buchlaOctave--; updateBuchlaOctLbl(); }
-      });
-      document.getElementById('buchla-oct-up').addEventListener('click', () => {
-        if (buchlaOctave < 2) { buchlaOctave++; updateBuchlaOctLbl(); }
-      });
-
-      // Poly Synth
-      function updatePadsOctLbl() {
-        document.getElementById('pads-oct-lbl').textContent = 'OCT ' + padsOctave;
-      }
-      document.getElementById('pads-oct-dn').addEventListener('click', () => {
-        if (padsOctave > -2) { padsOctave--; updatePadsOctLbl(); }
-      });
-      document.getElementById('pads-oct-up').addEventListener('click', () => {
-        if (padsOctave < 2) { padsOctave++; updatePadsOctLbl(); }
-      });
-    })();
 
     // Poly FM wired via sendBuchlaParams() called from polyfmXY profiles above
 
@@ -5583,11 +5532,12 @@ if (typeof TextEncoder === 'undefined') {
             midiOut.scheduleNote('bass', Math.max(0, Math.min(127, actualNote + 48)), velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
           } else if (inst === 'buchla') {
             const ccJson = JSON.stringify(buchlaCC());
+            const buchlaNote = Math.max(0, Math.min(127, note + (buchlaOctSend?.val ?? buchlaOctave) * 12));
             buchlaNode.port.postMessage({
               type: 'trigger', audioTime: ctx.currentTime,
-              midiNote: note, velocity, holdSamples, ccJson
+              midiNote: buchlaNote, velocity, holdSamples, ccJson
             });
-            midiOut.scheduleNote('buchla', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+            midiOut.scheduleNote('buchla', buchlaNote, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
           } else if (inst === 'pads') {
             const ccJson = JSON.stringify({
               74: pk['p-cutoff'].val, 71: pk['p-res'].val,
@@ -5595,12 +5545,13 @@ if (typeof TextEncoder === 'undefined') {
               91: pk['p-rev'].val, 88: pk['p-revsize'].val,
               29: pk['p-chorrate'].val, 30: pk['p-cho'].val, 31: pk['p-chomix'].val,
             });
+            const padsNote = Math.max(0, Math.min(127, note + (padsOctSend?.val ?? padsOctave) * 12));
             padsNode.port.postMessage({ type: 'setParams', ccJson });
             padsNode.port.postMessage({
               type: 'trigger', audioTime: ctx.currentTime,
-              midiNote: note, velocity, holdSamples
+              midiNote: padsNote, velocity, holdSamples
             });
-            midiOut.scheduleNote('pads', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+            midiOut.scheduleNote('pads', padsNote, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
           } else if (inst === 'rhodes') {
             const ccJson = JSON.stringify({
               74: rk['r-bright'].val, 72: rk['r-decay'].val,
@@ -6018,6 +5969,34 @@ if (typeof TextEncoder === 'undefined') {
       knobs[`${type}-send-dly`].onChange = v => rack?.setSend(0, type, v);
       knobs[`${type}-send-shp`].onChange = v => rack?.setSend(1, type, v);
       _sendKnobs[type] = knobs;
+    }
+
+    // ─── Octave knobs (in sends rows — the authoritative oct controls) ─────────
+    {
+      const bassOctSend = makeKnobGroup(
+        document.getElementById('bass-sends'), 'OCT',
+        [{ id: 'b-oct-s', label: 'OCT', min: -2, max: 2, value: 0, step: 1 }]
+      )['b-oct-s'];
+      bassOctSend.onChange = v => {
+        bassOctKnob.setVal(v);   // keep hidden knob val in sync (used by triggerBass)
+        sendBassParams();
+        if (seq) seq.bassOctaveOffset = 48 + v * 12;
+      };
+      // Also keep sends knob display in sync when bassOctKnob changes (e.g. project restore)
+      const _origBassOctOnChange = bassOctKnob.onChange;
+      bassOctKnob.onChange = () => { bassOctSend.setVal(bassOctKnob.val); _origBassOctOnChange(); };
+
+      buchlaOctSend = makeKnobGroup(
+        document.getElementById('buchla-sends'), 'OCT',
+        [{ id: 'buc-oct-s', label: 'OCT', min: -2, max: 2, value: 0, step: 1 }]
+      )['buc-oct-s'];
+      buchlaOctSend.onChange = v => { buchlaOctave = Math.round(v); if (seq) seq.buchlaOctaveOffset = buchlaOctave * 12; };
+
+      padsOctSend = makeKnobGroup(
+        document.getElementById('pads-sends'), 'OCT',
+        [{ id: 'pads-oct-s', label: 'OCT', min: -2, max: 2, value: 0, step: 1 }]
+      )['pads-oct-s'];
+      padsOctSend.onChange = v => { padsOctave = Math.round(v); };
     }
 
     // BPM helper for delay time calculation
@@ -7660,6 +7639,8 @@ if (typeof TextEncoder === 'undefined') {
         bpm: document.getElementById('seq-bpm').value,
         drumVals: drumVals,
         bassOct: bassOctKnob.val,
+        buchlaOct: buchlaOctave,
+        padsOct: padsOctave,
         bassYZ: {
           fmidx: byz['byz-fmidx'].val, cutoff: byz['byz-cutoff'].val,
           fdec: byz['byz-fdec'].val, adec: byz['byz-adec'].val
@@ -7734,6 +7715,8 @@ if (typeof TextEncoder === 'undefined') {
              sendDrumsParams();
           }
           if (p.bassOct !== undefined) bassOctKnob.setVal(p.bassOct);
+          if (p.buchlaOct !== undefined) { buchlaOctave = p.buchlaOct; buchlaOctSend?.setVal(p.buchlaOct); }
+          if (p.padsOct   !== undefined) { padsOctave   = p.padsOct;  padsOctSend?.setVal(p.padsOct);   }
           if (p.bassYZ) {
              byz['byz-fmidx'].val = p.bassYZ.fmidx;
              byz['byz-cutoff'].val = p.bassYZ.cutoff;
