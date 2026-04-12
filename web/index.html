@@ -281,6 +281,11 @@
       gap: .3rem;
       margin: .35rem 0 .2rem;
       flex-wrap: wrap;
+      align-items: center;
+    }
+    .inst-ctrl-tabs .oct-strip {
+      margin-left: auto;
+      padding: 0;
     }
 
     .ctrl-tab {
@@ -3640,15 +3645,15 @@
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="bass" min="0" max="100"
               value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="bass"><option value="">—</option></select></span></div>
         <div class="pads bass" id="bass-notes"></div>
-        <div class="oct-strip" id="bass-oct-strip">
-          <button class="oct-btn" id="bass-oct-dn">▼</button>
-          <span class="oct-lbl" id="bass-oct-lbl">OCT 0</span>
-          <button class="oct-btn" id="bass-oct-up">▲</button>
-        </div>
         <div class="inst-ctrl-wrap" data-inst="bass">
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="bass">KNOBS</button>
             <button class="ctrl-tab ctrl-tab-xy" data-inst="bass">XY</button>
+            <div class="oct-strip" id="bass-oct-strip">
+              <button class="oct-btn" id="bass-oct-dn">▼</button>
+              <span class="oct-lbl" id="bass-oct-lbl">OCT 0</span>
+              <button class="oct-btn" id="bass-oct-up">▲</button>
+            </div>
           </div>
           <div class="inst-knobs-panel" id="bass-knobs-panel">
             <div class="knob-row" id="bass-knobs"></div>
@@ -3665,18 +3670,18 @@
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="buchla" min="0"
               max="100" value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="buchla"><option value="">—</option></select></span></div>
         <div class="pads buchla" id="buchla-notes"></div>
-        <div class="oct-strip" id="buchla-oct-strip">
-          <button class="oct-btn" id="buchla-oct-dn">▼</button>
-          <span class="oct-lbl" id="buchla-oct-lbl">OCT 0</span>
-          <button class="oct-btn" id="buchla-oct-up">▲</button>
-        </div>
         <div class="inst-ctrl-wrap" data-inst="polyfm">
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="polyfm">KNOBS</button>
             <button class="ctrl-tab ctrl-tab-xy" data-inst="polyfm">XY</button>
+            <div class="oct-strip" id="buchla-oct-strip">
+              <button class="oct-btn" id="buchla-oct-dn">▼</button>
+              <span class="oct-lbl" id="buchla-oct-lbl">OCT 0</span>
+              <button class="oct-btn" id="buchla-oct-up">▲</button>
+            </div>
           </div>
           <div class="inst-knobs-panel" id="polyfm-knobs-panel">
-            <div class="buchla-ctrl" id="buchla-knobs"></div>
+            <div class="knob-row" id="buchla-knobs"></div>
           </div>
           <div class="inst-xy-panel" id="polyfm-xy-panel" style="display:none"></div>
           <div class="knob-row" id="buchla-sends"></div>
@@ -3690,15 +3695,15 @@
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="pads" min="0" max="100"
               value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="pads"><option value="">—</option></select></span></div>
         <div class="pads chords" id="chord-pads"></div>
-        <div class="oct-strip" id="pads-oct-strip">
-          <button class="oct-btn" id="pads-oct-dn">▼</button>
-          <span class="oct-lbl" id="pads-oct-lbl">OCT 0</span>
-          <button class="oct-btn" id="pads-oct-up">▲</button>
-        </div>
         <div class="inst-ctrl-wrap" data-inst="pads">
           <div class="inst-ctrl-tabs">
             <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="pads">KNOBS</button>
             <button class="ctrl-tab ctrl-tab-xy" data-inst="pads">XY</button>
+            <div class="oct-strip" id="pads-oct-strip">
+              <button class="oct-btn" id="pads-oct-dn">▼</button>
+              <span class="oct-lbl" id="pads-oct-lbl">OCT 0</span>
+              <button class="oct-btn" id="pads-oct-up">▲</button>
+            </div>
           </div>
           <div class="inst-knobs-panel" id="pads-knobs-panel">
             <div class="knob-row" id="pads-knobs"></div>
