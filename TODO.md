@@ -10,7 +10,7 @@
 - [x] **Settings overlay uses sessionStorage** — API key/model/provider stored client-side; no Python backend required for config. Key verified against `/api/llm` proxy on save.
 - [x] **COEP/COOP headers in `vercel.json`** — `Cross-Origin-Opener-Policy` + `Cross-Origin-Embedder-Policy` added for SharedArrayBuffer / WASM audio worklet support.
 - [x] **Remove hardcoded `localhost:8000`** — frontend API URL now reads `window.BAND_API_URL || ''`; band requests go to `/api/band/*`.
-- [ ] **Google / Gemini provider** — `api/llm.js` detects `gemini-*` models but has no proxy implementation yet.
+- [x] **Google / Gemini provider** — `api/llm.js` detects `gemini-*` models but has no proxy implementation yet.
 - [ ] **Authentication** — no auth on any endpoint. Anyone with the URL can call the band functions (though they need their own API key in the request body).
 - [ ] **Session persistence** — `api/band/*.js` are fully stateless; no server-side session history. History is sent by the client (last 4 turns). Long sessions lose older context.
 
@@ -20,7 +20,7 @@
 
 - [ ] **Voder (formant synth) in WASM** — still Python-only. Port `agents/voder/` DSP to Rust so it can run in the browser.
 - [ ] **Granular / Clouds sampler** — referenced in WEBPLAN (HybridSynth), not implemented in Rust or the browser.
-- [ ] **Rhodes worklet registration** — confirm the rhodes worklet is registered and routed in `sequencer.js` (t:3 track type).
+- [x] **Rhodes worklet registration** — confirm the rhodes worklet is registered and routed in `sequencer.js` (t:3 track type).
 - [ ] **Rebuild WASM** — run `wasm-pack build --release --target web` in `clankers_dsp/` and commit updated `web/wasm/` binaries whenever Rust source changes.
 
 ---
@@ -59,7 +59,7 @@
 
 ## UI / UX
 
-- [ ] **Step visualizer** — the playhead/step highlight during playback; exists in HTML but wiring to sequencer tick is unclear.
+- [x] **Step visualizer** — the playhead/step highlight during playback; exists in HTML but wiring to sequencer tick is unclear.
 - [ ] **LLM config overlay accessible on all screens** — `#btn-settings` is fixed-position but may be hidden on some screens.
 - [ ] **Keyboard shortcut help** — no overlay or tooltip listing shortcuts (Space = play/stop, etc.).
 - [ ] **Error states** — no user-facing feedback when API is unreachable or WASM fails to load.
