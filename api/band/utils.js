@@ -117,28 +117,46 @@ function callGemini(apiKey, model, system, messages, maxTokens) {
 }
 
 function extractAndRepairJSON(response) {
-  const match = response.match(/\{[\s\S]*\}/s);
-  if (!match) throw new Error('No JSON in response');
-  let s = match[0].trim();
-  if (s.endsWith(',')) s = s.slice(0, -1);
-  try { return JSON.parse(s); } catch (e) { }
+  const start = response.indexOf('{');
+  if (start === -1) throw new Error('No JSON in response');
 
-  let braces = 0, brackets = 0, inStr = false, esc = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (esc) { esc = false; continue; }
-    if (c === '\\') { esc = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
+  // Find outermost closing brace by scanning (not greedy regex)
+  let depth = 0, inStr = false, esc = false, end = -1;
+  for (let i = start; i < response.length; i++) {
+    const c = response[i];
+    if (esc)        { esc = false; continue; }
+    if (c === '\\') { esc = true;  continue; }
+    if (c === '"')  { inStr = !inStr; continue; }
     if (!inStr) {
-      if (c === '{') braces++;
-      if (c === '}') braces--;
-      if (c === '[') brackets++;
-      if (c === ']') brackets--;
+      if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { end = i; break; } }
     }
   }
-  while (brackets > 0) { s += ']'; brackets--; }
-  while (braces > 0) { s += '}'; braces--; }
-  return JSON.parse(s);
+
+  const s = end >= 0 ? response.slice(start, end + 1) : response.slice(start);
+  try { return JSON.parse(s); } catch (e) { /* fall through to repair */ }
+
+  if (end >= 0) throw new Error('Malformed JSON');
+
+  // Truncated JSON — rebuild closing sequence using a nesting stack
+  const stack = [];
+  inStr = false; esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (esc)        { esc = false; continue; }
+    if (c === '\\') { esc = true;  continue; }
+    if (c === '"')  { inStr = !inStr; continue; }
+    if (!inStr) {
+      if      (c === '{') stack.push('}');
+      else if (c === '[') stack.push(']');
+      else if (c === '}' || c === ']') stack.pop();
+    }
+  }
+
+  let t = s.trimEnd();
+  if (t.endsWith(',')) t = t.slice(0, -1).trimEnd();
+  const repaired = t + stack.reverse().join('');
+  return JSON.parse(repaired);
 }
 
 // Canonical sheet normalization:
