@@ -22,6 +22,14 @@ EVOLUTION RULES:
   - Preserve the key and genre unless the section demands a shift
   - Keep MIDI ranges: Drums t:10 d:0.25 no-dur; Pads t:6 + Rhodes t:3 always use dur; Bass MIDI 0–23
   - Bass first note per phrase: CC {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
+  - Output 128 steps (8 bars) at d:0.25 unless the input sheet uses a different length
+
+DRUM RICHNESS — mandatory in every section:
+  Drum map: Kick:36 Snare:38 HH Cl:42 HH Op:46 Tom L:41 Tom M:45 Clap:48
+  Ghost notes = snare 38 at v:28–50. HH Closed: vary velocity every step (v:45–80), drop hits.
+  Displaced snare: shift ±1 step from 2&4 sometimes. Drop expected kicks for groove.
+  Vary ALL velocities — kick v:100–115, snare v:70–95, hats v:45–80. Never flat.
+  If a drum pattern looks metronomically perfect, it is wrong. Break it.
 
 Return ONLY valid JSON — the complete evolved sheet, same format as input.`;
 

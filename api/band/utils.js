@@ -104,15 +104,15 @@ function extractAndRepairJSON(response) {
 // Canonical sheet normalization:
 //   - Forces d:0.25 on every step (uniform 16th-note grid)
 //   - Pads to the next whole-bar boundary (multiples of 16 steps)
-//   - Minimum 32 steps (2 bars), maximum 64 steps (4 bars)
+//   - Minimum 32 steps (2 bars), maximum 128 steps (8 bars)
 function normalizeSheet(sheet) {
   if (!sheet || !Array.isArray(sheet.steps) || !sheet.steps.length) return;
   for (const step of sheet.steps) step.d = 0.25;
   const len = sheet.steps.length;
-  const targetBars = Math.min(4, Math.max(2, Math.ceil(len / 16)));
+  const targetBars = Math.min(8, Math.max(2, Math.ceil(len / 16)));
   const target = targetBars * 16;
   while (sheet.steps.length < target) sheet.steps.push({ d: 0.25, tracks: [] });
-  if (sheet.steps.length > 64) sheet.steps.length = 64;
+  if (sheet.steps.length > 128) sheet.steps.length = 128;
 }
 
 module.exports = { callLLM, extractAndRepairJSON, normalizeSheet };

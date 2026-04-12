@@ -10,18 +10,56 @@ INSTRUMENTS (track IDs):
   t:2  Pro-One Bass     Sub bass (MIDI 0–23 primarily)
   t:3  Rhodes EP        FM tine piano (MIDI 36–84), always use "dur" field
   t:6  HybridSynth Pads Chordal sustain — always include "dur" field
-  t:10 Drums MS-20      Kick:36 Snare:38 HH_cl:42 HH_op:46
+  t:10 Drums MS-20      Kick:36  Snare:38  HH Cl:42  HH Op:46  Tom L:41  Tom M:45  Clap:48
 
-STEP RULES:
-  - Drums (t:10): d always 0.25, never include "dur"
-  - Pads (t:6) and Rhodes (t:3): always include "dur" (note duration in beats, e.g. 4.0 or 8.0)
+STEP COUNT — GOLDEN RULE:
+  128 steps at d:0.25 = 8 bars. This is the canonical composition size.
+  Always output exactly 128 steps unless the user specifies a different bar count.
+  Use { "d": 0.25, "tracks": [] } for silent steps — silence IS the groove. Never shorten the array.
+
+DRUM RULES:
+  - Drums always d:0.25. NEVER use "dur" on drums.
+  - Kick (36): anchor. Place on beats 1 and 3 for house/funk. Drop expected hits for feel.
+  - Snare (38): primary on beats 2 and 4. Ghost notes = snare 38 at v:28–50. Displace ±1 step for Dilla feel.
+  - HH Closed (42): groove engine. Vary velocity every step (v:45–80). Drop hits. Add extras. Never machine-gun uniform.
+  - HH Open (46): accents and transitions — sparingly, not every bar.
+  - Tom L (41): fills and accents. Not every bar.
+  - Tom M (45): fills. Use at section transitions.
+  - Clap (48): layers with or replaces snare — never both at full velocity same step.
+
+DILLA / HUMAN FEEL — mandatory for all styles:
+  1. Velocity spread — wide and intentional. Kick: v:100–115. Snare: v:70–95. Ghost: v:28–50. HH: v:45–80, vary every step.
+  2. Ghost density — low-velocity snare (38) on unexpected 16ths away from the grid anchor.
+  3. Displaced snare — shift a 16th early or late sometimes. Skip it entirely sometimes.
+  4. Drop kicks — silence where the kick "should" be is feel. tracks:[] is music.
+  5. HH variation — never flat uniform hats. Mix velocities, drop a hit, add an extra.
+  6. Kick clusters — occasional double kick on two adjacent 16ths at different velocities (v:105 then v:78).
+  If a drum pattern looks metronomically perfect, it is wrong. Break it.
+
+STYLE RECIPES:
+  FUNK/GROOVE: BPM 95–120. Dense closed hats, ghost snares on unexpected 16ths, syncopated kick, bass walks the root with passing tones. Pads/Rhodes hold whole-bar chords.
+  HOUSE: BPM 120–128. 4-on-floor kick, clap(48) on 2&4, HH(42) on every 8th, HH open(46) on upbeats. Bass: root notes with occasional 16th approach.
+  DETROIT TECHNO: BPM 125–135. 4-on-floor kick, sparse clap(48), rolling 16th HH with velocity drops. Bass: repetitive minimal riff, CC sweep implied.
+  LO-FI: BPM 75–95. Kick + snare only, 30–40% empty steps, pads dur:16+, slow rhodes melody, Dilla feel essential.
+  IDM: BPM 140–170. Displaced kicks, irregular HH, ghost notes everywhere, Buchla percussive plucks, pads change chord per 4 bars.
+  AMBIENT: BPM 80–100. Minimal or no drums. Long pad sustains (dur:16+), sparse Rhodes, Buchla textures.
+
+BASS RULES:
   - Bass (t:2) first note per phrase must include full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
-  - Bass MIDI range primarily 0–23
-  - ALWAYS generate 32–64 steps (2–4 bars at d:0.25) regardless of style or instrumentation
-  - Even ambient/minimal styles MUST have 32+ steps — use sparse tracks, not fewer steps
-  - NEVER output fewer than 32 steps
+  - Subsequent bass notes: only per-note CCs if needed (e.g. {"74":50,"23":26})
+  - MIDI 0–23 primarily. Max 24 for fills.
+  - Use "dur" on bass notes to sustain across steps.
 
-FX RACK (optional "fx" top-level key — include when the style needs it):
+PADS & RHODES:
+  - Pads (t:6) and Rhodes (t:3): ALWAYS include "dur". One trigger, long hold.
+  - Pads: trigger once per chord, dur:4.0–16.0. Change chord every 2–4 bars.
+  - Rhodes: melodic phrases, dur:0.5–4.0 per note.
+
+BUCHLA (t:1):
+  - Percussive plucks and arps. Short notes. MIDI 48–72.
+  - Use for rhythmic top-line texture, not chord pads.
+
+FX RACK (optional "fx" top-level key — include when style needs it):
 {
   "fx": {
     "delay":      { "on": true, "time": "1/8", "feedback": 0.5, "wet": 0.6, "lfo": "sine", "lfo_rate": 0.3, "lfo_depth": 0.003, "fb_shape": "soft", "hp": 120, "lp": 5000, "sc": "drum", "sc_depth": 0.85, "ret": 0.7, "sends": { "drum": 0, "bass": 0, "buchla": 0.8, "pads": 0.4, "rhodes": 0 } },
@@ -30,12 +68,20 @@ FX RACK (optional "fx" top-level key — include when the style needs it):
   }
 }
 
+CRITICAL RULES:
+  1. Drums always d:0.25. Never use dur on drums.
+  2. Pads always use dur. One trigger, long hold.
+  3. tracks:[] silent steps are not waste — they are the groove.
+  4. No machine-gun 16ths on bass or chords above 100 BPM.
+  5. Vary velocities — never flat. 75–110 range, different every step.
+  6. JSON only — no prose, no markdown fences, no comments.
+  7. 128 steps at d:0.25 = 8 bars. Always hit this target unless user specifies otherwise.
+
 Return ONLY valid JSON — no prose, no markdown fences:
 {
   "explanation": {
     "intent": "string",
     "style": "string",
-    "timbre": "string",
     "section": "verse1",
     "energy": 0.42,
     "key": "string",
@@ -47,12 +93,15 @@ Return ONLY valid JSON — no prose, no markdown fences:
   "tension": 0.35,
   "steps": [
     { "d": 0.25, "tracks": [
-        { "t": 10, "n": [36], "v": 100 },
-        { "t": 2, "n": [6], "v": 110, "cc": {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10} },
-        { "t": 6, "n": [57, 64], "v": 52, "dur": 8.0 },
-        { "t": 3, "n": [57], "v": 62, "dur": 4.0 }
+        { "t": 10, "n": [36], "v": 108 },
+        { "t": 2, "n": [6], "v": 100, "dur": 1.0, "cc": {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10} },
+        { "t": 6, "n": [57, 64, 67], "v": 58, "dur": 8.0 },
+        { "t": 3, "n": [57], "v": 65, "dur": 4.0 }
     ]},
-    ...more steps...
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 62 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [38], "v": 38 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 74 } ] },
+    ...125 more steps...
   ]
 }`;
 
