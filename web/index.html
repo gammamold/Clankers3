@@ -4131,6 +4131,9 @@
   <button id="btn-menu">≡ MENU</button>
 
   <div id="panel-menu">
+    <button class="menu-item" id="menu-item-save-project">💾 SAVE PROJECT</button>
+    <button class="menu-item" id="menu-item-load-project">📁 LOAD PROJECT</button>
+    <div style="height:1px;background:#222;margin:4px 8px;"></div>
     <button class="menu-item" id="menu-item-llm">⚙ LLM</button>
     <button class="menu-item" id="menu-item-song-builder">SONG BUILDER →</button>
     <button class="menu-item" id="menu-item-synth-lab">SYNTH LAB →</button>
@@ -7523,6 +7526,164 @@ if (typeof TextEncoder === 'undefined') {
         document.getElementById('config-overlay').classList.add('open');
       }
     })();
+    // ─── Save / Load Project ──────────────────────────────────────────────────
+    document.getElementById('menu-item-save-project').addEventListener('click', () => {
+      document.getElementById('panel-menu').classList.remove('open');
+      document.getElementById('btn-menu').classList.remove('active');
+      const p = {
+        version: 1,
+        sheet: null,
+        bpm: document.getElementById('seq-bpm').value,
+        drumVals: drumVals,
+        bassOct: bassOctKnob.val,
+        bassYZ: {
+          fmidx: byz['byz-fmidx'].val, cutoff: byz['byz-cutoff'].val,
+          fdec: byz['byz-fdec'].val, adec: byz['byz-adec'].val
+        },
+        pfm: { cutoff: pfm.cutoff.val, fold: pfm.fold.val, release: pfm.release.val, filterMod: pfm.filterMod.val },
+        pk: {
+          cutoff: pk['p-cutoff'].val, res: pk['p-res'].val,
+          atk: pk['p-atk'].val, dec: pk['p-dec'].val, rel: pk['p-rel'].val,
+          rev: pk['p-rev'].val, revsize: pk['p-revsize'].val,
+          chorrate: pk['p-chorrate'].val, cho: pk['p-cho'].val, chomix: pk['p-chomix'].val
+        },
+        rk: {
+          bright: rk['r-bright'].val, decay: rk['r-decay'].val, bark: rk['r-bark'].val, ratio: rk['r-ratio'].val,
+          trate: rk['r-trate'].val, tdepth: rk['r-tdepth'].val,
+          chorrate: rk['r-chorrate'].val, chorus: rk['r-chorus'].val
+        },
+        fx: rack ? rack.getParams() : null,
+        sends: {},
+        synthLabSession: { assignments: { ...synthLab._slotLegacyT }, patches: synthLab._slots.map(s => s.state ? s.bridge.snapshot() : null) },
+        songSequence: { patternBank, arrangement: songArrangement, activeSlot, songMode, songRepeat },
+        band: { sessionId, chatHistory }
+      };
+      
+      for (const type of INSTR_TYPES) {
+        if (_sendKnobs[type]) {
+          p.sends[type] = {
+            delay: _sendKnobs[type][`${type}-send-dly`].val,
+            shaper: _sendKnobs[type][`${type}-send-shp`].val
+          };
+        }
+      }
+
+      try { p.sheet = JSON.parse(document.getElementById('sheet-json').value); } catch(e){}
+
+      const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'clankers_project.clank' });
+      a.click();
+      URL.revokeObjectURL(url);
+      log('💾 Project saved');
+    });
+
+    const fileLoadInput = Object.assign(document.createElement('input'), { type: 'file', accept: '.clank,.json', style: 'display:none' });
+    document.body.appendChild(fileLoadInput);
+
+    document.getElementById('menu-item-load-project').addEventListener('click', () => {
+      document.getElementById('panel-menu').classList.remove('open');
+      document.getElementById('btn-menu').classList.remove('active');
+      fileLoadInput.value = '';
+      fileLoadInput.click();
+    });
+
+    fileLoadInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const p = JSON.parse(ev.target.result);
+          
+          if (p.bpm) {
+            document.getElementById('seq-bpm').value = p.bpm;
+            document.getElementById('bpm-val').textContent = p.bpm;
+            if (seq && seq.isPlaying) seq._bpm = +p.bpm;
+          }
+          if (p.drumVals) {
+             for (const k in p.drumVals) {
+                if (_drumKnobs[k]) _drumKnobs[k].setVal(p.drumVals[k]);
+                drumVals[k] = p.drumVals[k];
+             }
+             if (typeof drumsXY !== 'undefined') drumsXY.syncDot();
+             sendDrumsParams();
+          }
+          if (p.bassOct !== undefined) bassOctKnob.setVal(p.bassOct);
+          if (p.bassYZ) {
+             byz['byz-fmidx'].val = p.bassYZ.fmidx;
+             byz['byz-cutoff'].val = p.bassYZ.cutoff;
+             byz['byz-fdec'].val = p.bassYZ.fdec;
+             byz['byz-adec'].val = p.bassYZ.adec;
+             if (typeof bassXY !== 'undefined') bassXY.syncDot();
+             sendBassParams();
+          }
+          if (p.pfm) {
+             Object.assign(pfm.cutoff, { val: p.pfm.cutoff });
+             Object.assign(pfm.fold, { val: p.pfm.fold });
+             Object.assign(pfm.release, { val: p.pfm.release });
+             Object.assign(pfm.filterMod, { val: p.pfm.filterMod });
+             if (typeof polyfmXY !== 'undefined') polyfmXY.syncDot();
+             sendBuchlaParams();
+          }
+          if (p.pk) {
+             for(const k in p.pk) pk['p-'+k]?.setVal(p.pk[k]);
+             if (typeof padsXY !== 'undefined') padsXY.syncDot();
+             sendPadsParams();
+          }
+          if (p.rk) {
+             for(const k in p.rk) rk['r-'+k]?.setVal(p.rk[k]);
+             if (typeof rhodesXY !== 'undefined') rhodesXY.syncDot();
+             sendRhodesParams();
+          }
+          if (p.fx) applyFxParams(p.fx);
+          if (p.sends) {
+             for(const type in p.sends) {
+                if(_sendKnobs[type]) {
+                   _sendKnobs[type][`${type}-send-dly`].setVal(p.sends[type].delay);
+                   _sendKnobs[type][`${type}-send-shp`].setVal(p.sends[type].shaper);
+                   rack?.setSend(0, type, p.sends[type].delay);
+                   rack?.setSend(1, type, p.sends[type].shaper);
+                }
+             }
+          }
+          if (p.synthLabSession) {
+             for (const k in p.synthLabSession.assignments) synthLab._slotLegacyT[k] = p.synthLabSession.assignments[k];
+             p.synthLabSession.patches.forEach((state, i) => {
+                if (state) synthLab.loadPatch(i, state);
+                else synthLab.clearSlot(i);
+             });
+             synthLab._saveSession();
+          }
+          if (p.songSequence) {
+             songArrangement = p.songSequence.arrangement || [];
+             patternBank.splice(0, patternBank.length, ...(p.songSequence.patternBank || []));
+             songRepeat = !!p.songSequence.songRepeat;
+             document.getElementById('btn-arr-repeat').classList.toggle('mode-active', songRepeat);
+             setMode(p.songSequence.songMode ? 'song' : 'loop');
+             selectSlot(p.songSequence.activeSlot || 0);
+          }
+          if (p.band) {
+             sessionId = p.band.sessionId;
+             chatHistory = p.band.chatHistory || [];
+             if (sessionId) document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
+          }
+          if (p.sheet) {
+             document.getElementById('sheet-json').value = JSON.stringify(p.sheet, null, 2);
+             if (seq && !p.songSequence?.songMode && seq.isPlaying) {
+               seq.load(p.sheet);
+             } else if (seq && p.songSequence?.songMode && seq.isPlaying) {
+               seq.load(buildSongSheet());
+             }
+          }
+          log('📁 Project loaded');
+        } catch (err) {
+          log('Error loading project: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+
     // ── Global Keyboard Shortcuts ─────────────────────────────────────────────────
     window.addEventListener('keydown', e => {
       const activeTag = document.activeElement.tagName;
