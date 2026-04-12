@@ -21,6 +21,8 @@ import { PianoKeys }         from './synth/ui/PianoKeys.js';
 import { LLMWizard }         from './synth/wizard/LLMWizard.js';
 import { XYPad }             from './synth/ui/XYPad.js';
 
+const MAX_POLY = 5; // simultaneous voices per slot
+
 /** Track types for slots 0–4 (t:10 = drums, so skip it; t:12 = FM DRUMS slot 4) */
 export const SYNTH_SLOT_T = [7, 8, 9, 11, 12];
 export const T_TO_SLOT    = { 7: 0, 8: 1, 9: 2, 11: 3, 12: 4 };
@@ -68,14 +70,15 @@ export class SynthLab {
     this._slotLegacyT = { 0: 2, 1: 1, 2: 6, 3: 3 };
 
     this._slots = Array.from({ length: 5 }, (_, i) => ({
-      index:  i,
-      state:  null,
-      voice:  null,
-      bridge: new JSONBridge(),
-      gain:   null,   // GainNode; created in init()
-      muted:  false,
-      volume: 1.0,
-      panels: [],
+      index:    i,
+      state:    null,
+      voices:   [],        // VoicePool — up to MAX_POLY SynthVoice instances
+      voiceMap: new Map(), // midiNote → { voice, startTime }
+      bridge:   new JSONBridge(),
+      gain:     null,   // GainNode; created in init()
+      muted:    false,
+      volume:   1.0,
+      panels:   [],
     }));
 
     this._restoreAssignments();
@@ -86,6 +89,61 @@ export class SynthLab {
     const out = {};
     for (const [slot, t] of Object.entries(this._slotLegacyT)) out[t] = Number(slot);
     return out;
+  }
+
+  // ── Voice pool helpers ────────────────────────────────────────────────────────
+
+  _buildVoicePool(slot) {
+    if (!this._ctx || !slot.state) return;
+    const engine = new ClankerEngine(this._ctx, slot.gain);
+    slot.voices  = Array.from({ length: MAX_POLY }, () =>
+      new SynthVoice(engine).buildFromState(slot.state)
+    );
+    slot.voiceMap = new Map();
+    slot.bridge.onChange(s => slot.voices.forEach(v => v.updateState(s)));
+  }
+
+  _destroyVoicePool(slot) {
+    slot.voices.forEach(v => { try { v.destroy(); } catch (_) {} });
+    slot.voices  = [];
+    slot.voiceMap = new Map();
+  }
+
+  /** Find a free voice for midiNote, or steal the oldest sounding one. */
+  _allocateVoice(slot, midiNote) {
+    // Already sounding this note — retrigger same voice
+    if (slot.voiceMap.has(midiNote)) return slot.voiceMap.get(midiNote).voice;
+    // Free voice available
+    const free = slot.voices.find(v => v.activeNote === null);
+    if (free) return free;
+    // Steal oldest
+    let oldestNote = null, oldestTime = Infinity;
+    for (const [note, entry] of slot.voiceMap) {
+      if (entry.startTime < oldestTime) { oldestTime = entry.startTime; oldestNote = note; }
+    }
+    if (oldestNote !== null) {
+      const stolen = slot.voiceMap.get(oldestNote).voice;
+      stolen.noteOff();
+      slot.voiceMap.delete(oldestNote);
+      return stolen;
+    }
+    return slot.voices[0]; // fallback
+  }
+
+  _releaseVoice(slot, midiNote) {
+    const entry = slot.voiceMap.get(midiNote);
+    if (!entry) return;
+    entry.voice.noteOff();
+    slot.voiceMap.delete(midiNote);
+  }
+
+  /** Call a setter method on every voice in the pool (for live knob updates). */
+  _allVoices(slot) {
+    return new Proxy({}, {
+      get(_, method) {
+        return (...args) => slot.voices.forEach(v => v[method]?.(...args));
+      }
+    });
   }
 
   /** Call once the AudioContext exists (first user gesture).
@@ -100,13 +158,10 @@ export class SynthLab {
       slot.gain = ctx.createGain();
       slot.gain.gain.value = slot.muted ? 0 : slot.volume;
       slot.gain.connect(this._master);
-      // Rebuild voice on new context if a patch is loaded
+      // Rebuild voice pool on new context if a patch is loaded
       if (slot.state) {
-        if (slot.voice) { try { slot.voice.destroy(); } catch (_) {} }
-        const engine = new ClankerEngine(ctx, slot.gain);
-        slot.voice = new SynthVoice(engine);
-        slot.voice.buildFromState(slot.state);
-        slot.bridge.onChange(s => slot.voice?.updateState(s));
+        this._destroyVoicePool(slot);
+        this._buildVoicePool(slot);
       }
     }
     this._restorePatches();
@@ -130,15 +185,10 @@ export class SynthLab {
   loadPatch(slotIndex, patchState) {
     const slot = this._slots[slotIndex];
     if (!slot || !this._ctx) return;
-    if (slot.voice) { try { slot.voice.destroy(); } catch (_) {} slot.voice = null; }
-
-    const engine = new ClankerEngine(this._ctx, slot.gain);
-    slot.state   = JSON.parse(JSON.stringify(patchState));
+    this._destroyVoicePool(slot);
+    slot.state = JSON.parse(JSON.stringify(patchState));
     slot.bridge.init(slot.state);
-    slot.voice   = new SynthVoice(engine);
-    slot.voice.buildFromState(slot.state);
-    // Keep voice envelope/LFO params in sync with live knob changes
-    slot.bridge.onChange(s => slot.voice?.updateState(s));
+    this._buildVoicePool(slot);
 
     if (this._editingSlot === slotIndex) this._renderEditor(slotIndex);
     this._refreshSlotCards();
@@ -154,7 +204,7 @@ export class SynthLab {
   clearSlot(slotIndex) {
     const slot = this._slots[slotIndex];
     if (!slot) return;
-    if (slot.voice) { try { slot.voice.destroy(); } catch (_) {} slot.voice = null; }
+    this._destroyVoicePool(slot);
     slot.state = null;
     slot.bridge.init({});
     // Remove override — legacy track resumes playing its original WASM instrument (not for FM DRUMS slot 4)
@@ -173,10 +223,14 @@ export class SynthLab {
    */
   scheduleNote(slotIndex, midiNote, velocity, audioTime, holdMs) {
     const slot = this._slots[slotIndex];
-    if (!slot?.voice || slot.muted) return;
+    if (!slot?.voices?.length || slot.muted) return;
     const delayMs = Math.max(0, (audioTime - this._ctx.currentTime) * 1000);
-    setTimeout(() => slot.voice?.noteOn(midiNote, velocity * 127), delayMs);
-    setTimeout(() => slot.voice?.noteOff(),                         delayMs + holdMs);
+    setTimeout(() => {
+      const voice = this._allocateVoice(slot, midiNote);
+      slot.voiceMap.set(midiNote, { voice, startTime: this._ctx.currentTime });
+      voice.noteOn(midiNote, velocity * 127);
+    }, delayMs);
+    setTimeout(() => this._releaseVoice(slot, midiNote), delayMs + holdMs);
   }
 
   setMute(slotIndex, muted) {
@@ -327,24 +381,24 @@ export class SynthLab {
         { name: 'FILTER SWEEP',
           x: { label:'CUTOFF', min:20, max:18000, scale:'log',
                get: ()  => slot.bridge.get('modules.vcf.cutoff'),
-               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voice?.setVcfParam('cutoff', val); } },
+               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
           y: { label:'RESO',   min:0.01, max:20, scale:'log',
                get: ()  => slot.bridge.get('modules.vcf.resonance'),
-               set: val => { slot.bridge.set('modules.vcf.resonance', val); slot.voice?.setVcfParam('resonance', val); } } },
+               set: val => { slot.bridge.set('modules.vcf.resonance', val); slot.voices.forEach(v => v.setVcfParam('resonance', val)); } } },
         { name: 'TIMBRE',
           x: { label:'CUTOFF', min:20, max:18000, scale:'log',
                get: ()  => slot.bridge.get('modules.vcf.cutoff'),
-               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voice?.setVcfParam('cutoff', val); } },
+               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
           y: { label:'LFO AMT', min:1, max:2000, scale:'log',
                get: ()  => slot.bridge.get('modules.lfo.amount'),
-               set: val => { slot.bridge.set('modules.lfo.amount', val); slot.voice?.setLfoParam('amount', val); } } },
+               set: val => { slot.bridge.set('modules.lfo.amount', val); slot.voices.forEach(v => v.setLfoParam('amount', val)); } } },
         { name: 'ENVELOPE',
           x: { label:'ATTACK',  min:0.001, max:4, scale:'log',
                get: ()  => slot.bridge.get('modules.adsr_amp.attack'),
-               set: val => { slot.bridge.set('modules.adsr_amp.attack', val); slot.voice?.setAmpParam('attack', val); } },
+               set: val => { slot.bridge.set('modules.adsr_amp.attack', val); slot.voices.forEach(v => v.setAmpParam('attack', val)); } },
           y: { label:'RELEASE', min:0.01, max:8, scale:'log',
                get: ()  => slot.bridge.get('modules.adsr_amp.release'),
-               set: val => { slot.bridge.set('modules.adsr_amp.release', val); slot.voice?.setAmpParam('release', val); } } },
+               set: val => { slot.bridge.set('modules.adsr_amp.release', val); slot.voices.forEach(v => v.setAmpParam('release', val)); } } },
       ],
     });
     xyArea.appendChild(synthXY.render());
@@ -359,8 +413,15 @@ export class SynthLab {
     ed.appendChild(pianoArea);
 
     const piano = new PianoKeys({
-      onNoteOn:  (midi) => { if (this._ctx) { this._ctx.resume?.(); slot.voice?.noteOn(midi); } },
-      onNoteOff: ()     => { slot.voice?.noteOff(); },
+      onNoteOn:  (midi) => {
+        if (this._ctx) {
+          this._ctx.resume?.();
+          const voice = this._allocateVoice(slot, midi);
+          slot.voiceMap.set(midi, { voice, startTime: this._ctx.currentTime });
+          voice.noteOn(midi, 100);
+        }
+      },
+      onNoteOff: (midi) => { this._releaseVoice(slot, midi); },
       octave: 3,
     });
     pianoArea.querySelector('.sle-piano-container').appendChild(piano.render());
@@ -390,9 +451,10 @@ export class SynthLab {
 
   _renderPanels(slot, rackEl) {
     const panels = [];
-    const { state, voice, bridge } = slot;
+    const { state, bridge } = slot;
     const m = state.modules;
-    const v = voice; // stable closure ref
+    // Proxy forwards live knob updates to every voice in the pool
+    const v = this._allVoices(slot);
 
     // ── Oscillator ──
     const vcoPanel = new ModulePanel({

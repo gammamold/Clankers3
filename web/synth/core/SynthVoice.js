@@ -21,6 +21,7 @@ export class SynthVoice {
     this.engine             = engine;
     this._built             = false;
     this._state             = null;
+    this.activeNote         = null;   // midi note currently sounding, or null if free
     this._effects           = [];
     this._unisonOscs        = [];   // all MAX_UNISON slots; [0] = osc1
     this._unisonGains       = [];
@@ -210,6 +211,7 @@ export class SynthVoice {
 
   noteOn(midiNote, velocity = 100) {
     if (!this._built) return;
+    this.activeNote = midiNote;
     const ctx      = this.engine.ctx;
     const t        = ctx.currentTime;
     const freq     = 440 * Math.pow(2, (midiNote - 69) / 12);
@@ -254,6 +256,7 @@ export class SynthVoice {
 
   noteOff() {
     if (!this._built) return;
+    this.activeNote = null;
     const t = this.engine.currentTime;
     const g = this.ampEnv.gain;
     const r = this._ampParams.release;
