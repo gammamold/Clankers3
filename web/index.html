@@ -4351,6 +4351,7 @@
 
     async function _doInit() {
       ctx = new AudioContext({ sampleRate: 44100 });
+      ctx.resume(); // iOS: must resume before first await — gesture context is lost after any yield
       log('AudioContext @ ' + ctx.sampleRate + ' Hz');
 
       // Compile WASM once on main thread, share compiled module with all worklets
