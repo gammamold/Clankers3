@@ -31,6 +31,11 @@ export class MidiOutput {
     };
     /** Fired when the list of available output ports changes. */
     this.onPortsChanged = null;
+
+    // MIDI Clock state
+    this._clockEnabled = false;
+    this._clockTimer   = null;
+    this._clockBpm     = 120;
   }
 
   /**
@@ -75,6 +80,56 @@ export class MidiOutput {
   /** Get current channel for an instrument. */
   getChannel(instrType) {
     return this._channels[instrType];
+  }
+
+  /** Enable or disable MIDI clock output. */
+  setClockEnabled(enabled) {
+    this._clockEnabled = !!enabled;
+    if (!enabled && this._clockTimer) this.stopClock();
+  }
+
+  /** Returns true if clock output is enabled. */
+  get clockEnabled() { return this._clockEnabled; }
+
+  /**
+   * Start sending MIDI clock. Sends Start (0xFA) then 24 ppq timing pulses.
+   * @param {number} bpm — beats per minute
+   */
+  startClock(bpm) {
+    if (!this._clockEnabled || !this._port) return;
+    this._clockBpm = bpm;
+    // Send MIDI Start
+    this._port.send([0xFA]);
+    // Pulse interval: 24 pulses per quarter note
+    const intervalMs = 60000 / (bpm * 24);
+    this._clockTimer = setInterval(() => {
+      if (this._port) this._port.send([0xF8]);
+    }, intervalMs);
+  }
+
+  /**
+   * Stop MIDI clock. Sends Stop (0xFC).
+   */
+  stopClock() {
+    if (this._clockTimer) {
+      clearInterval(this._clockTimer);
+      this._clockTimer = null;
+    }
+    if (this._port && this._clockEnabled) {
+      this._port.send([0xFC]);
+    }
+  }
+
+  /**
+   * Update clock BPM while running. Restarts the pulse timer.
+   * @param {number} bpm
+   */
+  setClockBpm(bpm) {
+    this._clockBpm = bpm;
+    if (this._clockTimer) {
+      this.stopClock();
+      this.startClock(bpm);
+    }
   }
 
   /**

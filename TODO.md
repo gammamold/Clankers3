@@ -130,6 +130,21 @@
 
 ## Testing
 
+---
+
+## Song Builder & External Hardware Integration
+
+- [x] **Song Builder button global** — moved `#btn-song-screen` from `#screen-main` to fixed-position floating button visible on main/room/synth-lab screens (matches synth-lab/reach-outside pattern)
+- [x] **Pattern preview in Song Builder** — clicking arrangement grid slot selects that pattern; PREVIEW button plays selected pattern in loop mode; restores song mode on stop
+- [x] **MIDI Input** — `web/midi-input.js` (`MidiInput` class); UI in Reach the Outside panel with device selector + route-to dropdown; routes NoteOn/NoteOff to current or selected instrument via existing trigger functions
+- [x] **MIDI Clock output** — extended `MidiOutput` with `startClock(bpm)`/`stopClock()`/`setClockBpm(bpm)`; sends 0xFA/0xF8/0xFC; toggle in Reach the Outside panel; sequencer calls on start/stop
+- [x] **CV/Gate modular sync** — `web/modular-sync.js` (`ModularSync` class); ConstantSourceNode → per-instrument GainNode gates + clock pulses via `gain.setValueAtTime()`; stereo output (L=clock, R=triggers); route via DC-coupled audio interface (Expert Sleepers, MOTU, etc.)
+- [x] **CV/Gate UI** — clock enable + division selector (1/16, 1/8, 1/4, 1/1) + per-instrument gate checkboxes in Reach the Outside panel
+
+---
+
+## Testing
+
 - [ ] **E2E test: Vercel band flow** — deploy to Vercel → enter API key → POST `/api/band/session-new` with brief → load sheet into sequencer → play → verify audio.
 - [ ] **Unit tests for DSP** — Rust unit tests for each synth engine (kick, snare, bass FM, etc.).
 - [ ] **Sequencer timing test** — verify lookahead scheduler fires notes within ±2ms.

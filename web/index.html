@@ -1111,11 +1111,18 @@
       color: #00d4ff !important;
     }
 
-    /* SONG button on main screen */
+    #screen-song .arr-slot.arr-selected {
+      border-color: #66f !important;
+      color: #aaf !important;
+      box-shadow: 0 0 6px #66f44;
+    }
+
+    /* SONG BUILDER — global floating button (matches synth-lab / reach-outside pattern) */
     #btn-song-screen {
-      position: absolute;
-      bottom: 2rem;
-      left: 2rem;
+      position: fixed;
+      bottom: 1rem;
+      right: 1.5rem;
+      z-index: 160;
       background: #0e0e1a;
       border: 1px solid #2e2e5e;
       color: #88a;
@@ -1124,6 +1131,13 @@
       padding: .5rem .9rem;
       cursor: pointer;
       border-radius: 4px;
+      display: none;
+    }
+
+    body.on-main #btn-song-screen,
+    body.on-room #btn-song-screen,
+    body.on-synth-lab #btn-song-screen {
+      display: block;
     }
 
     #btn-song-screen:hover {
@@ -3132,7 +3146,7 @@
       /* Floating buttons: smaller and repositioned so they don't crowd */
       #btn-song-screen {
         bottom: 1rem;
-        left: 1rem;
+        right: 1rem;
         font-size: .72rem;
         padding: .4rem .7rem;
       }
@@ -3243,7 +3257,7 @@
 
     /* ══ Menu Button ═══════════════════════════════════════════════════════════ */
 
-    #btn-settings, #btn-synth-lab, #btn-reach-outside { display: none !important; }
+    #btn-settings, #btn-synth-lab, #btn-reach-outside, #btn-song-screen { display: none !important; }
 
     #btn-menu {
       position: fixed;
@@ -3284,6 +3298,7 @@
     }
     .menu-item:last-child { border-bottom: none; }
     .menu-item:hover { background: #1a1a1a; color: #ccc; }
+    #menu-item-song-builder:hover { color: #aaf; }
     #menu-item-synth-lab:hover { color: #ffe000; }
     #menu-item-reach-outside:hover { color: #00d4ff; }
     #menu-item-reach-outside.rto-active { color: #00ffff; background: #001830; }
@@ -3311,14 +3326,39 @@
   <!-- ─── Screen: Main (face reveal) ────────────────────────────── -->
   <div id="screen-main" class="screen">
     <div id="faces-row"></div>
-    <button id="btn-song-screen">SONG BUILDER →</button>
   </div>
+  <button id="btn-song-screen">SONG BUILDER →</button>
   <button id="btn-synth-lab">SYNTH LAB →</button>
 
-  <!-- ─── REACH THE OUTSIDE — MIDI output settings ───────────────── -->
-  <button id="btn-reach-outside" title="MIDI Output Settings">⬡ REACH THE OUTSIDE</button>
+  <!-- ─── REACH THE OUTSIDE — MIDI settings ───────────────── -->
+  <button id="btn-reach-outside" title="MIDI Settings">⬡ REACH THE OUTSIDE</button>
   <div id="panel-reach-outside">
     <h3>⬡ REACH THE OUTSIDE</h3>
+
+    <!-- MIDI Input -->
+    <div id="rto-input-section" style="margin-bottom:1.2rem;padding-bottom:.8rem;border-bottom:1px solid #1a1a2e;">
+      <div style="font-family:monospace;font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:.5rem;">MIDI INPUT</div>
+      <div id="rto-input-device-row" style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;">
+        <label style="font-family:monospace;font-size:.72rem;color:#888;">DEVICE</label>
+        <select id="rto-input-port-sel" style="flex:1;background:#111;border:1px solid #2a2a2a;color:#ccc;font-family:monospace;font-size:.72rem;padding:.25rem .4rem;border-radius:3px;">
+          <option value="">— none —</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:.5rem;">
+        <label style="font-family:monospace;font-size:.72rem;color:#888;">ROUTE TO</label>
+        <select id="rto-input-route" style="flex:1;background:#111;border:1px solid #2a2a2a;color:#ccc;font-family:monospace;font-size:.72rem;padding:.25rem .4rem;border-radius:3px;">
+          <option value="current">Current Instrument</option>
+          <option value="drum">DRUMS [t:10]</option>
+          <option value="bass">BASS FM [t:2]</option>
+          <option value="buchla">POLY FM [t:1]</option>
+          <option value="pads">HYBRID PADS [t:6]</option>
+          <option value="rhodes">RHODES EP [t:3]</option>
+        </select>
+      </div>
+      <div id="rto-input-status" style="font-family:monospace;font-size:.65rem;color:#444;margin-top:.3rem;"></div>
+    </div>
+
+    <!-- MIDI Output -->
     <div id="rto-device-row">
       <label>MIDI OUTPUT DEVICE</label>
       <select id="rto-port-sel">
@@ -3385,6 +3425,44 @@
       <select class="rto-ch-sel" data-rto-type="synth4">
         <option value="">OFF</option>
       </select>
+    </div>
+
+    <!-- MIDI Clock -->
+    <div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid #1a1a2e;">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+        <label style="font-family:monospace;font-size:.72rem;color:#888;">MIDI CLOCK</label>
+        <input type="checkbox" id="rto-midi-clock" style="accent-color:#00d4ff;">
+        <span id="rto-midi-clock-status" style="font-family:monospace;font-size:.65rem;color:#444;"></span>
+      </div>
+    </div>
+
+    <!-- CV/Gate Output -->
+    <div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid #1a1a2e;">
+      <div style="font-family:monospace;font-size:.68rem;color:#555;letter-spacing:.1em;margin-bottom:.5rem;">CV/GATE OUTPUT</div>
+      <div style="font-family:monospace;font-size:.6rem;color:#444;margin-bottom:.6rem;">Route via DC-coupled audio interface (e.g. Expert Sleepers, MOTU)<br>L = clock, R = triggers</div>
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+        <label style="font-family:monospace;font-size:.72rem;color:#888;">CLOCK</label>
+        <input type="checkbox" id="rto-cv-clock" style="accent-color:#00d4ff;">
+        <select id="rto-cv-clock-div" style="background:#111;border:1px solid #2a2a2a;color:#ccc;font-family:monospace;font-size:.72rem;padding:.2rem .3rem;border-radius:3px;">
+          <option value="0.25">1/16</option>
+          <option value="0.5">1/8</option>
+          <option value="1" selected>1/4</option>
+          <option value="4">1/1</option>
+        </select>
+      </div>
+      <div style="font-family:monospace;font-size:.68rem;color:#666;margin-bottom:.3rem;">TRIGGER GATES</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+        <label style="font-family:monospace;font-size:.68rem;color:#888;display:flex;align-items:center;gap:.2rem;">
+          <input type="checkbox" class="rto-cv-gate" data-cv-type="drum" style="accent-color:#00d4ff;"> DRUMS</label>
+        <label style="font-family:monospace;font-size:.68rem;color:#888;display:flex;align-items:center;gap:.2rem;">
+          <input type="checkbox" class="rto-cv-gate" data-cv-type="bass" style="accent-color:#00d4ff;"> BASS</label>
+        <label style="font-family:monospace;font-size:.68rem;color:#888;display:flex;align-items:center;gap:.2rem;">
+          <input type="checkbox" class="rto-cv-gate" data-cv-type="buchla" style="accent-color:#00d4ff;"> POLY FM</label>
+        <label style="font-family:monospace;font-size:.68rem;color:#888;display:flex;align-items:center;gap:.2rem;">
+          <input type="checkbox" class="rto-cv-gate" data-cv-type="pads" style="accent-color:#00d4ff;"> PADS</label>
+        <label style="font-family:monospace;font-size:.68rem;color:#888;display:flex;align-items:center;gap:.2rem;">
+          <input type="checkbox" class="rto-cv-gate" data-cv-type="rhodes" style="accent-color:#00d4ff;"> RHODES</label>
+      </div>
     </div>
   </div>
 
@@ -3469,6 +3547,9 @@
         <button id="song-stop-btn" class="stop-btn"
           style="font-family:monospace;font-size:.75rem;padding:.35rem .8rem;border:1px solid;border-radius:3px;cursor:pointer;"
           disabled>■ STOP</button>
+        <button id="song-preview-btn"
+          style="font-family:monospace;font-size:.75rem;padding:.35rem .8rem;border:1px solid #2e2e5e;border-radius:3px;cursor:pointer;background:#0e0e1a;color:#88a;"
+          title="Preview selected pattern">▶ PREVIEW</button>
       </div>
       <!-- Pattern bank — moved from legacy -->
       <div style="font-family:monospace;font-size:.72rem;color:#555;letter-spacing:.1em;margin-bottom:.4rem;">PATTERNS
@@ -4051,6 +4132,7 @@
 
   <div id="panel-menu">
     <button class="menu-item" id="menu-item-llm">⚙ LLM</button>
+    <button class="menu-item" id="menu-item-song-builder">SONG BUILDER →</button>
     <button class="menu-item" id="menu-item-synth-lab">SYNTH LAB →</button>
     <button class="menu-item" id="menu-item-reach-outside">⬡ REACH THE OUTSIDE</button>
   </div>
@@ -4113,6 +4195,8 @@
     import { SynthLab } from './synth-lab.js';
     import { XYPad } from './synth/ui/XYPad.js';
     import { midiOut } from './midi-output.js';
+    import { midiIn } from './midi-input.js';
+    import { modularSync } from './modular-sync.js';
 
     // ── Synth Lab singleton ───────────────────────────────────────────────────────
     const synthLab = new SynthLab();
@@ -4844,6 +4928,10 @@ if (typeof TextEncoder === 'undefined') {
         seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
         seq.synthLab = synthLab;  // enable Synth Lab track playback
         seq.midiOut   = midiOut;  // enable MIDI output (REACH THE OUTSIDE)
+        // Init modular sync (CV/Gate) and connect to audio output
+        modularSync.init(ctx);
+        modularSync.connect(ctx.destination);
+        seq.modularSync = modularSync;
         synthLab._seq = seq;      // let SynthLab register note-routing overrides
         synthLab._reapplyOverrides(); // re-register any patches loaded before sequencer existed
       }
@@ -5316,6 +5404,133 @@ if (typeof TextEncoder === 'undefined') {
       });
 
       log('[MIDI] Web MIDI API ready');
+    });
+
+    // ── MIDI Input ────────────────────────────────────────────────────────────────
+    midiIn.init().then(ok => {
+      const inputPortSel = document.getElementById('rto-input-port-sel');
+      const inputStatus = document.getElementById('rto-input-status');
+      const inputRoute = document.getElementById('rto-input-route');
+
+      if (!ok) {
+        inputStatus.textContent = 'MIDI input not available';
+        return;
+      }
+
+      function _refreshInputPorts() {
+        const cur = inputPortSel.value;
+        const ports = midiIn.getInputs();
+        inputPortSel.innerHTML = '<option value="">— none —</option>' +
+          ports.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        if (cur && [...inputPortSel.options].some(o => o.value === cur)) inputPortSel.value = cur;
+      }
+
+      midiIn.onPortsChanged = _refreshInputPorts;
+      _refreshInputPorts();
+      window.addEventListener('midi-input-ports-changed', _refreshInputPorts);
+
+      inputPortSel.addEventListener('change', () => {
+        midiIn.setInput(inputPortSel.value);
+        inputStatus.textContent = inputPortSel.value ? 'listening' : '';
+      });
+
+      // Determine target instrument for MIDI input routing
+      function _getTargetInst() {
+        const route = inputRoute.value;
+        if (route !== 'current') return route;
+        return _currentInst?.id ?? 'bass'; // default to bass if no room open
+      }
+
+      // Drum MIDI note → voiceId mapping (matches sequencer.js drumNoteToVoice)
+      function _drumNoteToVoice(note) {
+        if (note === 36) return 0;
+        if (note === 38 || note === 40) return 1;
+        if ([42, 49, 50, 51, 52, 53].includes(note)) return 2;
+        if ([46, 54, 55, 56, 57].includes(note)) return 3;
+        if (note === 41 || note === 43) return 4;
+        if (note === 45 || note === 47) return 5;
+        if (note === 48 || note === 50) return 6;
+        return 0;
+      }
+
+      midiIn.onNoteOn = (note, velocity, ch) => {
+        ensureReady().then(() => {
+          const inst = _getTargetInst();
+          const bpm = +document.getElementById('seq-bpm').value;
+          const holdSamples = Math.round(2 * (60 / bpm) * 44100);
+
+          if (inst === 'drum') {
+            const voiceId = _drumNoteToVoice(note);
+            drumsNode.port.postMessage({
+              type: 'trigger', audioTime: ctx.currentTime,
+              voiceId, velocity
+            });
+            midiOut.scheduleNote('drum', voiceId, velocity, ctx.currentTime, ctx, 100);
+          } else if (inst === 'bass') {
+            const ccJson = JSON.stringify(bassCC());
+            const actualNote = note + (bassOctKnob?.val ?? 0) * 12;
+            bassNode.port.postMessage({
+              type: 'trigger', audioTime: ctx.currentTime,
+              midiNote: actualNote, velocity, holdSamples, ccJson
+            });
+            midiOut.scheduleNote('bass', Math.max(0, Math.min(127, actualNote + 48)), velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+          } else if (inst === 'buchla') {
+            const ccJson = JSON.stringify(buchlaCC());
+            buchlaNode.port.postMessage({
+              type: 'trigger', audioTime: ctx.currentTime,
+              midiNote: note, velocity, holdSamples, ccJson
+            });
+            midiOut.scheduleNote('buchla', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+          } else if (inst === 'pads') {
+            const ccJson = JSON.stringify({
+              74: pk['p-cutoff'].val, 71: pk['p-res'].val,
+              73: pk['p-atk'].val, 75: pk['p-dec'].val, 72: pk['p-rel'].val,
+              91: pk['p-rev'].val, 88: pk['p-revsize'].val,
+              29: pk['p-chorrate'].val, 30: pk['p-cho'].val, 31: pk['p-chomix'].val,
+            });
+            padsNode.port.postMessage({ type: 'setParams', ccJson });
+            padsNode.port.postMessage({
+              type: 'trigger', audioTime: ctx.currentTime,
+              midiNote: note, velocity, holdSamples
+            });
+            midiOut.scheduleNote('pads', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+          } else if (inst === 'rhodes') {
+            const ccJson = JSON.stringify({
+              74: rk['r-bright'].val, 72: rk['r-decay'].val,
+              73: rk['r-bark'].val, 20: rk['r-ratio'].val,
+              26: rk['r-trate'].val, 27: rk['r-tdepth'].val,
+              29: rk['r-chorrate'].val, 30: rk['r-chorus'].val,
+            });
+            rhodesNode.port.postMessage({ type: 'setParams', ccJson });
+            rhodesNode.port.postMessage({
+              type: 'trigger', audioTime: ctx.currentTime,
+              midiNote: note, velocity, holdSamples
+            });
+            midiOut.scheduleNote('rhodes', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+          }
+        });
+      };
+
+      log('[MIDI-IN] Input ready');
+    });
+
+    // ── MIDI Clock toggle ────────────────────────────────────────────────────────��
+    document.getElementById('rto-midi-clock').addEventListener('change', function () {
+      midiOut.setClockEnabled(this.checked);
+      document.getElementById('rto-midi-clock-status').textContent = this.checked ? 'enabled' : '';
+    });
+
+    // ── CV/Gate controls ──────────────────────────────────────────────────────────
+    document.getElementById('rto-cv-clock').addEventListener('change', function () {
+      modularSync.setClockEnabled(this.checked);
+    });
+    document.getElementById('rto-cv-clock-div').addEventListener('change', function () {
+      modularSync.setClockDivision(+this.value);
+    });
+    document.querySelectorAll('.rto-cv-gate').forEach(cb => {
+      cb.addEventListener('change', function () {
+        modularSync.setEnabled(this.dataset.cvType, this.checked);
+      });
     });
 
     // REACH THE OUTSIDE panel toggle
@@ -6960,14 +7175,28 @@ if (typeof TextEncoder === 'undefined') {
           if (orig) btn.addEventListener('click', () => orig.click());
         });
       }
-      // Clone arr-grid slots
+      // Clone arr-grid slots — add preview-selection on occupied slots
       const legArr = document.getElementById('arr-grid');
       const songArr = document.getElementById('song-arr-grid');
       if (legArr && songArr) {
         songArr.innerHTML = legArr.innerHTML;
         [...songArr.children].forEach((slot, i) => {
           const orig = legArr.children[i];
-          if (orig) slot.addEventListener('click', () => orig.click());
+          if (!orig) return;
+          slot.addEventListener('click', (e) => {
+            // If slot has a pattern, select it for preview instead of toggling arrangement
+            if (i < songArrangement.length) {
+              e.stopPropagation();
+              _songSelectedArrIdx = i;
+              selectSlot(songArrangement[i]);
+              // highlight selected slot
+              [...songArr.children].forEach(s => s.classList.remove('arr-selected'));
+              slot.classList.add('arr-selected');
+              document.getElementById('song-pat-label').textContent = `P${songArrangement[i] + 1}`;
+            } else {
+              orig.click();
+            }
+          });
         });
       }
       // Sync slot label
@@ -6975,6 +7204,9 @@ if (typeof TextEncoder === 'undefined') {
       const songLabel = document.getElementById('song-pat-label');
       if (legLabel && songLabel) songLabel.textContent = legLabel.textContent;
     }
+
+    let _songSelectedArrIdx = -1;
+    let _songPreviewWasSongMode = false;
 
     // Observe legacy pat-bank + arr-grid for changes, sync to song screen
     const _songObserver = new MutationObserver(_syncSongScreenUI);
@@ -6988,6 +7220,22 @@ if (typeof TextEncoder === 'undefined') {
       showScreen('song');
     });
     document.getElementById('btn-song-back').addEventListener('click', () => showScreen('main'));
+
+    // PREVIEW — play the selected pattern in loop mode, restore mode on stop
+    document.getElementById('song-preview-btn').addEventListener('click', () => {
+      if (_songSelectedArrIdx < 0 || !patternBank[activeSlot]) return;
+      _songPreviewWasSongMode = songMode;
+      // switch to loop mode so play triggers single pattern
+      if (songMode) document.getElementById('song-btn-loop').click();
+      document.getElementById('btn-play').click();
+    });
+    // restore song mode when stop is pressed after a preview
+    document.getElementById('song-stop-btn').addEventListener('click', () => {
+      if (_songPreviewWasSongMode) {
+        _songPreviewWasSongMode = false;
+        document.getElementById('song-btn-song').click();
+      }
+    });
 
     // Song builder play/stop — delegate to the legacy transport buttons
     document.getElementById('song-play-btn').addEventListener('click', () => {
@@ -7088,6 +7336,9 @@ if (typeof TextEncoder === 'undefined') {
         const rtoOrig = document.getElementById('btn-reach-outside');
         document.getElementById('menu-item-reach-outside').style.display =
           rtoOrig.style.display === 'none' ? 'none' : '';
+        // Hide song builder when already on song screen
+        document.getElementById('menu-item-song-builder').style.display =
+          document.body.className === 'on-song' ? 'none' : '';
         panelMenu.classList.add('menu-open');
         btnMenu.classList.add('menu-open');
       }
@@ -7108,6 +7359,12 @@ if (typeof TextEncoder === 'undefined') {
       document.getElementById('menu-item-llm').addEventListener('click', () => {
         closeMenu();
         document.getElementById('config-overlay').classList.toggle('open');
+      });
+
+      document.getElementById('menu-item-song-builder').addEventListener('click', () => {
+        closeMenu();
+        _syncSongScreenUI();
+        showScreen('song');
       });
 
       document.getElementById('menu-item-synth-lab').addEventListener('click', () => {

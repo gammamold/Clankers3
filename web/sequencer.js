@@ -112,6 +112,12 @@ export class Sequencer {
     this.midiOut = null;
 
     /**
+     * ModularSync instance — set externally to enable CV/Gate output.
+     * @type {import('./modular-sync.js').ModularSync|null}
+     */
+    this.modularSync = null;
+
+    /**
      * When a SynthLab slot is active, mirror old-track-type notes to it.
      * e.g. { 2: 0 } means t:2 (Bass FM) notes ALSO trigger synth slot 0.
      * Set by SynthLab.loadPatch() / clearSlot() via seq.setSynthOverride().
@@ -174,11 +180,16 @@ export class Sequencer {
     this._startTime = this.ctx.currentTime + 0.05;
     this._nextBeat = 0;
     this._stepIdx = 0;
+    this._lastClockBeat = undefined;
     this._timer = setInterval(() => this._tick(), INTERVAL_MS);
     this._tick();
+    // Start MIDI clock if enabled
+    this.midiOut?.startClock(this._bpm);
   }
 
   stop() {
+    // Stop MIDI clock
+    this.midiOut?.stopClock();
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
     // Clear queued triggers and silence active envelopes in all worklets
     for (const port of Object.values(this._ports)) {
@@ -401,6 +412,20 @@ export class Sequencer {
     if (!this._steps.length) return;
     const scheduleUntil = this.ctx.currentTime + LOOKAHEAD_MS / 1000;
 
+    // Schedule CV clock pulses within the lookahead window
+    if (this.modularSync?.clockEnabled) {
+      const div = this.modularSync.clockDivision;
+      const elapsed = scheduleUntil - this._startTime;
+      const beatNow = elapsed * (this._bpm / 60);
+      if (this._lastClockBeat === undefined) this._lastClockBeat = -div;
+      const nextClockBeat = (Math.floor(this._lastClockBeat / div) + 1) * div;
+      if (nextClockBeat <= beatNow) {
+        const clockTime = this._startTime + this._beatsToSeconds(nextClockBeat);
+        this.modularSync.sendClock(clockTime);
+        this._lastClockBeat = nextClockBeat;
+      }
+    }
+
     while (true) {
       if (this._stepIdx >= this._steps.length) {
         if (!this.loop) {
@@ -510,6 +535,9 @@ export class Sequencer {
       });
       this.midiOut?.scheduleNote('rhodes', ev.midiNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
     }
+
+    // CV/Gate trigger output
+    this.modularSync?.sendGate(ev.type, audioTime);
   }
 }
 
