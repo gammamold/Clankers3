@@ -7201,6 +7201,11 @@ if (typeof TextEncoder === 'undefined') {
             }
           });
         });
+        // Re-apply selection highlight that may have been wiped by innerHTML rebuild
+        if (_songSelectedArrIdx >= 0) {
+          const sel = songArr.children[_songSelectedArrIdx];
+          if (sel) sel.classList.add('arr-selected');
+        }
       }
       // Sync slot label
       const legLabel = document.getElementById('pat-slot-label');
@@ -7228,15 +7233,22 @@ if (typeof TextEncoder === 'undefined') {
     document.getElementById('song-preview-btn').addEventListener('click', () => {
       if (_songSelectedArrIdx < 0 || !patternBank[activeSlot]) return;
       _songPreviewWasSongMode = songMode;
-      // switch to loop mode so play triggers single pattern
-      if (songMode) document.getElementById('song-btn-loop').click();
+      if (songMode) {
+        // switch to loop mode without hiding the arrangement section
+        document.getElementById('btn-mode-loop').click();
+        document.getElementById('song-btn-loop').classList.add('mode-active');
+        document.getElementById('song-btn-song').classList.remove('mode-active');
+      }
       document.getElementById('btn-play').click();
     });
     // restore song mode when stop is pressed after a preview
     document.getElementById('song-stop-btn').addEventListener('click', () => {
       if (_songPreviewWasSongMode) {
         _songPreviewWasSongMode = false;
-        document.getElementById('song-btn-song').click();
+        // restore song mode without touching arr-section visibility (we never hid it)
+        document.getElementById('btn-mode-song').click();
+        document.getElementById('song-btn-song').classList.add('mode-active');
+        document.getElementById('song-btn-loop').classList.remove('mode-active');
       }
     });
 
