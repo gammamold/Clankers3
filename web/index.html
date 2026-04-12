@@ -3351,8 +3351,8 @@
           <option value="drum">DRUMS [t:10]</option>
           <option value="bass">BASS FM [t:2]</option>
           <option value="buchla">POLY FM [t:1]</option>
-          <option value="pads">HYBRID PADS [t:6]</option>
-          <option value="rhodes">RHODES EP [t:3]</option>
+          <option value="pads">POLY SYNTH [t:6]</option>
+          <option value="rhodes">ORGAN [t:3]</option>
         </select>
       </div>
       <div id="rto-input-status" style="font-family:monospace;font-size:.65rem;color:#444;margin-top:.3rem;"></div>
@@ -3385,13 +3385,13 @@
       </select>
     </div>
     <div class="rto-row">
-      <span class="rto-label">HYBRID PADS <span>[t:6]</span></span>
+      <span class="rto-label">POLY SYNTH <span>[t:6]</span></span>
       <select class="rto-ch-sel" data-rto-type="pads">
         <option value="">OFF</option>
       </select>
     </div>
     <div class="rto-row">
-      <span class="rto-label">RHODES EP <span>[t:3]</span></span>
+      <span class="rto-label">ORGAN <span>[t:3]</span></span>
       <select class="rto-ch-sel" data-rto-type="rhodes">
         <option value="">OFF</option>
       </select>
@@ -3461,7 +3461,7 @@
         <label style="font-family:monospace;font-size:.68rem;color:#888;display:flex;align-items:center;gap:.2rem;">
           <input type="checkbox" class="rto-cv-gate" data-cv-type="pads" style="accent-color:#00d4ff;"> PADS</label>
         <label style="font-family:monospace;font-size:.68rem;color:#888;display:flex;align-items:center;gap:.2rem;">
-          <input type="checkbox" class="rto-cv-gate" data-cv-type="rhodes" style="accent-color:#00d4ff;"> RHODES</label>
+          <input type="checkbox" class="rto-cv-gate" data-cv-type="rhodes" style="accent-color:#00d4ff;"> ORGAN</label>
       </div>
     </div>
   </div>
@@ -3646,7 +3646,7 @@
 
       <!-- ── Pads ────────────────────────────────────────────────────────────── -->
       <div class="inst">
-        <div class="inst-hdr">HYBRID PADS <span>[t:6]</span> <button class="ms-btn" data-type="pads"
+        <div class="inst-hdr">POLY SYNTH <span>[t:6]</span> <button class="ms-btn" data-type="pads"
             data-ms="m">M</button><button class="ms-btn" data-type="pads" data-ms="s">S</button><span
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="pads" min="0" max="100"
               value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="pads"><option value="">—</option></select></span></div>
@@ -3666,7 +3666,7 @@
 
       <!-- ── Rhodes ────────────────────────────────────────────────────────────── -->
       <div class="inst">
-        <div class="inst-hdr">RHODES EP <span>[t:3]</span> <button class="ms-btn" data-type="rhodes"
+        <div class="inst-hdr">ORGAN <span>[t:3]</span> <button class="ms-btn" data-type="rhodes"
             data-ms="m">M</button><button class="ms-btn" data-type="rhodes" data-ms="s">S</button><span
             class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="rhodes" min="0"
               max="100" value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="rhodes"><option value="">—</option></select></span></div>
@@ -5737,7 +5737,7 @@ if (typeof TextEncoder === 'undefined') {
      * which now routes to the new synth).
      */
     function _synthLabContext() {
-      const T_NAMES = { 2: 'Bass FM (t:2)', 1: 'Poly FM (t:1)', 6: 'Pads (t:6)', 3: 'Rhodes (t:3)' };
+      const T_NAMES = { 2: 'Bass FM (t:2)', 1: 'Poly FM (t:1)', 6: 'Poly Synth (t:6)', 3: 'Organ (t:3)' };
       const lines = [];
       for (let i = 0; i < 4; i++) {
         const state = synthLab.getSlotState(i);
@@ -6763,8 +6763,8 @@ if (typeof TextEncoder === 'undefined') {
       { id: 'drum', label: 'DRUMS', t: 10, face: null },
       { id: 'bass', label: 'BASS FM', t: 2, face: null },
       { id: 'buchla', label: 'POLY FM', t: 1, face: null },
-      { id: 'pads', label: 'HYBRID PADS', t: 6, face: null },
-      { id: 'rhodes', label: 'RHODES EP', t: 3, face: null },
+      { id: 'pads', label: 'POLY SYNTH', t: 6, face: null },
+      { id: 'rhodes', label: 'ORGAN', t: 3, face: null },
     ];
 
     const FACE_POOL = [
@@ -6997,8 +6997,8 @@ if (typeof TextEncoder === 'undefined') {
       { id: 'drum', label: 'DRUMS', type: 'drum' },
       { id: 'bass', label: 'BASS FM', type: 'bass' },
       { id: 'buchla', label: 'POLY FM', type: 'buchla' },
-      { id: 'pads', label: 'HYBRID\nPADS', type: 'pads' },
-      { id: 'rhodes', label: 'RHODES\nEP', type: 'rhodes' },
+      { id: 'pads', label: 'POLY\nSYNTH', type: 'pads' },
+      { id: 'rhodes', label: 'ORGAN', type: 'rhodes' },
     ];
 
     function buildMixer() {
