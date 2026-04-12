@@ -15,8 +15,9 @@ SECTION TENSION & ENERGY GUIDE:
   outro:        tension 0.35–0.50  energy 0.35–0.55  (resolution, elements drop out)
 
 EVOLUTION RULES:
-  - Update explanation.section to the new section name
-  - Adjust bpm (±5 max), tension, energy to match the section guide above
+  - Update explanation.section to the new section name (REQUIRED — must match the requested section exactly)
+  - Keep bpm IDENTICAL to the input sheet — do NOT change it
+  - Adjust tension, energy to match the section guide above
   - Meaningfully change the pattern: vary note choices, rhythm density, velocities, CC sweeps
   - Add or remove layers (e.g. bring in buchla on verse2, strip bass on bridge)
   - Preserve the key and genre unless the section demands a shift
@@ -49,10 +50,12 @@ module.exports = async function handler(req, res) {
   if (!sheet) return res.status(400).json({ error: 'Missing sheet' });
   if (!section) return res.status(400).json({ error: 'Missing section' });
 
+  const prevSection = sheet.explanation?.section ?? 'previous section';
   const userContent = [
-    `Current sheet:\n${JSON.stringify(sheet, null, 2)}`,
+    `TARGET SECTION: ${section}`,
+    `Current sheet (previous section: ${prevSection}):\n${JSON.stringify(sheet, null, 2)}`,
     synth_context || '',
-    `Evolve this sheet for section: "${section}". Output the full evolved JSON sheet.`,
+    `Generate a FULL EVOLVED SHEET for "${section}". This must sound distinctly different from the ${prevSection} above — different rhythmic density, pattern structure, and arrangement. Set explanation.section to "${section}". Output valid JSON only.`,
   ].filter(Boolean).join('\n\n');
 
   try {
@@ -72,8 +75,18 @@ module.exports = async function handler(req, res) {
 
     normalizeSheet(evolved);
 
+    // Always restore original BPM — evolve must never drift tempo
+    evolved.bpm = sheet.bpm;
+
+    // Force correct section metadata regardless of LLM compliance
+    if (evolved.explanation) {
+      evolved.explanation.section = section;
+    } else {
+      evolved.explanation = { section };
+    }
+
     const tension = evolved.tension ?? 0.5;
-    const reply = `Moving into ${section}. Tension ${Math.round(tension * 100)}%. BPM locked at ${evolved.bpm ?? '?'}.`;
+    const reply = `Moving into ${section}. Tension ${Math.round(tension * 100)}%. BPM ${evolved.bpm ?? '?'}.`;
 
     return res.status(200).json({ sheet: evolved, reply });
   } catch (err) {
