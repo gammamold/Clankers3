@@ -1,7 +1,7 @@
 // POST /api/band/chat
 // Routes a user message to the band, updates the Music Sheet, returns companion reply.
 // Stateless — full sheet and last N history messages are sent by the client.
-const https = require('https');
+const { callLLM, extractAndRepairJSON, normalizeSheet } = require('./utils');
 
 const CONDUCTOR_SYSTEM = `You are the Conductor of The Clankers 3 -- an AI electronic music band.
 
@@ -37,11 +37,40 @@ You receive the current ClankerBoy JSON sheet and a user message.
 3. Write a short in-character reply from that companion (1-3 sentences max).
 
 RULES when editing steps:
-  - Drums (t:10) always d:0.25, never use dur.
-  - Pads (t:6) and Rhodes (t:3) always use dur.
-  - Bass first note per phrase needs full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
-  - Bass MIDI 0-23 primarily.
-  - The steps array MUST contain at least 32 steps (2 bars). Sparse music = fewer tracks per step, NOT fewer steps.
+  UNITS: "d" is the duration of a step slot in BEATS. "dur" is how long a note is held in BEATS. 1 beat = quarter note. 0.25 beats = 16th note.
+  GRID: ALWAYS use d:0.25 on EVERY step for EVERY instrument. The steps array is a uniform 16th-note grid. NEVER use any other value of d. NEVER omit d.
+  LENGTH: One entry in the steps array = one 16th note slot. So "16 steps" from the user = exactly 16 entries (1 bar). "32 steps" = 32 entries (2 bars). Honour the user's count. If unspecified, default to 32 steps (2 bars).
+  RESTS: Empty step slots are fine and expected. Use { "d": 0.25, "tracks": [] } for rests. NEVER collapse rests by enlarging d. NEVER make the array shorter than the requested length.
+  HOLDS: For sustained voices (pads t:6, rhodes t:3, bass t:2), use the "dur" field on the track to hold a note across multiple slots — e.g. a 1-bar pad chord placed on slot 0 with dur:4. Drums (t:10) never use dur.
+  Pads (t:6) and Rhodes (t:3) always include dur.
+  Bass first note per phrase needs full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
+  Bass MIDI 0-23 primarily.
+
+EXAMPLE — a 16-step funky 1-bar groove (kick on 0/8, snare on 4/12, closed hats every odd 16th, bass walking, pad held the whole bar):
+{
+  "steps": [
+    { "d": 0.25, "tracks": [
+      { "t": 10, "n": [36], "v": 110 },
+      { "t": 2,  "n": [12], "v": 100, "dur": 0.5, "cc": {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10} },
+      { "t": 6,  "n": [60,63,67], "v": 80, "dur": 4 }
+    ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 } ] },
+    { "d": 0.25, "tracks": [] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 }, { "t": 2, "n": [15], "v": 95, "dur": 0.25 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [38], "v": 105 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 } ] },
+    { "d": 0.25, "tracks": [] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 }, { "t": 2, "n": [17], "v": 95, "dur": 0.25 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [36], "v": 110 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 } ] },
+    { "d": 0.25, "tracks": [ { "t": 2, "n": [12], "v": 95, "dur": 0.25 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [38], "v": 105 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 } ] },
+    { "d": 0.25, "tracks": [ { "t": 2, "n": [19], "v": 95, "dur": 0.25 } ] },
+    { "d": 0.25, "tracks": [ { "t": 10, "n": [42], "v": 70 } ] }
+  ]
+}
 
 Return ONLY valid JSON -- no prose, no markdown fences:
 {
@@ -49,116 +78,6 @@ Return ONLY valid JSON -- no prose, no markdown fences:
   "reply": "Short in-character reply.",
   "sheet": { ...complete updated ClankerBoy JSON sheet... }
 }`;
-
-function callLLM(provider, apiKey, model, system, messages, maxTokens) {
-  const m = model || '';
-  const p = (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3'))
-    ? 'openai'
-    : (provider || 'anthropic');
-  if (p === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
-  return callAnthropic(apiKey, model, system, messages, maxTokens);
-}
-
-function callAnthropic(apiKey, model, system, messages, maxTokens) {
-  const payload = JSON.stringify({ model, max_tokens: maxTokens, system, messages });
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.anthropic.com',
-      path: '/v1/messages',
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(payload),
-      },
-    }, (res) => {
-      let data = '';
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode !== 200) {
-            reject(new Error(parsed.error?.message || `Anthropic ${res.statusCode}`));
-          } else {
-            resolve(parsed.content[0].text);
-          }
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
-
-function callOpenAI(apiKey, model, system, messages, maxTokens) {
-  const openaiMsgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
-  const payload = JSON.stringify({ model, max_tokens: maxTokens, messages: openaiMsgs });
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.openai.com',
-      path: '/v1/chat/completions',
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(payload),
-      },
-    }, (res) => {
-      let data = '';
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode !== 200) {
-            reject(new Error(parsed.error?.message || `OpenAI ${res.statusCode}`));
-          } else {
-            resolve(parsed.choices[0].message.content);
-          }
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
-
-function extractAndRepairJSON(response) {
-  const match = response.match(/\{[\s\S]*\}/s);
-  if (!match) throw new Error('No JSON in response');
-  let s = match[0].trim();
-  if (s.endsWith(',')) s = s.slice(0, -1);
-  try { return JSON.parse(s); } catch (e) { }
-
-  let braces = 0, brackets = 0, inStr = false, esc = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (esc) { esc = false; continue; }
-    if (c === '\\') { esc = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
-    if (!inStr) {
-      if (c === '{') braces++;
-      if (c === '}') braces--;
-      if (c === '[') brackets++;
-      if (c === ']') brackets--;
-    }
-  }
-  while (brackets > 0) { s += ']'; brackets--; }
-  while (braces > 0) { s += '}'; braces--; }
-  return JSON.parse(s);
-}
-
-function enforceCleanBars(sheet) {
-  if (!sheet || !sheet.steps || !sheet.steps.length) return;
-  const totalDur = sheet.steps.reduce((acc, s) => acc + (s.d ?? 0.5), 0);
-  const remainder = totalDur % 4.0;
-  if (remainder > 0.001) {
-    const pad = 4.0 - remainder;
-    sheet.steps.push({ d: Math.round(pad * 1000) / 1000, tracks: [] });
-  }
-}
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -209,12 +128,7 @@ module.exports = async function handler(req, res) {
     }
 
     const updatedSheet = data.sheet || sheet;
-    enforceCleanBars(updatedSheet);
-
-    // Ensure minimum step count for playable loop
-    if (updatedSheet.steps && updatedSheet.steps.length < 16) {
-      while (updatedSheet.steps.length < 64) updatedSheet.steps.push({ d: 0.25, tracks: [] });
-    }
+    normalizeSheet(updatedSheet);
 
     // Compute diff: top-level keys that changed
     const diff = {};

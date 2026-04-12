@@ -106,6 +106,28 @@ export async function offlineRender(sheet, opts = {}) {
 
   // ── 2. Register worklet modules ───────────────────────────────────────────
   // Each OfflineAudioContext needs its own addModule() calls.
+  // Load WASM glue into worklet scope as classic script (static import unsupported)
+  let glue = await fetch('/wasm/clankers_dsp.js').then(r => r.text());
+  const polyfill = `
+if (typeof TextDecoder === 'undefined') {
+  globalThis.TextDecoder = class { decode(buf) { if (!buf || !buf.length) return ''; return String.fromCharCode.apply(null, new Uint8Array(buf.buffer || buf, buf.byteOffset, buf.byteLength)); } };
+}
+if (typeof TextEncoder === 'undefined') {
+  globalThis.TextEncoder = class { encode(s) { const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; } encodeInto(s, dest) { const a = this.encode(s); dest.set(a); return { read: s.length, written: a.length }; } };
+}
+`;
+  glue = polyfill + glue.replace(/^export\s+class\s/gm, 'class ')
+             .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, '')
+             .replace(/import\.meta\.url/g, "'unused'");
+  glue += `\nglobalThis.initSync = initSync;\n`
+        + `globalThis.ClankersBass = ClankersBass;\n`
+        + `globalThis.ClankersBuchla = ClankersBuchla;\n`
+        + `globalThis.ClankersDrums = ClankersDrums;\n`
+        + `globalThis.ClankersPads = ClankersPads;\n`
+        + `globalThis.ClankersRhodes = ClankersRhodes;\n`;
+  const glueBlob = new Blob([glue], { type: 'application/javascript' });
+  await offCtx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
+
   await offCtx.audioWorklet.addModule('/worklets/drums-worklet.js');
   await offCtx.audioWorklet.addModule('/worklets/bass-worklet.js');
   await offCtx.audioWorklet.addModule('/worklets/buchla-worklet.js');

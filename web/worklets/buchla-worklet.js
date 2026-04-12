@@ -14,7 +14,7 @@
  *   { type:'error', message }
  */
 
-import { initSync, ClankersBass } from '../wasm/clankers_dsp.js';
+const { initSync, ClankersBass } = globalThis;
 
 class PolyFMWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {

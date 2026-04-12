@@ -14,7 +14,7 @@
  *   { type:'error', message }
  */
 
-import { initSync, ClankersDrums } from '../wasm/clankers_dsp.js';
+const { initSync, ClankersDrums } = globalThis;
 
 class DrumsWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {

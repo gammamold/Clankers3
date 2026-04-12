@@ -89,7 +89,10 @@
       "Bash(cp C:/Users/gamma/the_clankers3/vercel.json C:/Users/gamma/clankers3-web/)",
       "Bash(git ls-tree:*)",
       "Bash(git stash:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(node -c api/band/chat.js)",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"const u = require\\('C:/Users/gamma/the_clankers3/api/band/utils.js'\\); console.log\\(Object.keys\\(u\\)\\)\")"
     ]
   }
 }

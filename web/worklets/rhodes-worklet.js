@@ -13,7 +13,7 @@
  *   { type:'error', message }
  */
 
-import { initSync, ClankersRhodes } from '../wasm/clankers_dsp.js';
+const { initSync, ClankersRhodes } = globalThis;
 
 class RhodesWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {

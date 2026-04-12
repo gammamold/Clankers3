@@ -13,7 +13,7 @@
  *   { type:'error', message }
  */
 
-import { initSync, ClankersPads } from '../wasm/clankers_dsp.js';
+const { initSync, ClankersPads } = globalThis;
 
 class PadsWorkletProcessor extends AudioWorkletProcessor {
     constructor(options) {

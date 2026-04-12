@@ -1,7 +1,7 @@
 // POST /api/band/sheet-evolve
 // Evolves the current Music Sheet into a new section.
 // Stateless — full sheet sent by client.
-const https = require('https');
+const { callLLM, extractAndRepairJSON, normalizeSheet } = require('./utils');
 
 const EVOLVE_SYSTEM = `You are the Conductor of The Clankers 3 — an AI electronic music band.
 You will receive a Music Sheet and a target section name. Evolve the sheet for that new section.
@@ -24,116 +24,6 @@ EVOLUTION RULES:
   - Bass first note per phrase: CC {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
 
 Return ONLY valid JSON — the complete evolved sheet, same format as input.`;
-
-function callLLM(provider, apiKey, model, system, messages, maxTokens) {
-  const m = model || '';
-  const p = (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3'))
-    ? 'openai'
-    : (provider || 'anthropic');
-  if (p === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
-  return callAnthropic(apiKey, model, system, messages, maxTokens);
-}
-
-function callAnthropic(apiKey, model, system, messages, maxTokens) {
-  const payload = JSON.stringify({ model, max_tokens: maxTokens, system, messages });
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.anthropic.com',
-      path: '/v1/messages',
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(payload),
-      },
-    }, (res) => {
-      let data = '';
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode !== 200) {
-            reject(new Error(parsed.error?.message || `Anthropic ${res.statusCode}`));
-          } else {
-            resolve(parsed.content[0].text);
-          }
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
-
-function callOpenAI(apiKey, model, system, messages, maxTokens) {
-  const openaiMsgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
-  const payload = JSON.stringify({ model, max_tokens: maxTokens, messages: openaiMsgs });
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.openai.com',
-      path: '/v1/chat/completions',
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(payload),
-      },
-    }, (res) => {
-      let data = '';
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode !== 200) {
-            reject(new Error(parsed.error?.message || `OpenAI ${res.statusCode}`));
-          } else {
-            resolve(parsed.choices[0].message.content);
-          }
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
-
-function extractAndRepairJSON(response) {
-  const match = response.match(/\{[\s\S]*\}/s);
-  if (!match) throw new Error('No JSON in response');
-  let s = match[0].trim();
-  if (s.endsWith(',')) s = s.slice(0, -1);
-  try { return JSON.parse(s); } catch (e) { }
-
-  let braces = 0, brackets = 0, inStr = false, esc = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (esc) { esc = false; continue; }
-    if (c === '\\') { esc = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
-    if (!inStr) {
-      if (c === '{') braces++;
-      if (c === '}') braces--;
-      if (c === '[') brackets++;
-      if (c === ']') brackets--;
-    }
-  }
-  while (brackets > 0) { s += ']'; brackets--; }
-  while (braces > 0) { s += '}'; braces--; }
-  return JSON.parse(s);
-}
-
-function enforceCleanBars(sheet) {
-  if (!sheet || !sheet.steps || !sheet.steps.length) return;
-  const totalDur = sheet.steps.reduce((acc, s) => acc + (s.d ?? 0.5), 0);
-  const remainder = totalDur % 4.0;
-  if (remainder > 0.001) {
-    const pad = 4.0 - remainder;
-    sheet.steps.push({ d: Math.round(pad * 1000) / 1000, tracks: [] });
-  }
-}
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -172,7 +62,7 @@ module.exports = async function handler(req, res) {
       evolved = JSON.parse(JSON.stringify(sheet)); // fallback to unmutated sheet
     }
 
-    enforceCleanBars(evolved);
+    normalizeSheet(evolved);
 
     const tension = evolved.tension ?? 0.5;
     const reply = `Moving into ${section}. Tension ${Math.round(tension * 100)}%. BPM locked at ${evolved.bpm ?? '?'}.`;
