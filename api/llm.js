@@ -77,6 +77,53 @@ function proxyOpenAI(apiKey, payload) {
   });
 }
 
+function proxyGoogle(apiKey, payload) {
+  // Convert Anthropic-style body to Gemini generateContent format
+  const contents = (payload.messages || []).map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+  const body = {
+    contents,
+    generationConfig: { maxOutputTokens: payload.max_tokens || 8192 },
+  };
+  if (payload.system) body.system_instruction = { parts: [{ text: payload.system }] };
+  const postData = JSON.stringify(body);
+  const path = `/v1beta/models/${payload.model}:generateContent?key=${apiKey}`;
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'generativelanguage.googleapis.com',
+      path,
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(postData),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode === 200 && parsed.candidates) {
+            // Normalise to Anthropic shape so callers don't care
+            const text = parsed.candidates[0].content.parts[0].text;
+            const normalised = { content: [{ type: 'text', text }], model: payload.model };
+            resolve({ status: 200, body: JSON.stringify(normalised) });
+          } else {
+            resolve({ status: res.statusCode, body: data });
+          }
+        } catch (e) {
+          resolve({ status: res.statusCode, body: data });
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+}
+
 function detectProvider(payload) {
   if (payload.provider) return payload.provider;
   const m = payload.model || '';
@@ -97,6 +144,8 @@ module.exports = async function handler(req, res) {
     let result;
     if (provider === 'openai') {
       result = await proxyOpenAI(apiKey, payload);
+    } else if (provider === 'google') {
+      result = await proxyGoogle(apiKey, payload);
     } else {
       result = await proxyAnthropic(apiKey, payload);
     }
