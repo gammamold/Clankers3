@@ -378,6 +378,133 @@ export class ClankersRhodes {
 }
 if (Symbol.dispose) ClankersRhodes.prototype[Symbol.dispose] = ClankersRhodes.prototype.free;
 
+/**
+ * Parallel-formant Voder — 4-voice polyphonic formant synthesizer.
+ *
+ * Inspired by the 1939 Bell Laboratories Voder.  Glottal pulse + aspiration
+ * noise drive a bank of 5 parallel biquad resonators whose centre frequencies
+ * interpolate smoothly between phoneme targets (coarticulation).
+ *
+ * Phoneme indices (0-24):
+ *   0 AA   1 AE   2 AH   3 AO   4 EH   5 ER   6 EY   7 IH   8 IY
+ *   9 OW  10 UH  11 UW  12 L   13 R   14 W   15 Y   16 M   17 N
+ *  18 F   19 S   20 SH  21 TH  22 V   23 Z   24 ZH
+ *
+ * CC map:
+ *   CC74  brightness     0-127 → 0.5-1.5× formant freq scale
+ *   CC20  voicing        0-127 → 0-1 manual override (0 = phoneme's voicing)
+ *   CC73  attack_ms      0-127 → 1-100 ms
+ *   CC72  release_ms     0-127 → 10-500 ms
+ *   CC75  vibrato_depth  0-127 → 0-80 cents
+ *   CC76  vibrato_rate   0-127 → 3-8 Hz
+ *   CC77  coartic_ms     0-127 → 5-80 ms
+ *   CC16  volume         0-127 → 0-1
+ *
+ * Streaming API:
+ *   set_params(cc_json)
+ *   set_phoneme(idx)                   — change formant target live
+ *   set_phonemes(json_array)           — "[0,8,11]" phoneme sequence
+ *   set_xy(x, y)                       — vowel-pad mode (0..1 each axis)
+ *   trigger(midi_note, vel, hold_samps, cc_json)
+ *   release()                          — note-off for sustained voices
+ *   process(n_samples)                 — render mono Float32Array
+ *   phoneme_count()                    — returns 25
+ */
+export class ClankersVoder {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ClankersVoderFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_clankersvoder_free(ptr, 0);
+    }
+    /**
+     * @param {number} seed
+     */
+    constructor(seed) {
+        const ret = wasm.clankersvoder_new(seed);
+        this.__wbg_ptr = ret >>> 0;
+        ClankersVoderFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Number of phonemes in the built-in table (25).
+     * @returns {number}
+     */
+    static phoneme_count() {
+        const ret = wasm.clankersvoder_phoneme_count();
+        return ret >>> 0;
+    }
+    /**
+     * Render n_samples of audio.  Returns mono Float32Array.
+     * @param {number} n_samples
+     * @returns {Float32Array}
+     */
+    process(n_samples) {
+        const ret = wasm.clankersvoder_process(this.__wbg_ptr, n_samples);
+        return ret;
+    }
+    /**
+     * Send note-off to the most recently triggered voice.
+     */
+    release() {
+        wasm.clankersvoder_release(this.__wbg_ptr);
+    }
+    /**
+     * Update stored params from CC JSON object.
+     * @param {string} cc_json
+     */
+    set_params(cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankersvoder_set_params(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Set the active phoneme target (0-24).  All voices interpolate toward it.
+     * @param {number} idx
+     */
+    set_phoneme(idx) {
+        wasm.clankersvoder_set_phoneme(this.__wbg_ptr, idx);
+    }
+    /**
+     * Set a phoneme sequence from a JSON integer array, e.g. "[0,8,2,11]".
+     * The last triggered voice will step through the sequence over its hold duration.
+     * @param {string} json
+     * @param {number} hold_samps
+     */
+    set_phonemes(json, hold_samps) {
+        const ptr0 = passStringToWasm0(json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankersvoder_set_phonemes(this.__wbg_ptr, ptr0, len0, hold_samps);
+    }
+    /**
+     * Vowel-pad mode: x=F1 axis (0=high/closed..1=low/open),
+     * y=F2 axis (0=back..1=front).  All voices update live.
+     * @param {number} x
+     * @param {number} y
+     */
+    set_xy(x, y) {
+        wasm.clankersvoder_set_xy(this.__wbg_ptr, x, y);
+    }
+    /**
+     * Trigger a note.  Also updates params from cc_json.
+     * hold_samples: note-on duration in samples (0 = sustain until release()).
+     * @param {number} midi_note
+     * @param {number} velocity
+     * @param {number} hold_samples
+     * @param {string} cc_json
+     */
+    trigger(midi_note, velocity, hold_samples, cc_json) {
+        const ptr0 = passStringToWasm0(cc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.clankersvoder_trigger(this.__wbg_ptr, midi_note, velocity, hold_samples, ptr0, len0);
+    }
+}
+if (Symbol.dispose) ClankersVoder.prototype[Symbol.dispose] = ClankersVoder.prototype.free;
+
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -419,6 +546,9 @@ const ClankersPadsFinalization = (typeof FinalizationRegistry === 'undefined')
 const ClankersRhodesFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_clankersrhodes_free(ptr >>> 0, 1));
+const ClankersVoderFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_clankersvoder_free(ptr >>> 0, 1));
 
 function getArrayF32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -481,43 +611,6 @@ function passStringToWasm0(arg, malloc, realloc) {
 
     WASM_VECTOR_LEN = offset;
     return ptr;
-}
-
-// ── AudioWorkletGlobalScope polyfills ─────────────────────────────────────────
-if (typeof TextDecoder === 'undefined') {
-    globalThis.TextDecoder = class TextDecoder {
-        constructor(_e, _o) {}
-        decode(buf) {
-            if (!buf || buf.byteLength === 0) return '';
-            const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf.buffer ?? buf);
-            let s = '', i = 0;
-            while (i < b.length) {
-                const c = b[i++];
-                if (c < 0x80) { s += String.fromCharCode(c); }
-                else if ((c & 0xE0) === 0xC0) { s += String.fromCharCode(((c&0x1F)<<6)|(b[i++]&0x3F)); }
-                else if ((c & 0xF0) === 0xE0) { s += String.fromCharCode(((c&0x0F)<<12)|((b[i++]&0x3F)<<6)|(b[i++]&0x3F)); }
-                else { const p=((c&7)<<18)|((b[i++]&0x3F)<<12)|((b[i++]&0x3F)<<6)|(b[i++]&0x3F); const u=p-0x10000; s+=String.fromCharCode(0xD800+(u>>10),0xDC00+(u&0x3FF)); }
-            }
-            return s;
-        }
-    };
-}
-if (typeof TextEncoder === 'undefined') {
-    globalThis.TextEncoder = class TextEncoder {
-        encode(s) {
-            const o=[];
-            for (let i=0;i<s.length;i++) {
-                let c=s.charCodeAt(i);
-                if(c>=0xD800&&c<=0xDBFF) c=0x10000+((c-0xD800)<<10)+(s.charCodeAt(++i)-0xDC00);
-                if(c<0x80) o.push(c);
-                else if(c<0x800) o.push(0xC0|(c>>6),0x80|(c&0x3F));
-                else if(c<0x10000) o.push(0xE0|(c>>12),0x80|((c>>6)&0x3F),0x80|(c&0x3F));
-                else o.push(0xF0|(c>>18),0x80|((c>>12)&0x3F),0x80|((c>>6)&0x3F),0x80|(c&0x3F));
-            }
-            return new Uint8Array(o);
-        }
-        encodeInto(s,v){const b=this.encode(s);v.set(b);return{read:s.length,written:b.length};}
-    };
 }
 
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });

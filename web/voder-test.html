@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voder Test — Clankers 3</title>
+<style>
+  :root {
+    --bg: #111;
+    --surface: #1e1e1e;
+    --border: #333;
+    --accent: #7c3aed;
+    --accent2: #06b6d4;
+    --text: #e4e4e7;
+    --muted: #71717a;
+    --key-active: #7c3aed;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    padding: 16px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 16px; letter-spacing: .15em; color: var(--accent); margin-bottom: 16px; }
+  h2 { font-size: 11px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+
+  /* ── Phoneme buttons ── */
+  .phoneme-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .ph-btn {
+    background: #2a2a2a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 5px 8px;
+    transition: background .1s, border-color .1s;
+    min-width: 40px;
+    text-align: center;
+  }
+  .ph-btn:hover { background: #333; border-color: var(--accent); }
+  .ph-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ph-label { font-size: 9px; color: var(--muted); display: block; margin-top: 1px; }
+
+  /* ── Vowel XY pad ── */
+  #xy-pad {
+    width: 220px;
+    height: 220px;
+    background: #1a1a2e;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    position: relative;
+    cursor: crosshair;
+    touch-action: none;
+    flex-shrink: 0;
+  }
+  #xy-pad canvas { width: 100%; height: 100%; border-radius: 5px; }
+  #xy-cursor {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    top: 50%; left: 50%;
+    transition: background .1s;
+  }
+  .xy-axis-label {
+    position: absolute;
+    font-size: 9px;
+    color: var(--muted);
+  }
+
+  /* ── Piano ── */
+  #piano {
+    display: flex;
+    position: relative;
+    height: 80px;
+    user-select: none;
+    touch-action: none;
+  }
+  .white-key {
+    width: 30px;
+    height: 80px;
+    background: #ddd;
+    border: 1px solid #999;
+    border-radius: 0 0 4px 4px;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .white-key:hover { background: #f0e8ff; }
+  .white-key.pressed { background: var(--key-active); }
+  .black-key {
+    width: 20px;
+    height: 50px;
+    background: #222;
+    border: 1px solid #111;
+    border-radius: 0 0 3px 3px;
+    cursor: pointer;
+    position: absolute;
+    z-index: 1;
+    top: 0;
+  }
+  .black-key:hover { background: #444; }
+  .black-key.pressed { background: var(--accent); }
+
+  /* ── Knobs ── */
+  .knob-group { display: flex; flex-wrap: wrap; gap: 14px; }
+  .knob-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .knob-label { font-size: 10px; color: var(--muted); text-align: center; }
+  .knob-val   { font-size: 10px; color: var(--accent2); min-width: 36px; text-align: center; }
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 70px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* ── Phoneme sequence ── */
+  #seq-input {
+    background: #2a2a2a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 8px;
+    width: 280px;
+  }
+  #seq-input:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Buttons ── */
+  .btn {
+    background: #2a2a2a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 14px;
+    transition: background .1s;
+  }
+  .btn:hover { background: #333; border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #6d28d9; }
+
+  /* ── Status ── */
+  #status {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 6px 0;
+  }
+  #status.ok  { color: #4ade80; }
+  #status.err { color: #f87171; }
+</style>
+</head>
+<body>
+<h1>VODER // FORMANT SYNTHESIZER TEST</h1>
+<div id="status">Loading WASM…</div>
+
+<!-- Phoneme buttons -->
+<div class="panel">
+  <h2>Phonemes</h2>
+  <div class="phoneme-grid" id="phoneme-grid"></div>
+</div>
+
+<!-- Vowel pad + Knobs side by side -->
+<div class="row">
+
+  <!-- XY Vowel pad -->
+  <div class="panel" style="flex-shrink:0">
+    <h2>Vowel Pad &nbsp;<span style="color:var(--muted);font-weight:normal">(drag)</span></h2>
+    <div id="xy-pad">
+      <canvas id="xy-canvas" width="220" height="220"></canvas>
+      <div id="xy-cursor"></div>
+      <span class="xy-axis-label" style="bottom:4px;left:50%;transform:translateX(-50%)">← F1 open →</span>
+      <span class="xy-axis-label" style="top:50%;left:3px;transform:translateY(-50%) rotate(-90deg)">← F2 back · front →</span>
+    </div>
+  </div>
+
+  <!-- Knobs -->
+  <div class="panel" style="flex:1;min-width:260px">
+    <h2>Parameters</h2>
+    <div class="knob-group" id="knob-group"></div>
+  </div>
+</div>
+
+<!-- Piano -->
+<div class="panel">
+  <h2>Keyboard &nbsp;<span style="color:var(--muted);font-weight:normal">(click or mouse-down to hold)</span></h2>
+  <div id="piano"></div>
+</div>
+
+<!-- Phoneme sequence -->
+<div class="panel">
+  <h2>Phoneme Sequence</h2>
+  <div class="row" style="align-items:center;gap:8px">
+    <input id="seq-input" type="text" value="8,7,5,0,3,11" placeholder="Comma-separated phoneme indices, e.g. 8,7,5,0">
+    <button class="btn" id="seq-play-btn">PLAY SEQ</button>
+    <span style="font-size:11px;color:var(--muted)">held note:</span>
+    <select id="seq-note-sel" style="background:#2a2a2a;border:1px solid var(--border);color:var(--text);font-family:inherit;padding:4px 6px;border-radius:4px">
+      <option value="48">C3</option>
+      <option value="52">E3</option>
+      <option value="55">G3</option>
+      <option value="57" selected>A3</option>
+      <option value="60">C4</option>
+      <option value="64">E4</option>
+      <option value="67">G4</option>
+    </select>
+    <span style="font-size:11px;color:var(--muted)">dur/phoneme (ms):</span>
+    <input id="seq-dur-input" type="number" value="200" min="50" max="2000" step="50"
+           style="width:70px;background:#2a2a2a;border:1px solid var(--border);color:var(--text);font-family:inherit;padding:4px 6px;border-radius:4px">
+  </div>
+</div>
+
+<script type="module">
+// ── Phoneme table (mirrors Rust) ───────────────────────────────────────────
+const PHONEME_NAMES = [
+  ['AA','father'],['AE','cat'],  ['AH','but'],  ['AO','caught'],
+  ['EH','bed'],  ['ER','bird'],  ['EY','say'],  ['IH','bit'],
+  ['IY','beet'], ['OW','go'],    ['UH','book'],  ['UW','boot'],
+  ['L','l'],     ['R','r'],      ['W','w'],      ['Y','y'],
+  ['M','m'],     ['N','n'],
+  ['F','f'],     ['S','s'],      ['SH','sh'],   ['TH','th'],
+  ['V','v'],     ['Z','z'],      ['ZH','zh'],
+];
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+let audioCtx = null;
+let voderNode = null;
+let wasmModule = null;
+
+const statusEl = document.getElementById('status');
+
+function setStatus(msg, cls = '') {
+  statusEl.textContent = msg;
+  statusEl.className   = cls;
+}
+
+async function boot() {
+  try {
+    // Load WASM module bytes and expose helpers on globalThis for the worklet
+    const wasmResp = await fetch('wasm/clankers_dsp_bg.wasm');
+    const wasmBuf  = await wasmResp.arrayBuffer();
+    wasmModule     = await WebAssembly.compile(wasmBuf);
+
+    // Load the ES module bindings to get initSync
+    const mod = await import('./wasm/clankers_dsp.js');
+    mod.initSync({ module: wasmModule });
+
+    // Expose for worklet
+    globalThis.initSync     = mod.initSync;
+    globalThis.ClankersVoder = mod.ClankersVoder;
+
+    setStatus('WASM loaded — click a key or phoneme to start', 'ok');
+  } catch (e) {
+    setStatus(`Load error: ${e}`, 'err');
+    console.error(e);
+  }
+}
+
+async function ensureAudio() {
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    return;
+  }
+
+  audioCtx = new AudioContext({ sampleRate: 44100 });
+  await audioCtx.audioWorklet.addModule('worklets/voder-worklet.js');
+
+  voderNode = new AudioWorkletNode(audioCtx, 'voder-worklet', {
+    processorOptions: { wasmModule, seed: 0x70de7 },
+    numberOfOutputs: 1,
+    outputChannelCount: [1],
+  });
+
+  // Gain for master volume
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.7;
+  voderNode.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  voderNode.port.onmessage = ({ data }) => {
+    if (data.type === 'error') console.warn('voder-worklet:', data.message);
+  };
+
+  setStatus('Audio running', 'ok');
+}
+
+// ── CC state (mirrors knob positions) ────────────────────────────────────
+const CC = { 74: 64, 20: 0, 73: 20, 72: 40, 75: 0, 76: 64, 77: 40, 16: 100 };
+
+function ccJson() {
+  return JSON.stringify(
+    Object.fromEntries(Object.entries(CC).map(([k, v]) => [k, v]))
+  );
+}
+
+function sendParams() {
+  voderNode?.port.postMessage({ type: 'setParams', ccJson: ccJson() });
+}
+
+// ── Knob definitions ─────────────────────────────────────────────────────
+const KNOBS = [
+  { cc: 74, label: 'Brightness', min: 0,   max: 127, fmt: v => (0.5 + v/127).toFixed(2)+'×' },
+  { cc: 20, label: 'Voicing',    min: 0,   max: 127, fmt: v => (v/127).toFixed(2) },
+  { cc: 73, label: 'Attack',     min: 0,   max: 127, fmt: v => Math.round(1 + v/127*99)+'ms' },
+  { cc: 72, label: 'Release',    min: 0,   max: 127, fmt: v => Math.round(10 + v/127*490)+'ms' },
+  { cc: 75, label: 'Vib Depth',  min: 0,   max: 127, fmt: v => Math.round(v/127*80)+'¢' },
+  { cc: 76, label: 'Vib Rate',   min: 0,   max: 127, fmt: v => (3 + v/127*5).toFixed(1)+'Hz' },
+  { cc: 77, label: 'Coartic',    min: 0,   max: 127, fmt: v => Math.round(5 + v/127*75)+'ms' },
+  { cc: 16, label: 'Volume',     min: 0,   max: 127, fmt: v => Math.round(v/127*100)+'%' },
+];
+
+function buildKnobs() {
+  const container = document.getElementById('knob-group');
+  for (const k of KNOBS) {
+    const cell  = document.createElement('div');
+    cell.className = 'knob-cell';
+
+    const lbl = document.createElement('div');
+    lbl.className   = 'knob-label';
+    lbl.textContent = k.label;
+
+    const input = document.createElement('input');
+    input.type  = 'range';
+    input.min   = k.min;
+    input.max   = k.max;
+    input.value = CC[k.cc];
+    input.dataset.cc = k.cc;
+
+    const val = document.createElement('div');
+    val.className   = 'knob-val';
+    val.textContent = k.fmt(CC[k.cc]);
+
+    input.addEventListener('input', () => {
+      CC[k.cc]        = Number(input.value);
+      val.textContent = k.fmt(CC[k.cc]);
+      sendParams();
+    });
+
+    cell.append(lbl, input, val);
+    container.appendChild(cell);
+  }
+}
+
+// ── Phoneme buttons ───────────────────────────────────────────────────────
+let activePhonemeBtns = new Set();
+let currentPhoneme = 0;
+
+function buildPhonemes() {
+  const grid = document.getElementById('phoneme-grid');
+  PHONEME_NAMES.forEach(([name, word], idx) => {
+    const btn = document.createElement('button');
+    btn.className    = 'ph-btn' + (idx === 0 ? ' active' : '');
+    btn.dataset.idx  = idx;
+    btn.innerHTML    = `${name}<span class="ph-label">${word}</span>`;
+
+    btn.addEventListener('click', async () => {
+      await ensureAudio();
+      currentPhoneme = idx;
+      document.querySelectorAll('.ph-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      voderNode?.port.postMessage({ type: 'phoneme', idx });
+    });
+    grid.appendChild(btn);
+  });
+}
+
+// ── XY Vowel pad ──────────────────────────────────────────────────────────
+let xyActive = false;
+let xyX = 0.5, xyY = 0.5;
+
+function drawXYBackground() {
+  const canvas = document.getElementById('xy-canvas');
+  const ctx    = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  // Gradient background: blue(back/low) → purple(front) + green(closed) → red(open)
+  const grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w*0.7);
+  grad.addColorStop(0,   '#1e1040');
+  grad.addColorStop(0.5, '#0f172a');
+  grad.addColorStop(1,   '#0a0a1a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Plot phoneme vowels as labelled dots
+  const VOWELS = [
+    // [name, F1_hz, F2_hz]
+    ['AA', 730, 1090], ['AE', 660, 1720], ['AH', 520, 1190], ['AO', 570, 840],
+    ['EH', 530, 1840], ['ER', 490, 1350], ['EY', 390, 2530], ['IH', 390, 1990],
+    ['IY', 270, 2290], ['OW', 450, 800],  ['UH', 440, 1020], ['UW', 300, 870],
+  ];
+  const F1_MIN = 250, F1_MAX = 800, F2_MIN = 600, F2_MAX = 2500;
+
+  for (const [name, f1, f2] of VOWELS) {
+    const px = ((f1 - F1_MIN) / (F1_MAX - F1_MIN)) * w;
+    const py = (1 - (f2 - F2_MIN) / (F2_MAX - F2_MIN)) * h;
+
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(124,58,237,0.6)';
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(228,228,231,0.7)';
+    ctx.font      = '9px Courier New';
+    ctx.fillText(name, px + 6, py + 3);
+  }
+}
+
+function updateXYCursor() {
+  const cursor = document.getElementById('xy-cursor');
+  const pad    = document.getElementById('xy-pad');
+  const w = pad.offsetWidth, h = pad.offsetHeight;
+  cursor.style.left = (xyX * w) + 'px';
+  cursor.style.top  = ((1 - xyY) * h) + 'px';
+}
+
+function handleXY(e, pad) {
+  const rect = pad.getBoundingClientRect();
+  const x    = ((e.clientX || e.touches?.[0]?.clientX) - rect.left)  / rect.width;
+  const y    = 1 - ((e.clientY || e.touches?.[0]?.clientY) - rect.top) / rect.height;
+  xyX = Math.max(0, Math.min(1, x));
+  xyY = Math.max(0, Math.min(1, y));
+  updateXYCursor();
+  voderNode?.port.postMessage({ type: 'xy', x: xyX, y: xyY });
+}
+
+function initXYPad() {
+  const pad = document.getElementById('xy-pad');
+  drawXYBackground();
+  updateXYCursor();
+
+  pad.addEventListener('mousedown', async e => {
+    await ensureAudio();
+    xyActive = true;
+    handleXY(e, pad);
+  });
+  pad.addEventListener('mousemove', e => { if (xyActive) handleXY(e, pad); });
+  document.addEventListener('mouseup', () => { xyActive = false; });
+  pad.addEventListener('touchstart', async e => {
+    e.preventDefault();
+    await ensureAudio();
+    xyActive = true;
+    handleXY(e, pad);
+  }, { passive: false });
+  pad.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (xyActive) handleXY(e, pad);
+  }, { passive: false });
+  pad.addEventListener('touchend', () => { xyActive = false; });
+}
+
+// ── Piano keyboard ────────────────────────────────────────────────────────
+// Two octaves starting at C3 (midi 48)
+const START_NOTE = 48;
+const NUM_OCTAVES = 2;
+const WHITE_PATTERN = [0, 2, 4, 5, 7, 9, 11];  // semitones: C D E F G A B
+const BLACK_OFFSETS = { 1: 0.65, 3: 1.65, 6: 3.65, 8: 4.65, 10: 5.65 };  // black key left-offset within octave
+
+let heldNote = null;
+
+function triggerNote(note) {
+  if (!voderNode) return;
+  const vel = 0.85;
+  voderNode.port.postMessage({
+    type:        'trigger',
+    audioTime:   audioCtx.currentTime,
+    midiNote:    note,
+    velocity:    vel,
+    holdSamples: 0,         // sustain until release
+    ccJson:      ccJson(),
+    phoneme:     currentPhoneme,
+  });
+}
+
+function releaseNote() {
+  voderNode?.port.postMessage({ type: 'release', audioTime: audioCtx.currentTime });
+}
+
+function buildPiano() {
+  const container = document.getElementById('piano');
+  const whiteW = 30;
+
+  for (let oct = 0; oct < NUM_OCTAVES; oct++) {
+    for (const semi of WHITE_PATTERN) {
+      const note = START_NOTE + oct * 12 + semi;
+      const el   = document.createElement('div');
+      el.className    = 'white-key';
+      el.dataset.note = note;
+      container.appendChild(el);
+    }
+  }
+
+  // Overlay black keys
+  const whites = Array.from(container.querySelectorAll('.white-key'));
+  let whiteIdx = 0;
+  for (let oct = 0; oct < NUM_OCTAVES; oct++) {
+    for (const [semi, offset] of Object.entries(BLACK_OFFSETS)) {
+      const note = START_NOTE + oct * 12 + Number(semi);
+      const el   = document.createElement('div');
+      el.className    = 'black-key';
+      el.dataset.note = note;
+      const leftBase  = (oct * 7 + offset) * whiteW;
+      el.style.left   = leftBase + 'px';
+      container.appendChild(el);
+    }
+  }
+
+  // Event delegation on container
+  async function onDown(e) {
+    e.preventDefault();
+    await ensureAudio();
+    const el = e.target.closest('[data-note]');
+    if (!el) return;
+    const note = Number(el.dataset.note);
+    if (heldNote !== null) {
+      document.querySelector(`[data-note="${heldNote}"]`)?.classList.remove('pressed');
+      releaseNote();
+    }
+    heldNote = note;
+    el.classList.add('pressed');
+    triggerNote(note);
+  }
+
+  function onUp(e) {
+    if (heldNote === null) return;
+    document.querySelector(`[data-note="${heldNote}"]`)?.classList.remove('pressed');
+    releaseNote();
+    heldNote = null;
+  }
+
+  container.addEventListener('mousedown', onDown);
+  document.addEventListener('mouseup', onUp);
+  container.addEventListener('touchstart', onDown, { passive: false });
+  document.addEventListener('touchend', onUp);
+}
+
+// ── Phoneme sequence ──────────────────────────────────────────────────────
+document.getElementById('seq-play-btn').addEventListener('click', async () => {
+  await ensureAudio();
+  const raw = document.getElementById('seq-input').value.trim();
+  const indices = raw.split(/[,\s]+/).map(Number).filter(n => !isNaN(n));
+  if (!indices.length) return;
+
+  const note    = Number(document.getElementById('seq-note-sel').value);
+  const durMs   = Number(document.getElementById('seq-dur-input').value);
+  const totalMs = indices.length * durMs;
+  const holdSamps = Math.round((totalMs / 1000) * 44100);
+
+  // Trigger the note first
+  voderNode.port.postMessage({
+    type:        'trigger',
+    audioTime:   audioCtx.currentTime,
+    midiNote:    note,
+    velocity:    0.85,
+    holdSamples: holdSamps,
+    ccJson:      ccJson(),
+    phoneme:     indices[0],
+  });
+
+  // Then load the phoneme sequence (set_phonemes uses the last triggered voice)
+  voderNode.port.postMessage({
+    type:       'phonemes',
+    array:      indices,
+    holdSamples: holdSamps,
+  });
+});
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────
+document.addEventListener('keydown', async e => {
+  if (e.repeat || e.target.tagName === 'INPUT') return;
+  const MAP = {
+    'a':48,'w':49,'s':50,'e':51,'d':52,'f':53,'t':54,'g':55,
+    'y':56,'h':57,'u':58,'j':59,'k':60,'o':61,'l':62,'p':63,
+  };
+  const note = MAP[e.key.toLowerCase()];
+  if (note == null) return;
+  await ensureAudio();
+  if (heldNote !== null) {
+    document.querySelector(`[data-note="${heldNote}"]`)?.classList.remove('pressed');
+    releaseNote();
+  }
+  heldNote = note;
+  document.querySelector(`[data-note="${note}"]`)?.classList.add('pressed');
+  triggerNote(note);
+});
+
+document.addEventListener('keyup', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const MAP = {
+    'a':48,'w':49,'s':50,'e':51,'d':52,'f':53,'t':54,'g':55,
+    'y':56,'h':57,'u':58,'j':59,'k':60,'o':61,'l':62,'p':63,
+  };
+  const note = MAP[e.key.toLowerCase()];
+  if (note != null && note === heldNote) {
+    document.querySelector(`[data-note="${heldNote}"]`)?.classList.remove('pressed');
+    releaseNote();
+    heldNote = null;
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+buildKnobs();
+buildPhonemes();
+buildPiano();
+initXYPad();
+boot();
+</script>
+</body>
+</html>

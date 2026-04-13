@@ -1,4 +1,5 @@
 mod bass;
+mod biquad;
 mod buchla;
 mod chorus;
 mod drums;
@@ -13,6 +14,7 @@ mod rhodes;
 mod rng;
 mod tpt_ladder;
 mod vactrol;
+mod voder;
 mod wavefolder;
 
 use bass::{BassEngine, BassParams};
@@ -455,6 +457,134 @@ fn parse_cc_map(s: &str) -> Vec<(u8, f32)> {
         let v = parts.next().unwrap_or("").trim().trim_matches('"').trim();
         if let (Ok(kn), Ok(vf)) = (k.parse::<u8>(), v.parse::<f32>()) {
             out.push((kn, vf));
+        }
+    }
+    out
+}
+
+// ── Voder ─────────────────────────────────────────────────────────────────────
+
+use voder::{VoderEngine, VoderParams};
+
+/// Parallel-formant Voder — 4-voice polyphonic formant synthesizer.
+///
+/// Inspired by the 1939 Bell Laboratories Voder.  Glottal pulse + aspiration
+/// noise drive a bank of 5 parallel biquad resonators whose centre frequencies
+/// interpolate smoothly between phoneme targets (coarticulation).
+///
+/// Phoneme indices (0-24):
+///   0 AA   1 AE   2 AH   3 AO   4 EH   5 ER   6 EY   7 IH   8 IY
+///   9 OW  10 UH  11 UW  12 L   13 R   14 W   15 Y   16 M   17 N
+///  18 F   19 S   20 SH  21 TH  22 V   23 Z   24 ZH
+///
+/// CC map:
+///   CC74  brightness     0-127 → 0.5-1.5× formant freq scale
+///   CC20  voicing        0-127 → 0-1 manual override (0 = phoneme's voicing)
+///   CC73  attack_ms      0-127 → 1-100 ms
+///   CC72  release_ms     0-127 → 10-500 ms
+///   CC75  vibrato_depth  0-127 → 0-80 cents
+///   CC76  vibrato_rate   0-127 → 3-8 Hz
+///   CC77  coartic_ms     0-127 → 5-80 ms
+///   CC16  volume         0-127 → 0-1
+///
+/// Streaming API:
+///   set_params(cc_json)
+///   set_phoneme(idx)                   — change formant target live
+///   set_phonemes(json_array)           — "[0,8,11]" phoneme sequence
+///   set_xy(x, y)                       — vowel-pad mode (0..1 each axis)
+///   trigger(midi_note, vel, hold_samps, cc_json)
+///   release()                          — note-off for sustained voices
+///   process(n_samples)                 — render mono Float32Array
+///   phoneme_count()                    — returns 25
+#[wasm_bindgen]
+pub struct ClankersVoder {
+    engine: VoderEngine,
+    params: VoderParams,
+}
+
+#[wasm_bindgen]
+impl ClankersVoder {
+    #[wasm_bindgen(constructor)]
+    pub fn new(seed: u32) -> ClankersVoder {
+        ClankersVoder { engine: VoderEngine::new(seed), params: VoderParams::default() }
+    }
+
+    /// Update stored params from CC JSON object.
+    pub fn set_params(&mut self, cc_json: &str) {
+        self.params = parse_voder_params(cc_json);
+    }
+
+    /// Set the active phoneme target (0-24).  All voices interpolate toward it.
+    pub fn set_phoneme(&mut self, idx: u8) {
+        self.engine.set_phoneme(idx as usize);
+    }
+
+    /// Set a phoneme sequence from a JSON integer array, e.g. "[0,8,2,11]".
+    /// The last triggered voice will step through the sequence over its hold duration.
+    pub fn set_phonemes(&mut self, json: &str, hold_samps: u32) {
+        let phonemes = parse_phoneme_array(json);
+        self.engine.set_queue_for_last(&phonemes, hold_samps as usize);
+    }
+
+    /// Vowel-pad mode: x=F1 axis (0=high/closed..1=low/open),
+    /// y=F2 axis (0=back..1=front).  All voices update live.
+    pub fn set_xy(&mut self, x: f32, y: f32) {
+        self.engine.set_xy(x, y);
+    }
+
+    /// Trigger a note.  Also updates params from cc_json.
+    /// hold_samples: note-on duration in samples (0 = sustain until release()).
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: u32, cc_json: &str) {
+        self.params = parse_voder_params(cc_json);
+        self.engine.trigger(midi_note, velocity, hold_samples as usize, &self.params);
+    }
+
+    /// Send note-off to the most recently triggered voice.
+    pub fn release(&mut self) {
+        self.engine.release();
+    }
+
+    /// Render n_samples of audio.  Returns mono Float32Array.
+    pub fn process(&mut self, n_samples: u32) -> Float32Array {
+        let n = n_samples as usize;
+        let mut buf = vec![0.0f32; n];
+        self.engine.process(&mut buf, &self.params);
+        Float32Array::from(buf.as_slice())
+    }
+
+    /// Number of phonemes in the built-in table (25).
+    pub fn phoneme_count() -> u32 {
+        voder::N_PHONEMES as u32
+    }
+}
+
+fn parse_voder_params(cc_json: &str) -> VoderParams {
+    let mut p = VoderParams::default();
+    for (key, val) in parse_cc_map(cc_json) {
+        let n = val / 127.0;
+        match key {
+            74 => p.brightness     = 0.5 + n,                      // 0.5..1.5
+            20 => p.voicing_manual = n,                             // 0..1
+            73 => p.attack_s       = 0.001 + n * 0.099,            // 1..100 ms
+            72 => p.release_s      = 0.01  + n * 0.49,             // 10..500 ms
+            75 => p.vibrato_depth  = n * 0.667,                     // 0..0.667 semitones (~80 cents)
+            76 => p.vibrato_rate   = 3.0   + n * 5.0,              // 3..8 Hz
+            77 => p.coartic_ms     = 5.0   + n * 75.0,             // 5..80 ms
+            16 => p.volume         = n,
+            _  => {}
+        }
+    }
+    p
+}
+
+/// Parse a JSON integer array like "[0,8,2,11]" into a Vec<usize>.
+fn parse_phoneme_array(s: &str) -> Vec<usize> {
+    let mut out = Vec::new();
+    let s = s.trim().trim_start_matches('[').trim_end_matches(']');
+    for tok in s.split(',') {
+        let tok = tok.trim();
+        if let Ok(n) = tok.parse::<usize>() {
+            out.push(n);
         }
     }
     out
