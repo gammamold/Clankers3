@@ -13,48 +13,26 @@
  *   Accuracy is typically ≤5 ms — imperceptible for musical purposes.
  */
 
-import { SynthVoice }        from './synth/core/SynthVoice.js';
-import { JSONBridge }        from './synth/core/JSONBridge.js';
-import { buildClankersMeta } from './synth/core/ClankersBridge.js';
-import { ModulePanel }       from './synth/ui/ModulePanel.js';
-import { PianoKeys }         from './synth/ui/PianoKeys.js';
-import { LLMWizard }         from './synth/wizard/LLMWizard.js';
-import { XYPad }             from './synth/ui/XYPad.js';
+import { buildClankersMeta }       from './synth/core/ClankersBridge.js';
+import { WebAudioInstrumentAdapter } from './synth/core/InstrumentAdapter.js';
+import { registry }                  from './synth/core/InstrumentRegistry.js';
+import { ModulePanel }               from './synth/ui/ModulePanel.js';
+import { PianoKeys }                 from './synth/ui/PianoKeys.js';
+import { LLMWizard }                 from './synth/wizard/LLMWizard.js';
+import { XYPad }                     from './synth/ui/XYPad.js';
 
-const MAX_POLY = 5; // simultaneous voices per slot
+/** Unique patch ID counter for registry registration */
+let _patchSeq = Date.now();
 
-/** Track types for slots 0–4 (t:10 = drums, so skip it; t:12 = FM DRUMS slot 4) */
+/** Track types for slots 0–4 */
 export const SYNTH_SLOT_T = [7, 8, 9, 11, 12];
 export const T_TO_SLOT    = { 7: 0, 8: 1, 9: 2, 11: 3, 12: 4 };
 
-/** Pre-filled wizard prompt for the FM DRUMS slot */
-const FM_DRUMS_WIZARD_PROMPT = 'I want an FM percussion patch — Elektron Model:Cycles style';
-
-/** Human-readable name for each legacy track type */
-const LEGACY_T_NAMES = { 1: 'POLY FM', 2: 'BASS FM', 3: 'RHODES EP', 6: 'HYBRID PADS' };
+/** Human-readable name for each legacy track type (including drums) */
+const LEGACY_T_NAMES = { 1: 'POLY FM', 2: 'BASS FM', 3: 'RHODES EP', 6: 'HYBRID PADS', 10: 'DRUMS' };
 
 /** Maps the LLM's `replaces` field to the legacy track type it targets */
-const REPLACES_KEY_TO_T = { bass_fm: 2, poly_fm: 1, pad_synth: 6, rhodes: 3 };
-
-// ── ClankerEngine ──────────────────────────────────────────────────────────────
-// Adapts Clankers' existing AudioContext to the Synth Designer's AudioEngine API.
-class ClankerEngine {
-  constructor(ctx, destinationNode) {
-    this.ctx          = ctx;
-    this._destination = destinationNode;
-  }
-  get destination()          { return this._destination; }
-  get currentTime()          { return this.ctx.currentTime; }
-  resume()                   { if (this.ctx.state === 'suspended') this.ctx.resume(); }
-  createOscillator()         { return this.ctx.createOscillator(); }
-  createGain()               { return this.ctx.createGain(); }
-  createBiquadFilter()       { return this.ctx.createBiquadFilter(); }
-  createWaveShaper()         { return this.ctx.createWaveShaper(); }
-  createConvolver()          { return this.ctx.createConvolver(); }
-  createDelay(max)           { return this.ctx.createDelay(max); }
-  createDynamicsCompressor() { return this.ctx.createDynamicsCompressor(); }
-  createBuffer(...a)         { return this.ctx.createBuffer(...a); }
-}
+const REPLACES_KEY_TO_T = { bass_fm: 2, poly_fm: 1, pad_synth: 6, rhodes: 3, drums: 10 };
 
 // ── SynthLab ───────────────────────────────────────────────────────────────────
 
@@ -66,19 +44,16 @@ export class SynthLab {
     this._uiBuilt     = false;
     this._seq         = null;  // set externally: synthLab._seq = seq
 
-    /** Slot index → legacy track type it currently replaces (default mapping) */
-    this._slotLegacyT = { 0: 2, 1: 1, 2: 6, 3: 3 };
+    /** Slot index → legacy track type it currently replaces (null = no replacement) */
+    this._slotLegacyT = { 0: 2, 1: 1, 2: 6, 3: 3, 4: null };
 
     this._slots = Array.from({ length: 5 }, (_, i) => ({
-      index:    i,
-      state:    null,
-      voices:   [],        // VoicePool — up to MAX_POLY SynthVoice instances
-      voiceMap: new Map(), // midiNote → { voice, startTime }
-      bridge:   new JSONBridge(),
-      gain:     null,   // GainNode; created in init()
-      muted:    false,
-      volume:   1.0,
-      panels:   [],
+      index:   i,
+      adapter: null,  // WebAudioInstrumentAdapter | null
+      gain:    null,  // GainNode → master (created in init())
+      muted:   false,
+      volume:  1.0,
+      panels:  [],
     }));
 
     this._restoreAssignments();
@@ -91,57 +66,29 @@ export class SynthLab {
     return out;
   }
 
-  // ── Voice pool helpers ────────────────────────────────────────────────────────
+  // ── Adapter helpers ──────────────────────────────────────────────────────────
 
-  _buildVoicePool(slot) {
-    if (!this._ctx || !slot.state) return;
-    const engine = new ClankerEngine(this._ctx, slot.gain);
-    slot.voices  = Array.from({ length: MAX_POLY }, () =>
-      new SynthVoice(engine).buildFromState(slot.state)
-    );
-    slot.voiceMap = new Map();
-    slot.bridge.onChange(s => slot.voices.forEach(v => v.updateState(s)));
+  /** Build a new WebAudioInstrumentAdapter for a slot and wire it to slot.gain. */
+  _loadAdapter(slot, patchState) {
+    this._unloadAdapter(slot);
+    if (!this._ctx) return;
+    const id = `slot:${slot.index}`;
+    slot.adapter = new WebAudioInstrumentAdapter(this._ctx, patchState, id);
+    slot.adapter.connect(slot.gain);
   }
 
-  _destroyVoicePool(slot) {
-    slot.voices.forEach(v => { try { v.destroy(); } catch (_) {} });
-    slot.voices  = [];
-    slot.voiceMap = new Map();
+  /** Disconnect and discard the current adapter for a slot. */
+  _unloadAdapter(slot) {
+    if (!slot.adapter) return;
+    slot.adapter.disconnect();
+    slot.adapter = null;
   }
 
-  /** Find a free voice for midiNote, or steal the oldest sounding one. */
-  _allocateVoice(slot, midiNote) {
-    // Already sounding this note — retrigger same voice
-    if (slot.voiceMap.has(midiNote)) return slot.voiceMap.get(midiNote).voice;
-    // Free voice available
-    const free = slot.voices.find(v => v.activeNote === null);
-    if (free) return free;
-    // Steal oldest
-    let oldestNote = null, oldestTime = Infinity;
-    for (const [note, entry] of slot.voiceMap) {
-      if (entry.startTime < oldestTime) { oldestTime = entry.startTime; oldestNote = note; }
-    }
-    if (oldestNote !== null) {
-      const stolen = slot.voiceMap.get(oldestNote).voice;
-      stolen.noteOff();
-      slot.voiceMap.delete(oldestNote);
-      return stolen;
-    }
-    return slot.voices[0]; // fallback
-  }
-
-  _releaseVoice(slot, midiNote) {
-    const entry = slot.voiceMap.get(midiNote);
-    if (!entry) return;
-    entry.voice.noteOff();
-    slot.voiceMap.delete(midiNote);
-  }
-
-  /** Call a setter method on every voice in the pool (for live knob updates). */
+  /** Proxy that calls a setter method on every voice in the adapter pool. */
   _allVoices(slot) {
     return new Proxy({}, {
       get(_, method) {
-        return (...args) => slot.voices.forEach(v => v[method]?.(...args));
+        return (...args) => (slot.adapter?.voices ?? []).forEach(v => v[method]?.(...args));
       }
     });
   }
@@ -158,10 +105,10 @@ export class SynthLab {
       slot.gain = ctx.createGain();
       slot.gain.gain.value = slot.muted ? 0 : slot.volume;
       slot.gain.connect(this._master);
-      // Rebuild voice pool on new context if a patch is loaded
-      if (slot.state) {
-        this._destroyVoicePool(slot);
-        this._buildVoicePool(slot);
+      // Rebuild adapter on new context if a patch is loaded
+      if (slot.adapter) {
+        const state = slot.adapter.getState();
+        this._loadAdapter(slot, state);
       }
     }
     this._restorePatches();
@@ -181,36 +128,51 @@ export class SynthLab {
     }
   }
 
-  /** Load (or reload) a patch JSON into a slot. */
+  /**
+   * Load (or reload) a patch JSON into a slot.
+   * Registers the patch in the instrument library and routes the legacy
+   * track type through the new adapter via the sequencer.
+   */
   loadPatch(slotIndex, patchState) {
     const slot = this._slots[slotIndex];
     if (!slot || !this._ctx) return;
-    this._destroyVoicePool(slot);
-    slot.state = JSON.parse(JSON.stringify(patchState));
-    slot.bridge.init(slot.state);
-    this._buildVoicePool(slot);
+
+    this._loadAdapter(slot, patchState);
 
     if (this._editingSlot === slotIndex) this._renderEditor(slotIndex);
     this._refreshSlotCards();
-    // Register override so existing sheets route legacy track notes here too (not for FM DRUMS slot 4)
-    if (this._slotLegacyT[slotIndex] != null) {
-      this._seq?.setSynthOverride(this._slotLegacyT[slotIndex], slotIndex);
+
+    // Route legacy track type through this WebAudio adapter instead of WASM
+    const legacyT = this._slotLegacyT[slotIndex];
+    if (legacyT != null) {
+      const typeKey = _legacyTToType(legacyT);
+      this._seq?.setAdapter(typeKey, slot.adapter);
     }
+    // Also register this slot's own synth track type
+    this._seq?.setAdapter(`synth${slotIndex}`, slot.adapter);
+
+    // Register in the instrument library (auto-assign a stable id based on name)
+    this._registerPatch(slotIndex, patchState);
+
     this._saveSession();
-    console.log(`[SynthLab] slot ${slotIndex} loaded: "${patchState.name}" — overrides t:${this._slotLegacyT[slotIndex]}`);
+    console.log(`[SynthLab] slot ${slotIndex} loaded: "${patchState.name}" — replaces t:${legacyT}`);
   }
 
-  /** Destroy a slot's voice and clear its patch. */
+  /** Destroy a slot's adapter and restore the default WASM adapter for its legacy track. */
   clearSlot(slotIndex) {
     const slot = this._slots[slotIndex];
     if (!slot) return;
-    this._destroyVoicePool(slot);
-    slot.state = null;
-    slot.bridge.init({});
-    // Remove override — legacy track resumes playing its original WASM instrument (not for FM DRUMS slot 4)
-    if (this._slotLegacyT[slotIndex] != null) {
-      this._seq?.setSynthOverride(this._slotLegacyT[slotIndex], null);
+    this._unloadAdapter(slot);
+
+    // Restore WASM adapter for the legacy track type
+    const legacyT = this._slotLegacyT[slotIndex];
+    if (legacyT != null) {
+      const typeKey = _legacyTToType(legacyT);
+      this._seq?.setAdapter(typeKey, null); // null → restores default WASM adapter
     }
+    // Clear synth slot adapter too
+    this._seq?.setAdapter(`synth${slotIndex}`, null);
+
     if (this._editingSlot === slotIndex) { this._editingSlot = null; this._clearEditor(); }
     this._refreshSlotCards();
     this._saveSession();
@@ -218,19 +180,67 @@ export class SynthLab {
 
   /**
    * Schedule a noteOn + noteOff for the given slot.
-   * audioTime  — Web Audio context timestamp for noteOn
-   * holdMs     — duration in milliseconds before noteOff
+   * Delegates to the slot's WebAudioInstrumentAdapter.
    */
   scheduleNote(slotIndex, midiNote, velocity, audioTime, holdMs) {
     const slot = this._slots[slotIndex];
-    if (!slot?.voices?.length || slot.muted) return;
-    const delayMs = Math.max(0, (audioTime - this._ctx.currentTime) * 1000);
-    setTimeout(() => {
-      const voice = this._allocateVoice(slot, midiNote);
-      slot.voiceMap.set(midiNote, { voice, startTime: this._ctx.currentTime });
-      voice.noteOn(midiNote, velocity * 127);
-    }, delayMs);
-    setTimeout(() => this._releaseVoice(slot, midiNote), delayMs + holdMs);
+    if (!slot?.adapter || slot.muted) return;
+    slot.adapter.scheduleNote(midiNote, velocity, audioTime, holdMs);
+  }
+
+  // ── Modular plug / unplug / swap ─────────────────────────────────────────────
+
+  /**
+   * Load an instrument from the registry into a slot.
+   * @param {number} slotIndex
+   * @param {string} registryId - must be a 'webaudio' type entry in the registry
+   */
+  plug(slotIndex, registryId) {
+    const desc = registry.get(registryId);
+    if (!desc) { console.warn(`[SynthLab] plug: unknown id "${registryId}"`); return; }
+    if (desc.type !== 'webaudio' || !desc.state) {
+      console.warn(`[SynthLab] plug: "${registryId}" has no patch state`); return;
+    }
+    this.loadPatch(slotIndex, desc.state);
+  }
+
+  /**
+   * Remove the patch from a slot (restore default WASM for its legacy track).
+   * @param {number} slotIndex
+   */
+  unplug(slotIndex) {
+    this.clearSlot(slotIndex);
+  }
+
+  /**
+   * Atomically replace a slot's current instrument with one from the registry.
+   * @param {number} slotIndex
+   * @param {string} registryId
+   */
+  swap(slotIndex, registryId) {
+    this.clearSlot(slotIndex);
+    this.plug(slotIndex, registryId);
+  }
+
+  // ── Registry helpers ─────────────────────────────────────────────────────────
+
+  _registerPatch(slotIndex, patchState) {
+    // Generate a stable id from the patch name + slot so re-loading the same
+    // patch doesn't create duplicates.
+    const safeName = (patchState.name || 'untitled').replace(/\s+/g, '_').toLowerCase();
+    const id = `patch:${safeName}_s${slotIndex}`;
+    const role = _patchStateToRole(patchState, this._slotLegacyT[slotIndex]);
+    try {
+      registry.register({
+        id,
+        name:    patchState.name || 'Untitled',
+        role,
+        type:    'webaudio',
+        builtIn: false,
+        state:   JSON.parse(JSON.stringify(patchState)),
+      });
+    } catch (_) {}
+    return id;
   }
 
   setMute(slotIndex, muted) {
@@ -248,7 +258,7 @@ export class SynthLab {
   }
 
   getSlotState(slotIndex) {
-    return this._slots[slotIndex]?.bridge.snapshot() ?? null;
+    return this._slots[slotIndex]?.adapter?.getState() ?? null;
   }
 
   // ── UI ───────────────────────────────────────────────────────────────────────
@@ -266,58 +276,61 @@ export class SynthLab {
     row.innerHTML = '';
 
     this._slots.forEach((slot, i) => {
-      const isFmDrums = i === 4;
-      const t    = this._slotLegacyT[i];
-      const name = isFmDrums ? 'FM DRUMS' : (LEGACY_T_NAMES[t] ?? `SLOT ${i}`);
-      const accentStyle = isFmDrums ? ' style="color:#f4a261"' : '';
+      const t         = this._slotLegacyT[i];
+      const slotLabel = LEGACY_T_NAMES[t] ?? `SYNTH ${i + 1}`;
+      const state     = slot.adapter?.getState() ?? null;
 
       const card = document.createElement('div');
       card.className = 'synth-slot-card' + (this._editingSlot === i ? ' ssc-active' : '');
-      if (isFmDrums) card.style.borderColor = '#f4a261';
 
-      const assignSel = isFmDrums ? '' : `
+      const assignSel = `
         <select class="ssc-assign-sel" title="Assign slot to instrument track">
-          <option value="2" ${t===2?'selected':''}>BASS FM</option>
-          <option value="1" ${t===1?'selected':''}>POLY FM</option>
-          <option value="6" ${t===6?'selected':''}>HYB PADS</option>
-          <option value="3" ${t===3?'selected':''}>RHODES EP</option>
+          <option value="0"  ${!t         ?'selected':''}>— own track —</option>
+          <option value="10" ${t===10     ?'selected':''}>DRUMS</option>
+          <option value="2"  ${t===2      ?'selected':''}>BASS FM</option>
+          <option value="1"  ${t===1      ?'selected':''}>POLY FM</option>
+          <option value="6"  ${t===6      ?'selected':''}>HYB PADS</option>
+          <option value="3"  ${t===3      ?'selected':''}>RHODES EP</option>
         </select>`;
 
-      if (slot.state) {
+      if (state) {
         card.innerHTML = `
-          <div class="ssc-slot-label"${accentStyle}>${name}</div>
+          <div class="ssc-slot-label"${accentStyle}>${slotLabel}</div>
           ${assignSel}
-          <div class="ssc-name">${slot.state.name || 'Untitled'}</div>
+          <div class="ssc-name">${state.name || 'Untitled'}</div>
           <div class="ssc-tag">t:${SYNTH_SLOT_T[i]}</div>
           <div class="ssc-btns">
             <button class="ssc-edit-btn">EDIT</button>
+            <button class="ssc-swap-btn" title="Swap from library">⇄ SWAP</button>
             <button class="ssc-load-btn" title="Load a .json patch file">↑ LOAD</button>
-            <button class="ssc-clear-btn">✕</button>
+            <button class="ssc-clear-btn" title="Unplug — restore default WASM">⏏</button>
           </div>`;
         card.querySelector('.ssc-edit-btn').addEventListener('click',  () => this._openEditor(i));
+        card.querySelector('.ssc-swap-btn').addEventListener('click',  () => this._openLibraryForSlot(i));
         card.querySelector('.ssc-load-btn').addEventListener('click',  () => this._pickAndLoadFile(i));
         card.querySelector('.ssc-clear-btn').addEventListener('click', () => {
-          if (confirm(`Clear slot ${i + 1}: "${slot.state.name}"?`)) this.clearSlot(i);
+          if (confirm(`Unplug slot ${i + 1}: "${state.name}"?`)) this.unplug(i);
         });
         card.addEventListener('click', e => { if (!e.target.closest('button,select')) this._openEditor(i); });
       } else {
         card.innerHTML = `
-          <div class="ssc-empty"${accentStyle}>${name}</div>
+          <div class="ssc-empty"${accentStyle}>${slotLabel}</div>
           ${assignSel}
           <div class="ssc-tag">t:${SYNTH_SLOT_T[i]} · empty</div>
           <div class="ssc-btns" style="margin-top:.3rem;">
             <button class="ssc-new-btn" style="flex:1;">+ NEW</button>
+            <button class="ssc-swap-btn" title="Load from library">⇄ LIBRARY</button>
             <button class="ssc-load-btn" title="Load a .json patch file">↑ LOAD</button>
           </div>`;
         card.querySelector('.ssc-new-btn').addEventListener('click',  () => this._openWizardForSlot(i));
+        card.querySelector('.ssc-swap-btn').addEventListener('click', () => this._openLibraryForSlot(i));
         card.querySelector('.ssc-load-btn').addEventListener('click', () => this._pickAndLoadFile(i));
       }
 
-      if (!isFmDrums) {
-        card.querySelector('.ssc-assign-sel').addEventListener('change', e => {
-          this.reassignSlot(i, Number(e.target.value));
-        });
-      }
+      card.querySelector('.ssc-assign-sel').addEventListener('change', e => {
+        const v = Number(e.target.value);
+        this.reassignSlot(i, v === 0 ? null : v);
+      });
 
       row.appendChild(card);
     });
@@ -335,17 +348,18 @@ export class SynthLab {
   }
 
   _renderEditor(slotIndex) {
-    const slot = this._slots[slotIndex];
-    const ed   = document.getElementById('synth-lab-editor');
-    if (!ed || !slot?.state) return;
+    const slot  = this._slots[slotIndex];
+    const state = slot?.adapter?.getState();
+    const ed    = document.getElementById('synth-lab-editor');
+    if (!ed || !state) return;
     ed.innerHTML = '';
 
     // Header
     const hdr = document.createElement('div');
     hdr.className = 'sle-header';
     hdr.innerHTML = `
-      <span class="sle-name">${slot.state.name}</span>
-      <span class="sle-badge">${(slot.state.type || 'synth').toUpperCase()}</span>
+      <span class="sle-name">${state.name}</span>
+      <span class="sle-badge">${(state.type || 'synth').toUpperCase()}</span>
       <span class="sle-track" title="This synth plays on track type ${SYNTH_SLOT_T[slotIndex]} in the sequencer — it's live!">[t:${SYNTH_SLOT_T[slotIndex]} ●]</span>
       <div class="sle-action-btns">
         <button id="sle-wizard-btn">WIZARD</button>
@@ -380,25 +394,25 @@ export class SynthLab {
       profiles: [
         { name: 'FILTER SWEEP',
           x: { label:'CUTOFF', min:20, max:18000, scale:'log',
-               get: ()  => slot.bridge.get('modules.vcf.cutoff'),
-               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
+               get: ()  => slot.adapter?.bridge.get('modules.vcf.cutoff'),
+               set: val => { slot.adapter?.bridge.set('modules.vcf.cutoff', val); slot.adapter?.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
           y: { label:'RESO',   min:0.01, max:20, scale:'log',
-               get: ()  => slot.bridge.get('modules.vcf.resonance'),
-               set: val => { slot.bridge.set('modules.vcf.resonance', val); slot.voices.forEach(v => v.setVcfParam('resonance', val)); } } },
+               get: ()  => slot.adapter?.bridge.get('modules.vcf.resonance'),
+               set: val => { slot.adapter?.bridge.set('modules.vcf.resonance', val); slot.adapter?.voices.forEach(v => v.setVcfParam('resonance', val)); } } },
         { name: 'TIMBRE',
           x: { label:'CUTOFF', min:20, max:18000, scale:'log',
-               get: ()  => slot.bridge.get('modules.vcf.cutoff'),
-               set: val => { slot.bridge.set('modules.vcf.cutoff', val); slot.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
+               get: ()  => slot.adapter?.bridge.get('modules.vcf.cutoff'),
+               set: val => { slot.adapter?.bridge.set('modules.vcf.cutoff', val); slot.adapter?.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
           y: { label:'LFO AMT', min:1, max:2000, scale:'log',
-               get: ()  => slot.bridge.get('modules.lfo.amount'),
-               set: val => { slot.bridge.set('modules.lfo.amount', val); slot.voices.forEach(v => v.setLfoParam('amount', val)); } } },
+               get: ()  => slot.adapter?.bridge.get('modules.lfo.amount'),
+               set: val => { slot.adapter?.bridge.set('modules.lfo.amount', val); slot.adapter?.voices.forEach(v => v.setLfoParam('amount', val)); } } },
         { name: 'ENVELOPE',
           x: { label:'ATTACK',  min:0.001, max:4, scale:'log',
-               get: ()  => slot.bridge.get('modules.adsr_amp.attack'),
-               set: val => { slot.bridge.set('modules.adsr_amp.attack', val); slot.voices.forEach(v => v.setAmpParam('attack', val)); } },
+               get: ()  => slot.adapter?.bridge.get('modules.adsr_amp.attack'),
+               set: val => { slot.adapter?.bridge.set('modules.adsr_amp.attack', val); slot.adapter?.voices.forEach(v => v.setAmpParam('attack', val)); } },
           y: { label:'RELEASE', min:0.01, max:8, scale:'log',
-               get: ()  => slot.bridge.get('modules.adsr_amp.release'),
-               set: val => { slot.bridge.set('modules.adsr_amp.release', val); slot.voices.forEach(v => v.setAmpParam('release', val)); } } },
+               get: ()  => slot.adapter?.bridge.get('modules.adsr_amp.release'),
+               set: val => { slot.adapter?.bridge.set('modules.adsr_amp.release', val); slot.adapter?.voices.forEach(v => v.setAmpParam('release', val)); } } },
       ],
     });
     xyArea.appendChild(synthXY.render());
@@ -414,14 +428,12 @@ export class SynthLab {
 
     const piano = new PianoKeys({
       onNoteOn:  (midi) => {
-        if (this._ctx) {
+        if (this._ctx && slot.adapter) {
           this._ctx.resume?.();
-          const voice = this._allocateVoice(slot, midi);
-          slot.voiceMap.set(midi, { voice, startTime: this._ctx.currentTime });
-          voice.noteOn(midi, 100);
+          slot.adapter.noteOn(midi, 100);
         }
       },
-      onNoteOff: (midi) => { this._releaseVoice(slot, midi); },
+      onNoteOff: (midi) => { slot.adapter?.noteOff(midi); },
       octave: 3,
     });
     pianoArea.querySelector('.sle-piano-container').appendChild(piano.render());
@@ -451,8 +463,9 @@ export class SynthLab {
 
   _renderPanels(slot, rackEl) {
     const panels = [];
-    const { state, bridge } = slot;
-    const m = state.modules;
+    const state  = slot.adapter.getState();
+    const bridge = slot.adapter.bridge;
+    const m      = state.modules;
     // Proxy forwards live knob updates to every voice in the pool
     const v = this._allVoices(slot);
 
@@ -542,7 +555,7 @@ export class SynthLab {
     rackEl.appendChild(lfoEl); panels.push(lfoPanel);
 
     // ── Effects ──
-    _renderEffectPanels(state.modules.effects || [], rackEl, panels, bridge, voice);
+    _renderEffectPanels(state.modules.effects || [], rackEl, panels, bridge, v);
 
     return panels;
   }
@@ -558,27 +571,21 @@ export class SynthLab {
     overlay.classList.add('open');
     body.innerHTML = '';
 
-    const isFmDrums = slotIndex === 4;
     const wizard = new LLMWizard(state => {
       overlay.classList.remove('open');
-      // FM DRUMS slot always loads into slot 4; others route by replaces field
-      let targetSlot;
-      if (isFmDrums) {
-        targetSlot = 4;
-      } else {
-        const targetT = REPLACES_KEY_TO_T[state.replaces];
-        targetSlot = (targetT !== undefined ? this._legacyTToSlot[targetT] : undefined) ?? slotIndex;
-      }
+      // Route to whichever slot owns the target legacy track type (or default to this slot)
+      const targetT  = REPLACES_KEY_TO_T[state.replaces];
+      const targetSlot = (targetT !== undefined ? this._legacyTToSlot[targetT] : undefined) ?? slotIndex;
       this.loadPatch(targetSlot, state);
       this._openEditor(targetSlot);
-    }, isFmDrums ? FM_DRUMS_WIZARD_PROMPT : null);
+    });
     wizard.render(body);
   }
 
   _forgeSlot(slotIndex) {
     const slot = this._slots[slotIndex];
-    if (!slot?.state) return;
-    const json = slot.bridge.snapshot();
+    if (!slot?.adapter) return;
+    const json = slot.adapter.getState();
     json.clankers            = buildClankersMeta(json);
     json.clankers.trackType  = SYNTH_SLOT_T[slotIndex];
     const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
@@ -603,11 +610,15 @@ export class SynthLab {
     reader.readAsText(file);
   }
 
-  /** Called when the sequencer connects — registers overrides for any already-loaded slots. */
+  /** Called when the sequencer connects — re-register adapters for any already-loaded slots. */
   _reapplyOverrides() {
     this._slots.forEach((slot, i) => {
-      if (slot.state && this._slotLegacyT[i] != null) {
-        this._seq?.setSynthOverride(this._slotLegacyT[i], i);
+      if (slot.adapter) {
+        const legacyT = this._slotLegacyT[i];
+        if (legacyT != null) {
+          this._seq?.setAdapter(_legacyTToType(legacyT), slot.adapter);
+        }
+        this._seq?.setAdapter(`synth${i}`, slot.adapter);
       }
     });
   }
@@ -621,13 +632,17 @@ export class SynthLab {
     const other = this._legacyTToSlot[newLegacyT];
     if (other !== undefined) {
       this._slotLegacyT[other] = oldT;
-      if (this._slots[other].state) this._seq?.setSynthOverride(oldT, other);
+      if (this._slots[other].adapter && oldT != null) {
+        this._seq?.setAdapter(_legacyTToType(oldT), this._slots[other].adapter);
+      }
     }
 
     this._slotLegacyT[slotIndex] = newLegacyT;
-    if (this._slots[slotIndex].state) {
-      this._seq?.setSynthOverride(oldT, null);
-      this._seq?.setSynthOverride(newLegacyT, slotIndex);
+    if (this._slots[slotIndex].adapter) {
+      // Remove from old type (restores WASM default)
+      if (oldT != null) this._seq?.setAdapter(_legacyTToType(oldT), null);
+      // Register on new type (if not "own track" / null)
+      if (newLegacyT != null) this._seq?.setAdapter(_legacyTToType(newLegacyT), this._slots[slotIndex].adapter);
     }
 
     this._saveSession();
@@ -642,7 +657,7 @@ export class SynthLab {
   _saveSession() {
     const session = {
       assignments: { ...this._slotLegacyT },
-      patches: this._slots.map(s => s.state ? s.bridge.snapshot() : null),
+      patches:     this._slots.map(s => s.adapter ? s.adapter.getState() : null),
     };
     try { localStorage.setItem('clankers_synth_lab', JSON.stringify(session)); } catch (_) {}
   }
@@ -652,7 +667,7 @@ export class SynthLab {
       const raw = localStorage.getItem('clankers_synth_lab');
       if (!raw) return;
       const { assignments } = JSON.parse(raw);
-      const valid = new Set([1, 2, 3, 6]);
+      const valid = new Set([1, 2, 3, 6, 10]);
       if (assignments) {
         for (const [k, v] of Object.entries(assignments)) {
           if (valid.has(v)) this._slotLegacyT[Number(k)] = v;
@@ -668,6 +683,86 @@ export class SynthLab {
       const { patches } = JSON.parse(raw);
       patches?.forEach((state, i) => { if (state) this.loadPatch(i, state); });
     } catch (_) {}
+  }
+
+  /** Open the library browser and wire it to load into the given slot. */
+  _openLibraryForSlot(slotIndex) {
+    this._buildUI();
+    const panel = document.getElementById('synth-library-panel');
+    if (!panel) return;
+    this._libraryTargetSlot = slotIndex;
+    panel.classList.add('slp-open');
+    this._renderLibraryPanel();
+  }
+
+  /** Build and render the library browser panel contents. */
+  _renderLibraryPanel() {
+    const panel = document.getElementById('synth-library-panel');
+    if (!panel) return;
+    const allPatches = registry.list().filter(d => d.type === 'webaudio' && d.state);
+    const roles = ['all', 'bass', 'lead', 'pad', 'keys', 'drums', 'poly_fm'];
+    const activeRole = this._libraryRole ?? 'all';
+
+    panel.innerHTML = `
+      <div class="slp-header">
+        <span class="slp-title">INSTRUMENT LIBRARY</span>
+        <button class="slp-close">✕</button>
+      </div>
+      <div class="slp-role-tabs">
+        ${roles.map(r => `<button class="slp-role-tab ${activeRole === r ? 'slpr-active' : ''}" data-role="${r}">${r.toUpperCase()}</button>`).join('')}
+      </div>
+      <div class="slp-list">
+        ${allPatches.length === 0
+          ? '<div class="slp-empty">No custom patches yet.<br>Create one via the Wizard!</div>'
+          : allPatches
+              .filter(d => activeRole === 'all' || d.role === activeRole)
+              .map(d => `
+                <div class="slp-item" data-id="${d.id}">
+                  <span class="slp-item-name">${d.name}</span>
+                  <span class="slp-item-role">${d.role ?? ''}</span>
+                  <div class="slp-item-btns">
+                    <button class="slp-load-btn" data-id="${d.id}">LOAD</button>
+                    <button class="slp-del-btn"  data-id="${d.id}">✕</button>
+                  </div>
+                </div>`)
+              .join('')
+        }
+      </div>`;
+
+    panel.querySelector('.slp-close').addEventListener('click', () => {
+      panel.classList.remove('slp-open');
+    });
+    panel.querySelectorAll('.slp-role-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._libraryRole = btn.dataset.role;
+        this._renderLibraryPanel();
+      });
+    });
+    panel.querySelectorAll('.slp-load-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.plug(this._libraryTargetSlot, btn.dataset.id);
+        panel.classList.remove('slp-open');
+      });
+    });
+    panel.querySelectorAll('.slp-del-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (confirm('Remove this patch from the library?')) {
+          registry.unregister(btn.dataset.id);
+          this._renderLibraryPanel();
+        }
+      });
+    });
+  }
+
+  _buildUI() {
+    // Ensure library panel exists in the DOM (injected once)
+    if (!document.getElementById('synth-library-panel')) {
+      const panel = document.createElement('div');
+      panel.id = 'synth-library-panel';
+      panel.className = 'synth-library-panel';
+      document.getElementById('screen-synth-lab')?.appendChild(panel)
+        ?? document.body.appendChild(panel);
+    }
   }
 
   _pickAndLoadFile(slotIndex) {
@@ -729,6 +824,37 @@ function _renderEffectPanels(effects, rackEl, panels, bridge, voice) {
     rackEl.appendChild(panel.render());
     panels.push(panel);
   });
+}
+
+// ── Module-level helpers ──────────────────────────────────────────────────────
+
+/**
+ * Convert a legacy track-type number to the sequencer type key string.
+ * e.g. 2 → 'bass', 1 → 'buchla', 6 → 'pads', 3 → 'rhodes'
+ */
+function _legacyTToType(t) {
+  switch (t) {
+    case 2:  return 'bass';
+    case 1:  return 'buchla';
+    case 6:  return 'pads';
+    case 3:  return 'rhodes';
+    case 10: return 'drum';
+    default: return null;
+  }
+}
+
+/**
+ * Derive a role string for the registry from the patch state + legacy track type.
+ */
+function _patchStateToRole(patchState, legacyT) {
+  if (patchState?.role) return patchState.role;
+  switch (legacyT) {
+    case 2:  return 'bass';
+    case 1:  return 'poly_fm';
+    case 6:  return 'pad';
+    case 3:  return 'keys';
+    default: return 'lead';
+  }
 }
 
 function _makeSelect(label, options, current, onChange) {

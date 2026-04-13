@@ -2019,6 +2019,107 @@
       color: #f77;
     }
 
+    .ssc-swap-btn {
+      background: #001318;
+      border: 1px solid #004a5a;
+      color: #2a9d8f;
+      padding: .2rem .35rem;
+      border-radius: 2px;
+      font-size: .65rem;
+      cursor: pointer;
+      font-family: monospace;
+    }
+    .ssc-swap-btn:hover { border-color: #2a9d8f; color: #4dd; }
+
+    /* Library panel — slides in from bottom of the synth-lab screen */
+    .synth-library-panel {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 55%;
+      background: #0c0c10;
+      border-top: 1px solid #2a9d8f;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform .25s ease;
+      z-index: 50;
+    }
+    .synth-library-panel.slp-open { transform: translateY(0); }
+
+    .slp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .5rem .8rem;
+      border-bottom: 1px solid #1a2a2a;
+      flex-shrink: 0;
+    }
+    .slp-title { font-size: .75rem; letter-spacing: .1em; color: #2a9d8f; }
+    .slp-close  { background: transparent; border: none; color: #666; font-size: .9rem; cursor: pointer; padding: 0 .3rem; }
+    .slp-close:hover { color: #aaa; }
+
+    .slp-role-tabs {
+      display: flex;
+      gap: .3rem;
+      padding: .4rem .6rem;
+      border-bottom: 1px solid #1a2a2a;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .slp-role-tab {
+      background: transparent;
+      border: 1px solid #2a2a2a;
+      color: #555;
+      font-size: .6rem;
+      padding: .15rem .4rem;
+      border-radius: 2px;
+      cursor: pointer;
+      font-family: monospace;
+      letter-spacing: .06em;
+    }
+    .slp-role-tab:hover, .slp-role-tab.slpr-active {
+      border-color: #2a9d8f;
+      color: #2a9d8f;
+    }
+    .slp-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: .4rem .6rem;
+    }
+    .slp-empty { color: #444; font-size: .7rem; padding: .8rem; text-align: center; }
+    .slp-item {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .35rem .4rem;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .slp-item:hover { background: #111; }
+    .slp-item-name  { flex: 1; font-size: .72rem; color: #ccc; }
+    .slp-item-role  { font-size: .58rem; color: #444; min-width: 3.5rem; text-align: right; }
+    .slp-item-btns  { display: flex; gap: .3rem; }
+    .slp-load-btn {
+      background: #001318;
+      border: 1px solid #004a5a;
+      color: #2a9d8f;
+      padding: .15rem .4rem;
+      font-size: .6rem;
+      border-radius: 2px;
+      cursor: pointer;
+      font-family: monospace;
+    }
+    .slp-load-btn:hover { border-color: #2a9d8f; }
+    .slp-del-btn {
+      background: transparent;
+      border: 1px solid #2a1a1a;
+      color: #633;
+      padding: .15rem .35rem;
+      font-size: .6rem;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .slp-del-btn:hover { border-color: #a44; color: #f77; }
+
     .ssc-new-btn {
       background: #131000;
       border: 1px solid #5a4a00;
@@ -2250,6 +2351,7 @@
       gap: 2px;
       cursor: ns-resize;
       user-select: none;
+      touch-action: none;
       width: auto;
     }
 
@@ -3342,6 +3444,88 @@
       #btn-menu { left: auto; right: .5rem; }
       #panel-menu { left: auto; right: .5rem; min-width: 140px; }
       #panel-reach-outside.rto-from-menu { right: .5rem; width: calc(100vw - 1rem); }
+    }
+
+    /* ── 2.6 Synth Lab: mobile layout ─────────────────────────────────────── */
+    @media (max-width: 640px) {
+      /* Stack sidebar strip above editor instead of side-by-side */
+      #screen-synth-lab {
+        flex-direction: column;
+      }
+
+      /* Sidebar becomes a horizontal strip */
+      #synth-slots-sidebar {
+        width: 100%;
+        height: auto;
+        flex-shrink: 0;
+        flex-direction: row;
+        align-items: stretch;
+        overflow-y: visible;
+        border-right: none;
+        border-bottom: 1px solid #1a1a1a;
+      }
+
+      /* Hide the "— SYNTH LAB —" title — save the vertical space */
+      #synth-slots-hdr { display: none; }
+
+      /* Slot cards scroll left-to-right */
+      #synth-slots-row {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex: 1;
+        min-width: 0;
+        padding: .4rem;
+        gap: .35rem;
+        scrollbar-width: none;
+        touch-action: pan-x;
+      }
+      #synth-slots-row::-webkit-scrollbar { display: none; }
+
+      /* Cards: fixed-width chips in the horizontal strip */
+      .synth-slot-card {
+        min-width: 145px;
+        max-width: 165px;
+        flex-shrink: 0;
+      }
+
+      /* ← BACK anchored on the left of the strip */
+      #btn-synth-lab-back {
+        order: -1;
+        flex-shrink: 0;
+        align-self: center;
+        width: auto;
+        white-space: nowrap;
+        margin: .4rem .5rem;
+      }
+
+      /* Editor fills the rest of the screen height */
+      #synth-lab-main {
+        flex: 1;
+        min-height: 0;
+      }
+
+      /* Tighten editor header */
+      .sle-header {
+        padding: .5rem .75rem .4rem;
+        gap: .4rem;
+      }
+
+      /* Piano area: allow horizontal scroll, hide scrollbar */
+      .sle-piano-area {
+        overflow-x: auto;
+        scrollbar-width: none;
+        touch-action: pan-x;
+      }
+      .sle-piano-area::-webkit-scrollbar { display: none; }
+
+      /* Wider piano keys for finger tapping */
+      .piano-keys { height: 80px; }
+      .piano-key.white { width: 34px; height: 80px; }
+      .piano-key.black { width: 21px; height: 50px; margin: 0 -10.5px; }
+
+      /* Library overlay: taller on mobile so list is usable */
+      .synth-library-panel { height: 72% !important; }
     }
   </style>
 </head>
@@ -7659,7 +7843,7 @@ if (typeof TextEncoder === 'undefined') {
         },
         fx: rack ? rack.getParams() : null,
         sends: {},
-        synthLabSession: { assignments: { ...synthLab._slotLegacyT }, patches: synthLab._slots.map(s => s.state ? s.bridge.snapshot() : null) },
+        synthLabSession: { assignments: { ...synthLab._slotLegacyT }, patches: synthLab._slots.map(s => s.adapter ? s.adapter.getState() : null) },
         songSequence: { patternBank, arrangement: songArrangement, activeSlot, songMode, songRepeat },
         band: { sessionId, chatHistory }
       };

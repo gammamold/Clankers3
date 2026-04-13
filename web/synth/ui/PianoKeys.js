@@ -16,6 +16,7 @@ export class PianoKeys {
     this.el        = null;
     this._active   = new Set();
     this._octaveEl = null;
+    this._touchNotes = new Map(); // touchId → midi
 
     // Map key → semitone offset from C of current octave
     this._keyMap = {
@@ -70,6 +71,47 @@ export class PianoKeys {
 
       keysEl.appendChild(key);
     }
+
+    // Touch: slide across keys to play notes; supports multi-touch
+    keysEl.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el?.dataset.semi != null) {
+          const midi = this._midiFor(Number(el.dataset.semi));
+          this._touchNotes.set(t.identifier, midi);
+          this._press(midi);
+        }
+      }
+    }, { passive: false });
+
+    keysEl.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        const newMidi = el?.dataset.semi != null ? this._midiFor(Number(el.dataset.semi)) : null;
+        const oldMidi = this._touchNotes.get(t.identifier);
+        if (oldMidi !== newMidi) {
+          if (oldMidi != null) this._release(oldMidi);
+          if (newMidi != null) {
+            this._touchNotes.set(t.identifier, newMidi);
+            this._press(newMidi);
+          } else {
+            this._touchNotes.delete(t.identifier);
+          }
+        }
+      }
+    }, { passive: false });
+
+    const touchEnd = (e) => {
+      for (const t of e.changedTouches) {
+        const midi = this._touchNotes.get(t.identifier);
+        if (midi != null) this._release(midi);
+        this._touchNotes.delete(t.identifier);
+      }
+    };
+    keysEl.addEventListener('touchend',   touchEnd);
+    keysEl.addEventListener('touchcancel', touchEnd);
 
     this.el.appendChild(keysEl);
     this._keysEl = keysEl;
