@@ -7155,7 +7155,6 @@ if (typeof TextEncoder === 'undefined') {
       ];
 
       FACES.forEach(f => {
-        if (!usedTypes.has(f.t)) return; // skip instruments not in sheet
         const card = document.createElement('div');
         card.className = 'face-card';
         card.dataset.inst = f.id;
