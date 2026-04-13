@@ -19,7 +19,7 @@
  *   t:8   Synth Lab slot 1
  *   t:9   Synth Lab slot 2
  *   t:11  Synth Lab slot 3
- *   t:12  Synth Lab slot 4  (FM DRUMS — percussive FM patch)
+ *   t:12  Synth Lab slot 4  (WebAudioInstrumentAdapter — set by SynthLab)
  *
  * Usage:
  *   const seq = new Sequencer(audioCtx, { drums, bass, buchla, pads, rhodes });
@@ -389,7 +389,7 @@ export class Sequencer {
           }
         }
 
-        // Synth Lab slots (t:7 = slot 0, t:8 = slot 1, t:9 = slot 2, t:11 = slot 3, t:12 = slot 4 FM DRUMS)
+        // Synth Lab slots (t:7 = slot 0, t:8 = slot 1, t:9 = slot 2, t:11 = slot 3, t:12 = slot 4)
         const SYNTH_T_SLOT = { 7: 0, 8: 1, 9: 2, 11: 3, 12: 4 };
         if (track.t in SYNTH_T_SLOT) {
           const slotIndex = SYNTH_T_SLOT[track.t];
@@ -473,7 +473,10 @@ export class Sequencer {
     const audible = this._isAudible(ev.type);
 
     if (ev.type === 'drum') {
-      if (audible && adapter) adapter.scheduleNote(0, ev.velocity, audioTime, 0, { voiceId: ev.voiceId });
+      // Map voiceId back to a representative MIDI note so WebAudio adapters
+      // replacing drums receive a pitched note (kick=36, snare=38, etc.)
+      const drumNote = DRUM_VOICE_TO_NOTE[ev.voiceId] ?? 36;
+      if (audible && adapter) adapter.scheduleNote(drumNote, ev.velocity, audioTime, 100, { voiceId: ev.voiceId });
       this.midiOut?.scheduleNote('drum', ev.voiceId, ev.velocity, audioTime, this.ctx, 100);
       this.modularSync?.sendGate(ev.type, audioTime);
       return;
@@ -520,7 +523,10 @@ export class Sequencer {
   }
 }
 
-// ── Drum note → voice ID ──────────────────────────────────────────────────────
+// ── Drum note ↔ voice ID ─────────────────────────────────────────────────────
+
+// Representative MIDI note per voice ID (used when a WebAudio adapter replaces drums)
+const DRUM_VOICE_TO_NOTE = [36, 38, 42, 46, 41, 45, 49]; // kick, snare, hh-cl, hh-op, tom-l, tom-m, cymbal
 
 function drumNoteToVoice(note) {
   if (note === 36) return 0; // KICK

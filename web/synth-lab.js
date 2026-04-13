@@ -24,18 +24,15 @@ import { XYPad }                     from './synth/ui/XYPad.js';
 /** Unique patch ID counter for registry registration */
 let _patchSeq = Date.now();
 
-/** Track types for slots 0–4 (t:10 = drums, so skip it; t:12 = FM DRUMS slot 4) */
+/** Track types for slots 0–4 */
 export const SYNTH_SLOT_T = [7, 8, 9, 11, 12];
 export const T_TO_SLOT    = { 7: 0, 8: 1, 9: 2, 11: 3, 12: 4 };
 
-/** Pre-filled wizard prompt for the FM DRUMS slot */
-const FM_DRUMS_WIZARD_PROMPT = 'I want an FM percussion patch — Elektron Model:Cycles style';
-
-/** Human-readable name for each legacy track type */
-const LEGACY_T_NAMES = { 1: 'POLY FM', 2: 'BASS FM', 3: 'RHODES EP', 6: 'HYBRID PADS' };
+/** Human-readable name for each legacy track type (including drums) */
+const LEGACY_T_NAMES = { 1: 'POLY FM', 2: 'BASS FM', 3: 'RHODES EP', 6: 'HYBRID PADS', 10: 'DRUMS' };
 
 /** Maps the LLM's `replaces` field to the legacy track type it targets */
-const REPLACES_KEY_TO_T = { bass_fm: 2, poly_fm: 1, pad_synth: 6, rhodes: 3 };
+const REPLACES_KEY_TO_T = { bass_fm: 2, poly_fm: 1, pad_synth: 6, rhodes: 3, drums: 10 };
 
 // ── SynthLab ───────────────────────────────────────────────────────────────────
 
@@ -47,8 +44,8 @@ export class SynthLab {
     this._uiBuilt     = false;
     this._seq         = null;  // set externally: synthLab._seq = seq
 
-    /** Slot index → legacy track type it currently replaces (default mapping) */
-    this._slotLegacyT = { 0: 2, 1: 1, 2: 6, 3: 3 };
+    /** Slot index → legacy track type it currently replaces (null = no replacement) */
+    this._slotLegacyT = { 0: 2, 1: 1, 2: 6, 3: 3, 4: null };
 
     this._slots = Array.from({ length: 5 }, (_, i) => ({
       index:   i,
@@ -279,22 +276,21 @@ export class SynthLab {
     row.innerHTML = '';
 
     this._slots.forEach((slot, i) => {
-      const isFmDrums  = i === 4;
-      const t          = this._slotLegacyT[i];
-      const slotLabel  = isFmDrums ? 'FM DRUMS' : (LEGACY_T_NAMES[t] ?? `SLOT ${i}`);
-      const accentStyle = isFmDrums ? ' style="color:#f4a261"' : '';
-      const state       = slot.adapter?.getState() ?? null;
+      const t         = this._slotLegacyT[i];
+      const slotLabel = LEGACY_T_NAMES[t] ?? `SYNTH ${i + 1}`;
+      const state     = slot.adapter?.getState() ?? null;
 
       const card = document.createElement('div');
       card.className = 'synth-slot-card' + (this._editingSlot === i ? ' ssc-active' : '');
-      if (isFmDrums) card.style.borderColor = '#f4a261';
 
-      const assignSel = isFmDrums ? '' : `
+      const assignSel = `
         <select class="ssc-assign-sel" title="Assign slot to instrument track">
-          <option value="2" ${t===2?'selected':''}>BASS FM</option>
-          <option value="1" ${t===1?'selected':''}>POLY FM</option>
-          <option value="6" ${t===6?'selected':''}>HYB PADS</option>
-          <option value="3" ${t===3?'selected':''}>RHODES EP</option>
+          <option value="0"  ${!t         ?'selected':''}>— own track —</option>
+          <option value="10" ${t===10     ?'selected':''}>DRUMS</option>
+          <option value="2"  ${t===2      ?'selected':''}>BASS FM</option>
+          <option value="1"  ${t===1      ?'selected':''}>POLY FM</option>
+          <option value="6"  ${t===6      ?'selected':''}>HYB PADS</option>
+          <option value="3"  ${t===3      ?'selected':''}>RHODES EP</option>
         </select>`;
 
       if (state) {
@@ -331,11 +327,10 @@ export class SynthLab {
         card.querySelector('.ssc-load-btn').addEventListener('click', () => this._pickAndLoadFile(i));
       }
 
-      if (!isFmDrums) {
-        card.querySelector('.ssc-assign-sel').addEventListener('change', e => {
-          this.reassignSlot(i, Number(e.target.value));
-        });
-      }
+      card.querySelector('.ssc-assign-sel').addEventListener('change', e => {
+        const v = Number(e.target.value);
+        this.reassignSlot(i, v === 0 ? null : v);
+      });
 
       row.appendChild(card);
     });
@@ -576,20 +571,14 @@ export class SynthLab {
     overlay.classList.add('open');
     body.innerHTML = '';
 
-    const isFmDrums = slotIndex === 4;
     const wizard = new LLMWizard(state => {
       overlay.classList.remove('open');
-      // FM DRUMS slot always loads into slot 4; others route by replaces field
-      let targetSlot;
-      if (isFmDrums) {
-        targetSlot = 4;
-      } else {
-        const targetT = REPLACES_KEY_TO_T[state.replaces];
-        targetSlot = (targetT !== undefined ? this._legacyTToSlot[targetT] : undefined) ?? slotIndex;
-      }
+      // Route to whichever slot owns the target legacy track type (or default to this slot)
+      const targetT  = REPLACES_KEY_TO_T[state.replaces];
+      const targetSlot = (targetT !== undefined ? this._legacyTToSlot[targetT] : undefined) ?? slotIndex;
       this.loadPatch(targetSlot, state);
       this._openEditor(targetSlot);
-    }, isFmDrums ? FM_DRUMS_WIZARD_PROMPT : null);
+    });
     wizard.render(body);
   }
 
@@ -650,10 +639,10 @@ export class SynthLab {
 
     this._slotLegacyT[slotIndex] = newLegacyT;
     if (this._slots[slotIndex].adapter) {
-      // Remove from old type
+      // Remove from old type (restores WASM default)
       if (oldT != null) this._seq?.setAdapter(_legacyTToType(oldT), null);
-      // Register on new type
-      this._seq?.setAdapter(_legacyTToType(newLegacyT), this._slots[slotIndex].adapter);
+      // Register on new type (if not "own track" / null)
+      if (newLegacyT != null) this._seq?.setAdapter(_legacyTToType(newLegacyT), this._slots[slotIndex].adapter);
     }
 
     this._saveSession();
@@ -678,7 +667,7 @@ export class SynthLab {
       const raw = localStorage.getItem('clankers_synth_lab');
       if (!raw) return;
       const { assignments } = JSON.parse(raw);
-      const valid = new Set([1, 2, 3, 6]);
+      const valid = new Set([1, 2, 3, 6, 10]);
       if (assignments) {
         for (const [k, v] of Object.entries(assignments)) {
           if (valid.has(v)) this._slotLegacyT[Number(k)] = v;
@@ -849,6 +838,7 @@ function _legacyTToType(t) {
     case 1:  return 'buchla';
     case 6:  return 'pads';
     case 3:  return 'rhodes';
+    case 10: return 'drum';
     default: return null;
   }
 }
