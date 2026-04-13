@@ -1,20 +1,21 @@
 /**
  * ClankerBoy JSON Step Sequencer — Web Audio lookahead scheduler
  *
- * Real-time streaming architecture: all DSP runs inside AudioWorklets.
- * The tick loop sends timestamped trigger messages to worklet ports —
- * no AudioBuffers, no pre-rendering, no rerender() calls.
+ * Real-time streaming architecture: all DSP runs inside AudioWorklets or
+ * WebAudio voice pools.  The tick loop sends timestamped trigger messages
+ * through InstrumentAdapter instances — a single unified dispatch path that
+ * works for both WASM worklets and Web Audio synthesizers.
  *
  * Param changes take effect within one lookahead window (~100ms) for drums
  * and within one audio block (~3ms) for all pitched instruments.
  *
  * Supported tracks:
- *   t:10  AntigravityDrums  (drums-worklet)
- *   t:2   Pro-One Bass      (bass-worklet)
- *   t:1   Poly FM Bass      (buchla-worklet)
- *   t:6   HybridSynth Pads  (pads-worklet)
- *   t:3   Rhodes FM piano   (rhodes-worklet)
- *   t:7   Synth Lab slot 0  (SynthVoice / Web Audio)
+ *   t:10  AntigravityDrums  (WasmInstrumentAdapter → drums-worklet)
+ *   t:2   Pro-One Bass      (WasmInstrumentAdapter → bass-worklet)
+ *   t:1   Poly FM Bass      (WasmInstrumentAdapter → buchla-worklet)
+ *   t:6   HybridSynth Pads  (WasmInstrumentAdapter → pads-worklet)
+ *   t:3   Rhodes FM piano   (WasmInstrumentAdapter → rhodes-worklet)
+ *   t:7   Synth Lab slot 0  (WebAudioInstrumentAdapter — set by SynthLab)
  *   t:8   Synth Lab slot 1
  *   t:9   Synth Lab slot 2
  *   t:11  Synth Lab slot 3
@@ -22,19 +23,20 @@
  *
  * Usage:
  *   const seq = new Sequencer(audioCtx, { drums, bass, buchla, pads, rhodes });
- *   // each value is an AudioWorkletNode
- *   seq.synthLab = synthLabInstance; // optional: enables Synth Lab playback
+ *   seq.synthLab = synthLabInstance;   // wires slot mute/volume + connectToMaster
  *   seq.load(sheet);
  *   seq.start();
  *   seq.stop();
  *
- * Live param control (no debounce needed):
- *   // Drums — read from drumParamOverride callback at schedule time
- *   seq.drumParamOverride = (voiceId) => ({ p0, p1, p2 });
+ * Swapping an instrument adapter at runtime:
+ *   seq.setAdapter('bass', new WebAudioInstrumentAdapter(ctx, patch, 'bass'));
+ *   seq.setAdapter('bass', seq.getDefaultAdapter('bass')); // restore WASM
  *
- *   // All others — send directly to worklet port:
- *   bassNode.port.postMessage({ type:'setParams', ccJson });
+ * Live param control (WASM instruments):
+ *   seq.getAdapter('bass').setParams(ccJson);
  */
+
+import { WasmInstrumentAdapter } from './synth/core/InstrumentAdapter.js';
 
 const LOOKAHEAD_MS = 100;
 const INTERVAL_MS = 25;
@@ -66,7 +68,22 @@ export class Sequencer {
   constructor(ctx, nodes = {}) {
     this.ctx = ctx;
 
-    // AudioWorkletNode references (for audio graph wiring)
+    // ── Instrument adapters (unified dispatch) ─────────────────────────────
+    // Default WASM adapters built from the provided AudioWorkletNodes.
+    // Synth Lab slots (synth0–4) start as null — set by SynthLab via setAdapter().
+    this._defaultAdapters = {
+      drum:   nodes.drums  ? new WasmInstrumentAdapter(nodes.drums,  'drum',   { isDrum: true }) : null,
+      bass:   nodes.bass   ? new WasmInstrumentAdapter(nodes.bass,   'bass')                     : null,
+      buchla: nodes.buchla ? new WasmInstrumentAdapter(nodes.buchla, 'buchla')                   : null,
+      pads:   nodes.pads   ? new WasmInstrumentAdapter(nodes.pads,   'pads')                     : null,
+      rhodes: nodes.rhodes ? new WasmInstrumentAdapter(nodes.rhodes, 'rhodes')                   : null,
+    };
+    this._adapters = {
+      ...this._defaultAdapters,
+      synth0: null, synth1: null, synth2: null, synth3: null, synth4: null,
+    };
+
+    // Keep raw node refs for backward compat (render.js, external code)
     this._nodes = {
       drum: nodes.drums ?? null,
       bass: nodes.bass ?? null,
@@ -75,38 +92,31 @@ export class Sequencer {
       rhodes: nodes.rhodes ?? null,
     };
 
-    // Worklet message ports (for trigger / setParams messages)
-    this._ports = {
-      drum: nodes.drums?.port ?? null,
-      bass: nodes.bass?.port ?? null,
-      buchla: nodes.buchla?.port ?? null,
-      pads: nodes.pads?.port ?? null,
-      rhodes: nodes.rhodes?.port ?? null,
-    };
-
     this.sheet = null;
     this._timer = null;
 
     this._bpm = 120;
-    this._steps = [];   // compiled event list (no audioBuffer)
+    this._steps = [];   // compiled event list
     this._loopBeats = 0;
     this._startTime = 0;
     this._nextBeat = 0;
     this._stepIdx = 0;
 
     // Per-instrument mute/solo/volume
-    this._mute = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
-    this._solo = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
-    this._volumes = { drum: 1.0, bass: 1.0, buchla: 1.0, pads: 1.0, rhodes: 1.0, synth0: 1.0, synth1: 1.0, synth2: 1.0, synth3: 1.0, synth4: 1.0 };
+    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,   synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0,   synth4: 1.0 };
 
     /**
-     * SynthLab instance — set externally to enable Synth Lab playback.
+     * SynthLab instance — set externally.
+     * Used for: connectToMaster(), setMute/setVolume on synth slots.
+     * Scheduling now goes through _adapters, not synthLab.scheduleNote().
      * @type {import('./synth-lab.js').SynthLab|null}
      */
     this.synthLab = null;
 
     /**
-     * MidiOutput instance — set externally to enable MIDI output from triggers.
+     * MidiOutput instance — set externally to enable MIDI output.
      * @type {import('./midi-output.js').MidiOutput|null}
      */
     this.midiOut = null;
@@ -117,27 +127,21 @@ export class Sequencer {
      */
     this.modularSync = null;
 
-    /**
-     * When a SynthLab slot is active, mirror old-track-type notes to it.
-     * e.g. { 2: 0 } means t:2 (Bass FM) notes ALSO trigger synth slot 0.
-     * Set by SynthLab.loadPatch() / clearSlot() via seq.setSynthOverride().
-     */
-    this.synthOverrides = {}; // { trackType: slotIndex }
-
-    this.loop = true;
-    this.swing = 0;   // 0.0 to 1.0. Applied dynamically in _tick() to upbeat 16ths.
+    this.loop  = true;
+    this.swing = 0;   // 0.0–1.0, applied dynamically to upbeat 16ths
     this.onEnd = null;
 
-    this._stepBeats = [];  // beat positions for the step visualizer
+    this._stepBeats = [];  // beat positions for the step visualiser
 
-    // Live UI CC getters — merged as base before per-note JSON CCs are applied.
-    // Set externally: seq.liveCC = { bass: () => ({71:32,...}), buchla: () => ({74:56,...}) }
+    // Live UI CC getters — merged with per-note CCs before dispatch to WASM adapters.
+    // seq.liveCC = { bass: () => ({71:32,...}), buchla: () => ({74:56,...}) }
     this.liveCC = {};
 
-    // Semitone offset applied to all bass MIDI notes from the sheet.
-    // Matches trigger_render's +48 offset used by the offline renderer.
-    this.bassOctaveOffset = 48;
-
+    // Semitone offsets applied to MIDI notes before dispatch (WASM only).
+    // bass:   +48 matches the Pro-One worklet's internal note→freq mapping.
+    // buchla: 0 by default; override as needed.
+    this.bassOctaveOffset   = 48;
+    this.buchlaOctaveOffset = 0;
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -154,56 +158,47 @@ export class Sequencer {
     if (!this.sheet) throw new Error('No sheet loaded');
     if (this._timer) return;
 
-    // Fresh master gain — disconnect old one
+    // Fresh master gain
     if (this._masterGain) this._masterGain.disconnect();
     this._masterGain = this.ctx.createGain();
     this._masterGain.gain.value = 0.22;
     this._masterGain.connect(this.ctx.destination);
 
-    // Per-instrument gain nodes — reconnect worklet nodes each start()
+    // Per-instrument gain nodes — reconnect via adapters each start()
     if (this._instrGains) {
       for (const g of Object.values(this._instrGains)) {
-        try { g.disconnect(); } catch (_) { }
+        try { g.disconnect(); } catch (_) {}
       }
     }
     this._instrGains = {};
     for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
-      const node = this._nodes[type];
-      if (node) { try { node.disconnect(); } catch (_) { } }
       const g = this.ctx.createGain();
       g.connect(this._masterGain);
       this._instrGains[type] = g;
-      if (node) node.connect(g);
+      this._adapters[type]?.connect(g);
     }
+
+    // Route synth Lab slots through its own gain management
+    this.synthLab?.connectToMaster(this._masterGain);
+
     this._updateGains();
 
     this._startTime = this.ctx.currentTime + 0.05;
-    this._nextBeat = 0;
-    this._stepIdx = 0;
+    this._nextBeat  = 0;
+    this._stepIdx   = 0;
     this._lastClockBeat = undefined;
     this._timer = setInterval(() => this._tick(), INTERVAL_MS);
     this._tick();
-    // Start MIDI clock if enabled
     this.midiOut?.startClock(this._bpm);
   }
 
   stop() {
-    // Stop MIDI clock
     this.midiOut?.stopClock();
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
-    // Clear queued triggers and silence active envelopes in all worklets
-    for (const port of Object.values(this._ports)) {
-      if (port) {
-        port.postMessage({ type: 'stop' });
-        port.postMessage({ type: 'trigger', audioTime: 0, midiNote: 0, velocity: 0, holdSamples: 0, voiceId: 0, ccJson: '{}' });
-      }
-    }
 
-    // Silence any active SynthLab instances
-    if (this.synthLab) {
-      for (let i = 0; i < 5; i++) {
-        this.synthLab.scheduleNote(i, 0, 0, this.ctx.currentTime, 0); // Fast note off
-      }
+    // Silence all adapters
+    for (const adapter of Object.values(this._adapters)) {
+      adapter?.stop();
     }
 
     if (this._masterGain) this._masterGain.disconnect();
@@ -257,22 +252,43 @@ export class Sequencer {
   getVolumes() { return { ...this._volumes }; }
 
   /**
-   * Register a SynthLab slot as the replacement for a legacy track type.
-   * e.g. setSynthOverride(2, 0)  → t:2 (Bass FM) notes also play on synth slot 0.
-   * Pass slotIndex=null to remove override. Reloads the current sheet to recompile.
+   * Swap an instrument adapter for the given track type.
+   *
+   * Called by SynthLab when a custom patch is loaded/cleared:
+   *   seq.setAdapter('bass',   webAudioAdapter);  // patch replaces WASM bass
+   *   seq.setAdapter('bass',   null);              // restore default WASM
+   *   seq.setAdapter('synth0', webAudioAdapter);  // slot 0 loaded
+   *   seq.setAdapter('synth0', null);              // slot 0 cleared
+   *
+   * @param {string} type - one of the 10 instrument type keys
+   * @param {InstrumentAdapter|null} adapter
    */
-  setSynthOverride(trackType, slotIndex) {
-    if (slotIndex === null || slotIndex === undefined) {
-      delete this.synthOverrides[trackType];
-    } else {
-      this.synthOverrides[trackType] = slotIndex;
-    }
-    // Recompile if a sheet is loaded so new events are immediately scheduled
-    if (this._steps.length) {
-      const sheet = this._lastSheet;
-      if (sheet) this.load(sheet);
+  setAdapter(type, adapter) {
+    const old = this._adapters[type];
+    if (old && old !== adapter) old.disconnect();
+
+    this._adapters[type] = adapter ?? this._defaultAdapters[type] ?? null;
+
+    // If currently playing, wire the new adapter to its existing gain node
+    const gainNode = this._instrGains?.[type];
+    if (gainNode && this._adapters[type]) {
+      this._adapters[type].connect(gainNode);
     }
   }
+
+  /**
+   * Return the currently active adapter for a type, or null.
+   * @param {string} type
+   * @returns {InstrumentAdapter|null}
+   */
+  getAdapter(type) { return this._adapters[type] ?? null; }
+
+  /**
+   * Return the default (WASM) adapter for a type, or null.
+   * @param {string} type
+   * @returns {InstrumentAdapter|null}
+   */
+  getDefaultAdapter(type) { return this._defaultAdapters[type] ?? null; }
 
   // ── Internal ───────────────────────────────────────────────────────────────
 
@@ -290,7 +306,7 @@ export class Sequencer {
         this._instrGains[type].gain.value = this._isAudible(type) ? this._volumes[type] : 0.0;
       }
     }
-    // Propagate mute/volume to SynthLab slots
+    // Propagate mute/volume to SynthLab slots (which manage their own gain nodes)
     if (this.synthLab) {
       for (let i = 0; i < 5; i++) {
         const key = `synth${i}`;
@@ -385,18 +401,6 @@ export class Sequencer {
             });
           }
         }
-
-        // SynthLab override — if a slot replaces a legacy track type, mirror notes to it
-        if (track.t in this.synthOverrides) {
-          const slotIndex = this.synthOverrides[track.t];
-          const durBeats = track.dur ?? step.d ?? 0.5;
-          for (const note of notes) {
-            raw.push({
-              beatTime: beat, type: `synth${slotIndex}`, midiNote: note,
-              velocity: vel, durBeats
-            });
-          }
-        }
       }
 
       beat += d;
@@ -465,81 +469,53 @@ export class Sequencer {
   }
 
   _sendTrigger(ev, audioTime) {
-    // Synth Lab events are handled separately below (no worklet port)
-    const SYNTH_TYPE_SLOT = { synth0: 0, synth1: 1, synth2: 2, synth3: 3, synth4: 4 };
+    const adapter = this._adapters[ev.type];
     const audible = this._isAudible(ev.type);
 
-    if (ev.type in SYNTH_TYPE_SLOT) {
-      const holdMs = ev.durBeats * (60 / this._bpm) * 1000;
-      if (audible && this.synthLab) {
-        this.synthLab.scheduleNote(SYNTH_TYPE_SLOT[ev.type], ev.midiNote, ev.velocity, audioTime, holdMs);
-      }
-      this.midiOut?.scheduleNote(ev.type, ev.midiNote, ev.velocity, audioTime, this.ctx, holdMs);
+    if (ev.type === 'drum') {
+      if (audible && adapter) adapter.scheduleNote(0, ev.velocity, audioTime, 0, { voiceId: ev.voiceId });
+      this.midiOut?.scheduleNote('drum', ev.voiceId, ev.velocity, audioTime, this.ctx, 100);
+      this.modularSync?.sendGate(ev.type, audioTime);
       return;
     }
 
-    const port = this._ports[ev.type];
-    if (!port) return;
+    // All pitched instrument types (WASM and WebAudio) share this path
+    if (!adapter && !this.midiOut && !this.modularSync) return;
 
-    if (ev.type === 'drum') {
-      if (audible) port.postMessage({
-        type: 'trigger', audioTime,
-        voiceId: ev.voiceId, velocity: ev.velocity
-      });
-      this.midiOut?.scheduleNote('drum', ev.voiceId, ev.velocity, audioTime, this.ctx, 100);
+    const holdMs = (ev.durBeats ?? 0) * (60 / this._bpm) * 1000;
 
-    } else if (ev.type === 'bass') {
-      const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC = this.liveCC?.bass?.() ?? {};
-      const noteCC = JSON.parse(ev.ccJson || '{}');
-      const merged = Object.assign({}, noteCC, liveCC);
-      const midi = Math.max(0, Math.min(127, ev.midiNote + (this.bassOctaveOffset ?? 0)));
-      if (audible) port.postMessage({
-        type: 'trigger', audioTime,
-        midiNote: midi, velocity: ev.velocity,
-        holdSamples, ccJson: JSON.stringify(merged)
-      });
-      this.midiOut?.scheduleNote('bass', midi, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
+    if (ev.type === 'bass' || ev.type === 'buchla') {
+      // Merge live CC overrides (WASM instruments only — WebAudio ignores ccJson)
+      const liveGetter = this.liveCC?.[ev.type];
+      let ccJson = ev.ccJson ?? '{}';
+      if (liveGetter) {
+        const liveCC = liveGetter() ?? {};
+        const noteCC = JSON.parse(ccJson);
+        ccJson = JSON.stringify(Object.assign({}, noteCC, liveCC));
+      }
+      // Apply octave offset
+      const offset = ev.type === 'bass' ? (this.bassOctaveOffset ?? 0) : (this.buchlaOctaveOffset ?? 0);
+      const midi = Math.max(0, Math.min(127, ev.midiNote + offset));
+      if (audible && adapter) adapter.scheduleNote(midi, ev.velocity, audioTime, holdMs, { ccJson });
+      this.midiOut?.scheduleNote(ev.type, midi, ev.velocity, audioTime, this.ctx, holdMs);
 
-    } else if (ev.type === 'buchla') {
-      const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC = this.liveCC?.buchla?.() ?? {};
-      const noteCC = JSON.parse(ev.ccJson || '{}');
-      const merged = Object.assign({}, noteCC, liveCC);
-      const buchlaNote = Math.max(0, Math.min(127, ev.midiNote + (this.buchlaOctaveOffset ?? 0)));
-      if (audible) port.postMessage({
-        type: 'trigger', audioTime,
-        midiNote: buchlaNote, velocity: ev.velocity,
-        holdSamples, ccJson: JSON.stringify(merged)
-      });
-      this.midiOut?.scheduleNote('buchla', buchlaNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
+    } else if (ev.type === 'pads' || ev.type === 'rhodes') {
+      const liveGetter = this.liveCC?.[ev.type];
+      let ccJson = ev.ccJson ?? '{}';
+      if (liveGetter) {
+        const liveCC = liveGetter() ?? {};
+        const noteCC = JSON.parse(ccJson);
+        ccJson = JSON.stringify(Object.assign({}, noteCC, liveCC));
+      }
+      if (audible && adapter) adapter.scheduleNote(ev.midiNote, ev.velocity, audioTime, holdMs, { ccJson });
+      this.midiOut?.scheduleNote(ev.type, ev.midiNote, ev.velocity, audioTime, this.ctx, holdMs);
 
-    } else if (ev.type === 'pads') {
-      const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC = this.liveCC?.pads?.() ?? {};
-      const noteCC = JSON.parse(ev.ccJson || '{}');
-      const merged = Object.assign({}, noteCC, liveCC);
-      if (audible) port.postMessage({
-        type: 'trigger', audioTime,
-        midiNote: ev.midiNote, velocity: ev.velocity,
-        holdSamples, ccJson: JSON.stringify(merged)
-      });
-      this.midiOut?.scheduleNote('pads', ev.midiNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
-
-    } else if (ev.type === 'rhodes') {
-      const holdSamples = Math.round(ev.durBeats * (60 / this._bpm) * this.ctx.sampleRate);
-      const liveCC = this.liveCC?.rhodes?.() ?? {};
-      const noteCC = JSON.parse(ev.ccJson || '{}');
-      const merged = Object.assign({}, noteCC, liveCC);
-      if (audible) port.postMessage({
-        type: 'trigger', audioTime,
-        midiNote: ev.midiNote, velocity: ev.velocity,
-        holdSamples, ccJson: JSON.stringify(merged)
-      });
-      this.midiOut?.scheduleNote('rhodes', ev.midiNote, ev.velocity, audioTime, this.ctx, holdSamples / this.ctx.sampleRate * 1000);
+    } else {
+      // synth0–synth4: no CC merging, no octave offset
+      if (audible && adapter) adapter.scheduleNote(ev.midiNote, ev.velocity, audioTime, holdMs);
+      this.midiOut?.scheduleNote(ev.type, ev.midiNote, ev.velocity, audioTime, this.ctx, holdMs);
     }
 
-    // CV/Gate trigger output
     this.modularSync?.sendGate(ev.type, audioTime);
   }
 }

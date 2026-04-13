@@ -88,27 +88,27 @@
 > Currently the WASM instruments and Synth Lab are two parallel systems with separate dispatch paths in the sequencer. The goal is a unified slot system where any slot can hold either type, instruments can be swapped at runtime, and custom patches live in a persistent library.
 
 ### Phase 1 — `InstrumentAdapter` abstraction
-- [ ] **Create `web/synth/core/InstrumentAdapter.js`** — base class with `connect()`, `disconnect()`, `scheduleNote()`, `setParams()`, `stop()`, `getState()`
-- [ ] **`WasmInstrumentAdapter`** — wraps `AudioWorkletNode`, forwards `scheduleNote()` as `port.postMessage({type:'trigger',...})`, handles worklet ready handshake
-- [ ] **`WebAudioInstrumentAdapter`** — wraps `SynthVoice` + `JSONBridge`, forwards `scheduleNote()` via setTimeout scheduling
-- [ ] **`SynthVoice.js` minor** — ensure clean `connect()`/`disconnect()` lifecycle
+- [x] **Create `web/synth/core/InstrumentAdapter.js`** — base class with `connect()`, `disconnect()`, `scheduleNote()`, `setParams()`, `stop()`, `getState()`
+- [x] **`WasmInstrumentAdapter`** — wraps `AudioWorkletNode`, forwards `scheduleNote()` as `port.postMessage({type:'trigger',...})`
+- [x] **`WebAudioInstrumentAdapter`** — wraps `SynthVoice` pool + `JSONBridge`, forwards `scheduleNote()` via setTimeout scheduling; exposes `noteOn()`/`noteOff()` for piano UI
+- [x] **`SynthVoice.js` minor** — lifecycle handled via adapter's `connect()`/`disconnect()` (pool build/destroy)
 
 ### Phase 2 — `InstrumentRegistry`
-- [ ] **Create `web/synth/core/InstrumentRegistry.js`** — catalog with `register()`, `unregister()`, `get()`, `list(role?)`, `save()`/`restore()` to localStorage
-- [ ] Register 5 built-in WASM instruments at startup with `builtIn: true`
-- [ ] Modify SynthLab forge to auto-register created patches in the registry
-- [ ] Persist custom instruments to `localStorage['clankers_instrument_library']`
+- [x] **Create `web/synth/core/InstrumentRegistry.js`** — catalog with `register()`, `unregister()`, `get()`, `list(role?)`, `save()`/`restore()` to localStorage
+- [x] Register 5 built-in WASM instruments at startup with `builtIn: true`
+- [x] Modify SynthLab `loadPatch()` to auto-register created patches in the registry
+- [x] Persist custom instruments to `localStorage['clankers_instrument_library']`
 
 ### Phase 3 — Slot manager + sequencer unification
-- [ ] **Refactor `web/synth-lab.js`** — slots hold `InstrumentAdapter` instances; add `plug(slotIndex, id)`, `unplug(slotIndex)`, `swap(slotIndex, id)`
-- [ ] **Refactor `web/sequencer.js`** — replace dual dispatch (`_ports` + `synthLab.scheduleNote`) with single `_sendTrigger()` through slot adapters; remove `synthOverrides` mechanism
-- [ ] **Modify `web/render.js`** — use adapter `connect(offlineCtx)` for offline rendering with custom instruments
+- [x] **Refactor `web/synth-lab.js`** — slots hold `WebAudioInstrumentAdapter` instances; add `plug(slotIndex, id)`, `unplug(slotIndex)`, `swap(slotIndex, id)`
+- [x] **Refactor `web/sequencer.js`** — replaced dual dispatch (`_ports` + `synthLab.scheduleNote`) with single `_sendTrigger()` through `_adapters`; removed `synthOverrides` mechanism; added `setAdapter(type, adapter)` / `getAdapter(type)` / `getDefaultAdapter(type)`
+- [ ] **Modify `web/render.js`** — use adapter `connect(offlineCtx)` for offline rendering with custom instruments (offline WebAudio scheduling via OfflineAudioContext not yet implemented)
 
 ### Phase 4 — Library UI
-- [ ] Slot cards showing current instrument with swap/unplug buttons
-- [ ] Library browser panel, filterable by role (bass / lead / pad / keys / drums)
-- [ ] LLM wizard output auto-registered in library
-- [ ] Slot assignments persist to localStorage across reloads
+- [x] Slot cards showing current instrument with ⇄ SWAP and ⏏ UNPLUG buttons
+- [x] Library browser panel, filterable by role (bass / lead / pad / keys / drums / poly_fm)
+- [x] LLM wizard output auto-registered in library via `loadPatch()`
+- [x] Slot assignments persist to localStorage across reloads
 
 ---
 
