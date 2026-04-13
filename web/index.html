@@ -4610,13 +4610,13 @@ if (typeof TextEncoder === 'undefined') {
       glue = polyfill + glue.replace(/^export\s+class\s/gm, 'class ')
                   .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, '')
                   .replace(/import\.meta\.url/g, "'unused'");
-      glue += `\nglobalThis.initSync = initSync;\n`
-            + `globalThis.ClankersBass = ClankersBass;\n`
-            + `globalThis.ClankersBuchla = ClankersBuchla;\n`
-            + `globalThis.ClankersDrums = ClankersDrums;\n`
-            + `globalThis.ClankersPads = ClankersPads;\n`
-            + `globalThis.ClankersRhodes = ClankersRhodes;\n`
-            + `globalThis.ClankersVoder = ClankersVoder;\n`;
+      glue += `\nglobalThis.initSync = wasm_bindgen.initSync;\n`
+            + `globalThis.ClankersBass = wasm_bindgen.ClankersBass;\n`
+            + `globalThis.ClankersBuchla = wasm_bindgen.ClankersBuchla;\n`
+            + `globalThis.ClankersDrums = wasm_bindgen.ClankersDrums;\n`
+            + `globalThis.ClankersPads = wasm_bindgen.ClankersPads;\n`
+            + `globalThis.ClankersRhodes = wasm_bindgen.ClankersRhodes;\n`
+            + `globalThis.ClankersVoder = wasm_bindgen.ClankersVoder;\n`;
       const glueBlob = new Blob([glue], { type: 'application/javascript' });
       await ctx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
 
