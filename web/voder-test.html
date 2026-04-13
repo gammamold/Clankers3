@@ -269,19 +269,8 @@ function setStatus(msg, cls = '') {
 
 async function boot() {
   try {
-    // Load WASM module bytes and expose helpers on globalThis for the worklet
-    const wasmResp = await fetch('wasm/clankers_dsp_bg.wasm');
-    const wasmBuf  = await wasmResp.arrayBuffer();
-    wasmModule     = await WebAssembly.compile(wasmBuf);
-
-    // Load the ES module bindings to get initSync
-    const mod = await import('./wasm/clankers_dsp.js');
-    mod.initSync({ module: wasmModule });
-
-    // Expose for worklet
-    globalThis.initSync     = mod.initSync;
-    globalThis.ClankersVoder = mod.ClankersVoder;
-
+    const wasmBuf = await fetch('wasm/clankers_dsp_bg.wasm').then(r => r.arrayBuffer());
+    wasmModule    = await WebAssembly.compile(wasmBuf);
     setStatus('WASM loaded — click a key or phoneme to start', 'ok');
   } catch (e) {
     setStatus(`Load error: ${e}`, 'err');
@@ -296,6 +285,29 @@ async function ensureAudio() {
   }
 
   audioCtx = new AudioContext({ sampleRate: 44100 });
+
+  // Inject WASM glue into AudioWorkletGlobalScope as a classic script.
+  // AudioWorklets run in their own scope — window.globalThis is not visible there.
+  // We fetch the JS bindings, strip ES-module syntax, append globalThis exports,
+  // and load via blob URL — same pattern as index.html.
+  const polyfill = `
+if (typeof TextDecoder === 'undefined') {
+  globalThis.TextDecoder = class { decode(buf) { if (!buf || !buf.length) return ''; return String.fromCharCode.apply(null, new Uint8Array(buf.buffer || buf, buf.byteOffset, buf.byteLength)); } };
+}
+if (typeof TextEncoder === 'undefined') {
+  globalThis.TextEncoder = class { encode(s) { const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; } encodeInto(s, dest) { const a = this.encode(s); dest.set(a); return { read: s.length, written: a.length }; } };
+}
+`;
+  let glue = await fetch('wasm/clankers_dsp.js').then(r => r.text());
+  glue = polyfill
+       + glue.replace(/^export\s+class\s/gm, 'class ')
+             .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, '')
+             .replace(/import\.meta\.url/g, "'unused'");
+  glue += `\nglobalThis.initSync = initSync;\n`
+        + `globalThis.ClankersVoder = ClankersVoder;\n`;
+
+  const glueBlob = new Blob([glue], { type: 'application/javascript' });
+  await audioCtx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
   await audioCtx.audioWorklet.addModule('worklets/voder-worklet.js');
 
   voderNode = new AudioWorkletNode(audioCtx, 'voder-worklet', {
