@@ -21,7 +21,9 @@ EVOLUTION RULES:
   - Meaningfully change the pattern: vary note choices, rhythm density, velocities, CC sweeps
   - Add or remove layers (e.g. bring in buchla on verse2, strip bass on bridge)
   - Preserve the key and genre unless the section demands a shift
-  - Keep MIDI ranges: Drums t:10 d:0.25 no-dur; Pads t:6 + Rhodes t:3 always use dur; Bass MIDI 0–23
+  - Keep MIDI ranges: Drums t:10 d:0.25 no-dur; Pads t:6 + Rhodes t:3 + Voder t:5 always use dur; Bass MIDI 0–23; Voder MIDI 36–84
+  - ACCENT: add "a":1 on any track for emphasis (velocity × 1.3). Use sparingly — downbeat kick, stabbed chord, peak snare. Omit or 0 for normal steps.
+  - Voder t:5 always includes both dur and ph (phoneme array). Default CC: {"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0}
   - Bass first note per phrase: CC {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   - Output 128 steps (8 bars) at d:0.25 unless the input sheet uses a different length
 
@@ -31,6 +33,13 @@ DRUM RICHNESS — mandatory in every section:
   Displaced snare: shift ±1 step from 2&4 sometimes. Drop expected kicks for groove.
   Vary ALL velocities — kick v:100–115, snare v:70–95, hats v:45–80. Never flat.
   If a drum pattern looks metronomically perfect, it is wrong. Break it.
+
+VODER (t:5) — PHONEME SEQUENCING:
+  "ph" field: array of phoneme indices spread evenly over "dur". Always include both.
+  Phonemes: 0:AA 1:AE 2:AH 3:AO 4:EH 5:ER 6:EY 7:IH 8:IY 9:OW 10:UH 11:UW
+            12:L 13:R 14:W 15:Y 16:M 17:N  18:F 19:S 20:SH 21:TH  22:V 23:Z 24:ZH
+  CC: 74=brightness(64=neutral) 73=attack 72=release 77=coartic(30=smooth,80=robotic) 75=vibrato_depth 76=vibrato_rate 20=voicing(0=auto)
+  Example: { "t":5, "n":[60], "v":80, "dur":4, "ph":[2,16], "cc":{"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0} }
 
 Return ONLY valid JSON — the complete evolved sheet, same format as input.`;
 

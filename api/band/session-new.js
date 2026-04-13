@@ -9,6 +9,7 @@ INSTRUMENTS (track IDs):
   t:1  Buchla 259/292   Percussive plucks/arps (MIDI 48–72)
   t:2  Pro-One Bass     Sub bass (MIDI 0–23 primarily)
   t:3  Rhodes EP        FM tine piano (MIDI 36–84), always use "dur" field
+  t:5  Voder           Vocal formant synth — pitch + phoneme sequence, always use dur
   t:6  HybridSynth Pads Chordal sustain — always include "dur" field
   t:10 Drums MS-20      Kick:36  Snare:38  HH Cl:42  HH Op:46  Tom L:41  Tom M:45  Clap:48
 
@@ -55,6 +56,16 @@ PADS & RHODES:
   - Pads: trigger once per chord, dur:4.0–16.0. Change chord every 2–4 bars.
   - Rhodes: melodic phrases, dur:0.5–4.0 per note.
 
+VODER (t:5) — PHONEME SEQUENCING:
+  - Always include both "dur" and "ph" fields. MIDI 36–84.
+  - "ph": array of phoneme indices spread evenly over dur.
+  - Phonemes: 0:AA 1:AE 2:AH 3:AO 4:EH 5:ER 6:EY 7:IH 8:IY 9:OW 10:UH 11:UW
+              12:L 13:R 14:W 15:Y 16:M 17:N  18:F 19:S 20:SH 21:TH  22:V 23:Z 24:ZH
+  - CC: 74=brightness(64=neutral) 73=attack 72=release 77=coartic(30=smooth,80=robotic) 75=vibrato_depth 76=vibrato_rate 20=voicing(0=auto)
+  - Default CC (first note per phrase): {"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0}
+  - Uses: sustained vowel pads ph:[8] or ph:[9] dur:4–16; melodic syllables ph:[19,8]="see" ph:[2,16]="ahm" ph:[4,15]="yeah"; robotic speech = short dur + cc.77 high
+  - Example: { "t":5, "n":[60], "v":80, "dur":4, "ph":[2,16], "cc":{"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0} }
+
 BUCHLA (t:1):
   - Percussive plucks and arps. Short notes. MIDI 48–72.
   - Use for rhythmic top-line texture, not chord pads.
@@ -62,15 +73,15 @@ BUCHLA (t:1):
 FX RACK (optional "fx" top-level key — include when style needs it):
 {
   "fx": {
-    "delay":      { "on": true, "time": "1/8", "feedback": 0.5, "wet": 0.6, "lfo": "sine", "lfo_rate": 0.3, "lfo_depth": 0.003, "fb_shape": "soft", "hp": 120, "lp": 5000, "sc": "drum", "sc_depth": 0.85, "ret": 0.7, "sends": { "drum": 0, "bass": 0, "buchla": 0.8, "pads": 0.4, "rhodes": 0 } },
-    "waveshaper": { "on": true, "type": "fold", "drive": 0.5, "tone": 3200, "wet": 0.5, "sc": null, "sc_depth": 0.7, "ret": 0.6, "sends": { "drum": 0, "bass": 0.8, "buchla": 0, "pads": 0, "rhodes": 0 } },
-    "beatrepeat": { "slice": "1/16", "rate": 1.0, "decay": 0.9, "wet": 0.85, "sc": null, "sc_depth": 0.6, "ret": 0.75, "sends": { "drum": 0.6, "bass": 0, "buchla": 0, "pads": 0, "rhodes": 0 } }
+    "delay":      { "on": true, "time": "1/8", "feedback": 0.5, "wet": 0.6, "lfo": "sine", "lfo_rate": 0.3, "lfo_depth": 0.003, "fb_shape": "soft", "hp": 120, "lp": 5000, "sc": "drum", "sc_depth": 0.85, "ret": 0.7, "sends": { "drum": 0, "bass": 0, "buchla": 0.8, "pads": 0.4, "rhodes": 0, "voder": 0.5 } },
+    "waveshaper": { "on": true, "type": "fold", "drive": 0.5, "tone": 3200, "wet": 0.5, "sc": null, "sc_depth": 0.7, "ret": 0.6, "sends": { "drum": 0, "bass": 0.8, "buchla": 0, "pads": 0, "rhodes": 0, "voder": 0 } },
+    "beatrepeat": { "slice": "1/16", "rate": 1.0, "decay": 0.9, "wet": 0.85, "sc": null, "sc_depth": 0.6, "ret": 0.75, "sends": { "drum": 0.6, "bass": 0, "buchla": 0, "pads": 0, "rhodes": 0, "voder": 0 } }
   }
 }
 
 CRITICAL RULES:
   1. Drums always d:0.25. Never use dur on drums.
-  2. Pads always use dur. One trigger, long hold.
+  2. Pads always use dur. One trigger, long hold. Voder always uses dur and ph.
   3. tracks:[] silent steps are not waste — they are the groove.
   4. No machine-gun 16ths on bass or chords above 100 BPM.
   5. Vary velocities — never flat. 75–110 range, different every step.

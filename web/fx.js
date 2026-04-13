@@ -325,8 +325,8 @@ export class MasterFx {
 
     // Send values persist across seq.start() reconnects
     this._sendVals = [
-      { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0 },
-      { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0 },
+      { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0, voder: 0 },
+      { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0, voder: 0 },
     ];
   }
 
@@ -338,7 +338,7 @@ export class MasterFx {
    * passing the sequencer's _instrGains object and the audio destination.
    */
   attach(instrGains, destination) {
-    const INSTRS = ['drum', 'bass', 'buchla', 'pads', 'rhodes'];
+    const INSTRS = ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder'];
 
     // Tear down old send nodes
     for (const instr of INSTRS) {

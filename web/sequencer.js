@@ -173,10 +173,21 @@ export class Sequencer {
         try { g.disconnect(); } catch (_) {}
       }
     }
+    if (this._voderLpf) { try { this._voderLpf.disconnect(); } catch (_) {} }
     this._instrGains = {};
     for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder']) {
       const g = this.ctx.createGain();
-      g.connect(this._masterGain);
+      if (type === 'voder') {
+        // Insert per-channel LPF between voder gain and master (cuts harshness, ~6 kHz default)
+        this._voderLpf = this.ctx.createBiquadFilter();
+        this._voderLpf.type = 'lowpass';
+        this._voderLpf.frequency.value = this._voderLpfHz ?? 6000;
+        this._voderLpf.Q.value = 0.5;
+        g.connect(this._voderLpf);
+        this._voderLpf.connect(this._masterGain);
+      } else {
+        g.connect(this._masterGain);
+      }
       this._instrGains[type] = g;
       this._adapters[type]?.connect(g);
     }
@@ -226,6 +237,8 @@ export class Sequencer {
   getMuteState() { return { ...this._mute }; }
   getSoloState() { return { ...this._solo }; }
 
+  setLoopBeats(n) { this._loopBeats = n > 0 ? n : this._totalBeats ?? this._loopBeats; }
+
   getCurrentBeat() {
     if (!this._timer || !this._startTime) return -1;
     const elapsed = this.ctx.currentTime - this._startTime;
@@ -253,6 +266,14 @@ export class Sequencer {
     this._updateGains();
   }
   getVolumes() { return { ...this._volumes }; }
+
+  /** Set voder channel LPF cutoff in Hz (applied post-instrGain, pre-master). */
+  setVoderLpf(hz) {
+    this._voderLpfHz = hz;
+    if (this._voderLpf) {
+      this._voderLpf.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.02);
+    }
+  }
 
   /**
    * Swap an instrument adapter for the given track type.
@@ -342,7 +363,7 @@ export class Sequencer {
 
       for (const track of step.tracks ?? []) {
         const notes = track.n ?? [];
-        const vel = (track.v ?? 100) / 127;
+        const vel = Math.min(1.0, ((track.v ?? 100) / 127) * (track.a ? 1.3 : 1.0));
         const cc = Object.assign({}, track.cc ?? {}, _evalAutomation(autoMap[track.t], beat));
 
         if (track.t === 10) {
@@ -423,6 +444,7 @@ export class Sequencer {
 
     raw.sort((a, b) => a.beatTime - b.beatTime);
     this._steps = raw;
+    this._totalBeats = beat;
     this._loopBeats = sheet.loopBeats ?? beat;
     console.log(`[seq] compiled ${raw.length} events (${this._loopBeats} beats @ ${this._bpm} BPM) — streaming`);
   }
@@ -458,6 +480,11 @@ export class Sequencer {
       }
 
       const ev = this._steps[this._stepIdx];
+      if (ev.beatTime >= this._loopBeats) {
+        this._nextBeat += this._loopBeats;
+        this._stepIdx = 0;
+        continue;
+      }
       const loopN = Math.floor(this._nextBeat / this._loopBeats) || 0;
       const evBeat = loopN * this._loopBeats + ev.beatTime;
 

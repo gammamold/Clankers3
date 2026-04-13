@@ -3711,6 +3711,17 @@
       <button id="room-render-btn" class="render-btn" style="font-size:.75rem;padding:.4rem .7rem;"
         title="Offline WAV render">⬇ WAV</button>
       <label style="display:inline-flex;align-items:center;gap:.4rem;font-size:.75rem;margin-left:.4rem;">
+        LOOP
+        <select id="room-loop-len"
+          style="background:#0e0e0e;color:#ff4444;border:1px solid #400000;font-family:monospace;font-size:.72rem;padding:.2rem .35rem;border-radius:2px;cursor:pointer;">
+          <option value="0" selected>FULL</option>
+          <option value="4">1 bar</option>
+          <option value="8">2 bars</option>
+          <option value="16">4 bars</option>
+          <option value="32">8 bars</option>
+        </select>
+      </label>
+      <label style="display:inline-flex;align-items:center;gap:.4rem;font-size:.75rem;margin-left:.4rem;">
         NOTE
         <select id="room-resolution"
           style="background:#0e0e0e;color:#00d4ff;border:1px solid #004060;font-family:monospace;font-size:.72rem;padding:.2rem .35rem;border-radius:2px;cursor:pointer;">
@@ -3917,6 +3928,7 @@
           <div class="inst-knobs-panel" id="voder-knobs-panel">
             <div class="knob-row" id="voder-knobs"></div>
           </div>
+          <div class="knob-row" id="voder-sends"></div>
         </div>
       </div>
 
@@ -5166,7 +5178,34 @@ if (typeof TextEncoder === 'undefined') {
 
     // ─── Voder ─────────────────────────────────────────────────────────────────
 
-    function voderCC() { return { 74: 64, 20: 0, 73: 20, 72: 40, 77: 40, 16: 100 }; }
+    const voderKnobContainer = document.getElementById('voder-knobs');
+    const vk = {
+      ...makeKnobGroup(voderKnobContainer, 'VOICE', [
+        { id: 'vod-bright',  label: 'BRIGHT',  min: 0, max: 127, value: 64,  step: 1 },  // CC74 brightness
+        { id: 'vod-voice',   label: 'VOICE',   min: 0, max: 127, value: 0,   step: 1 },  // CC20 voicing manual
+        { id: 'vod-atk',     label: 'ATK',     min: 0, max: 127, value: 20,  step: 1 },  // CC73 attack
+        { id: 'vod-rel',     label: 'REL',     min: 0, max: 127, value: 40,  step: 1 },  // CC72 release
+        { id: 'vod-coartic', label: 'COART',   min: 0, max: 127, value: 40,  step: 1 },  // CC77 coarticulation
+        { id: 'vod-vib',     label: 'VIB',     min: 0, max: 127, value: 0,   step: 1 },  // CC75 vibrato depth
+      ]),
+      ...makeKnobGroup(voderKnobContainer, 'CHANNEL', [
+        { id: 'vod-lpf', label: 'LPF', min: 500, max: 20000, value: 6000, step: 100 },
+      ]),
+    };
+
+    vk['vod-lpf'].onChange = v => { seq?.setVoderLpf(v); };
+
+    function voderCC() {
+      return {
+        74: vk['vod-bright'].val,
+        20: vk['vod-voice'].val,
+        73: vk['vod-atk'].val,
+        72: vk['vod-rel'].val,
+        77: vk['vod-coartic'].val,
+        75: vk['vod-vib'].val,
+        16: 100,
+      };
+    }
 
     function triggerVoder(midi, phonemes) {
       ensureReady().then(() => {
@@ -5222,6 +5261,7 @@ if (typeof TextEncoder === 'undefined') {
           buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode, voder: voderNode
         });
         seq.liveCC = { bass: bassCC, buchla: buchlaCC, pads: padsCC, rhodes: rhodesCC, voder: voderCC };
+        seq.setVoderLpf(vk['vod-lpf'].val);
         seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
         seq.buchlaOctaveOffset = buchlaOctave * 12;
         seq.synthLab = synthLab;  // enable Synth Lab track playback
@@ -6196,7 +6236,7 @@ if (typeof TextEncoder === 'undefined') {
 
     // ─── FX Rack UI ────────────────────────────────────────────────────────────
 
-    const INSTR_TYPES = ['drum', 'bass', 'buchla', 'pads', 'rhodes'];
+    const INSTR_TYPES = ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder'];
 
     // ─── FX Send Knobs (per-instrument, created at page load) ──────────────────
     // Two knobs per instrument: →DLY (slot 0) and →SHP (slot 1).
@@ -6575,6 +6615,7 @@ if (typeof TextEncoder === 'undefined') {
         this.ROW_H_PITCHED = 12;
 
         canvas.style.touchAction = 'none'; // prevent scroll when vertically sweeping velocity
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
         canvas.addEventListener('pointerdown', e => this._onPointerDown(e));
         canvas.addEventListener('pointermove', e => this._onPointerMove(e));
         canvas.addEventListener('pointerup', e => this._onPointerUp(e));
@@ -6585,6 +6626,97 @@ if (typeof TextEncoder === 'undefined') {
         this._tType = null;
         this.selectedNotes = [];
         this.marqueeBox = null;
+        this._history = [];
+        this.loopBeats = 0; // 0 = full sheet
+        this._canvasActive = false;
+
+        // Track whether the canvas was the last thing clicked
+        canvas.addEventListener('pointerdown', () => { this._canvasActive = true; });
+        document.addEventListener('pointerdown', e => { if (e.target !== canvas) this._canvasActive = false; });
+        document.addEventListener('keydown', e => this._onKeyDown(e));
+      }
+
+      _pushHistory() {
+        if (!this._sheet) return;
+        this._history.push(JSON.stringify(this._sheet));
+        if (this._history.length > 50) this._history.shift();
+      }
+
+      undo() {
+        if (!this._history.length) return;
+        const prev = JSON.parse(this._history.pop());
+        for (const k of Object.keys(this._sheet)) delete this._sheet[k];
+        Object.assign(this._sheet, prev);
+        document.getElementById('sheet-json').value = JSON.stringify(this._sheet, null, 2);
+        this.notes = this._extract(this._sheet, this._tType);
+        this.totalBeats = Math.round(this._sheet.steps.reduce((s, st) => s + (st.d ?? 0.25), 0) * 1e6) / 1e6;
+        if (typeof seq !== 'undefined' && seq) seq.load(this._sheet);
+        if (!this._raf) this.draw(-1);
+      }
+
+      _onKeyDown(e) {
+        if (!this._sheet) return;
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+        const res = parseFloat(document.getElementById('room-resolution')?.value ?? '0.25');
+
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+          e.preventDefault();
+          this.undo();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+          e.preventDefault();
+          this.selectedNotes = [...this.notes];
+          if (!this._raf) this.draw(-1);
+        } else if (e.key === 'Escape') {
+          this.selectedNotes = [];
+          if (!this._raf) this.draw(-1);
+        } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedNotes.length) {
+          e.preventDefault();
+          this._pushHistory();
+          this.deleteSelected();
+        } else if (e.key === 'ArrowLeft' && this.selectedNotes.length && this._canvasActive) {
+          e.preventDefault();
+          this._pushHistory();
+          this._nudgeSelected(-res, 0);
+        } else if (e.key === 'ArrowRight' && this.selectedNotes.length && this._canvasActive) {
+          e.preventDefault();
+          this._pushHistory();
+          this._nudgeSelected(res, 0);
+        } else if (e.key === 'ArrowUp' && this.selectedNotes.length && !this.isDrum && this._canvasActive) {
+          e.preventDefault();
+          this._pushHistory();
+          this._nudgeSelected(0, 1);
+        } else if (e.key === 'ArrowDown' && this.selectedNotes.length && !this.isDrum && this._canvasActive) {
+          e.preventDefault();
+          this._pushHistory();
+          this._nudgeSelected(0, -1);
+        } else if ((e.key === 'm' || e.key === 'M') && this.instId) {
+          if (typeof seq !== 'undefined' && seq) {
+            const on = seq.toggleMute(this.instId);
+            document.querySelectorAll(`.ms-btn[data-type="${this.instId}"][data-ms="m"]`).forEach(b => b.classList.toggle('active-m', on));
+            document.querySelectorAll(`.ms-btn[data-type="${this.instId}"][data-ms="s"]`).forEach(b => b.classList.remove('active-s'));
+          }
+        } else if ((e.key === 's' || e.key === 'S') && this.instId) {
+          if (typeof seq !== 'undefined' && seq) {
+            const on = seq.toggleSolo(this.instId);
+            document.querySelectorAll(`.ms-btn[data-type="${this.instId}"][data-ms="s"]`).forEach(b => b.classList.toggle('active-s', on));
+            document.querySelectorAll(`.ms-btn[data-type="${this.instId}"][data-ms="m"]`).forEach(b => b.classList.remove('active-m'));
+            const soloState = seq.getSoloState();
+            document.querySelectorAll('.ms-btn[data-ms="s"]').forEach(s => s.classList.toggle('active-s', soloState[s.dataset.type]));
+          }
+        }
+      }
+
+      _nudgeSelected(dBeat, dPitch) {
+        for (const sn of this.selectedNotes) this._deleteNote(sn.beat, sn.pitch);
+        const moved = this.selectedNotes.map(sn => ({
+          beat: Math.max(0, sn.beat + dBeat),
+          pitch: Math.max(0, Math.min(127, sn.pitch + dPitch)),
+          dur: sn.dur, vel: sn.vel
+        }));
+        for (const n of moved) this._insertNote(n.beat, n.pitch, n.dur, n.vel);
+        this.selectedNotes = moved;
+        this._compileAndUpload(false);
       }
 
       load(sheet, instId, tType) {
@@ -6615,7 +6747,7 @@ if (typeof TextEncoder === 'undefined') {
           for (const tr of (step.tracks || [])) {
             if (tr.t === t) {
               for (const n of (tr.n || [])) {
-                out.push({ beat, pitch: n, dur: tr.dur ?? step.d ?? 0.25, vel: tr.v ?? 64 });
+                out.push({ beat, pitch: n, dur: tr.dur ?? step.d ?? 0.25, vel: tr.v ?? 64, accent: tr.a ? 1 : 0 });
               }
             }
           }
@@ -6670,6 +6802,10 @@ if (typeof TextEncoder === 'undefined') {
           const L = 10 + (n.vel / 127) * 38;
           ctx.fillStyle = `hsl(20,80%,${L}%)`;
           ctx.fillRect(x, y, nw, RH - 4);
+          if (n.accent) {
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.fillRect(x, y, 3, RH - 4);
+          }
         });
 
         this._drawDecorations(ctx);
@@ -6715,6 +6851,10 @@ if (typeof TextEncoder === 'undefined') {
           const L = 10 + (n.vel / 127) * 40;
           ctx.fillStyle = `hsl(${hue},72%,${L}%)`;
           ctx.beginPath(); ctx.roundRect(x, y, nw, RH - 2, 2); ctx.fill();
+          if (n.accent) {
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.fillRect(x + 1, y + 1, 3, RH - 4);
+          }
         });
 
         this._drawDecorations(ctx);
@@ -6743,6 +6883,16 @@ if (typeof TextEncoder === 'undefined') {
           const x = KEY_W + s * BEAT_W / 4;
           if (x > W + 1) break;
           ctx.beginPath(); ctx.moveTo(x, HEADER); ctx.lineTo(x, H); ctx.stroke();
+        }
+        // Loop-end marker
+        if (this.loopBeats > 0 && this.loopBeats < totalBeats) {
+          const lx = KEY_W + this.loopBeats * BEAT_W;
+          ctx.strokeStyle = 'rgba(255,60,60,0.7)';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(lx, HEADER); ctx.lineTo(lx, H); ctx.stroke();
+          ctx.fillStyle = 'rgba(255,60,60,0.7)';
+          ctx.font = '8px monospace'; ctx.textAlign = 'left';
+          ctx.fillText('LOOP', lx + 3, 13);
         }
       }
 
@@ -6864,6 +7014,24 @@ if (typeof TextEncoder === 'undefined') {
       _onPointerDown(e) {
         if (!this._sheet) return;
         this.cv.setPointerCapture(e.pointerId);
+
+        if (e.button === 2) {
+          const pos = this._getGridPos(e);
+          if (!pos) return;
+          const hit = this.notes.find(n => n.pitch === pos.pitch && pos.clickBeat >= n.beat && pos.clickBeat < n.beat + n.dur);
+          if (!hit) return;
+          let acc = 0;
+          for (const step of this._sheet.steps) {
+            if (Math.abs(acc - hit.beat) < 0.001) {
+              const tr = step.tracks?.find(x => x.t === this._tType && x.n?.includes(hit.pitch));
+              if (tr) { this._pushHistory(); tr.a = tr.a ? 0 : 1; this._compileAndUpload(false); }
+              break;
+            }
+            acc += step.d ?? 0.25;
+          }
+          return;
+        }
+
         const pos = this._getGridPos(e);
         if (!pos) return;
 
@@ -6898,11 +7066,11 @@ if (typeof TextEncoder === 'undefined') {
             startPosPitch: pos.pitch, startPosBeat: pos.clickBeat,
             deltaBeat: 0, deltaPitch: 0,
             hasMoved: false,
-            wasSelected: isSel,   // true = second click → delete; false = first click → just select
             targetTrack: null, startVel: hit.vel
           };
 
           if (type === 'vel') {
+            this._pushHistory();
             let acc = 0;
             for (const step of this._sheet.steps) {
               if (Math.abs(acc - hit.beat) < 0.001) {
@@ -6995,15 +7163,15 @@ if (typeof TextEncoder === 'undefined') {
         } else if ((st.type === 'move' || st.type === 'dup') && st.hasMoved) {
           this._commitDraggedNotes();
         } else if (!st.hasMoved && (st.type === 'vel' || st.type === 'move' || st.type === 'dup')) {
-          if (st.wasSelected) {
-            // Second click on an already-selected step → delete it
-            this._deleteNote(st.startPosBeat, st.startPosPitch);
-            this.selectedNotes = this.selectedNotes.filter(
-              sn => !(sn.beat === st.startPosBeat && sn.pitch === st.startPosPitch)
-            );
-            this._compileAndUpload(false);
-          }
-          // First click (wasSelected=false) → already selected in pointerdown, nothing more to do
+          // Single tap on a note → delete it (history already pushed in pointerdown for vel; push here for move/dup)
+          if (st.type !== 'vel') this._pushHistory();
+          const delBeat = st.hitNote?.beat ?? st.startPosBeat;
+          const delPitch = st.hitNote?.pitch ?? st.startPosPitch;
+          this._deleteNote(delBeat, delPitch);
+          this.selectedNotes = this.selectedNotes.filter(
+            sn => !(sn.beat === delBeat && sn.pitch === delPitch)
+          );
+          this._compileAndUpload(false);
         }
         this._dragState = null;
         if (!this._raf) this.draw(-1);
@@ -7012,6 +7180,7 @@ if (typeof TextEncoder === 'undefined') {
       _commitDraggedNotes() {
         const st = this._dragState;
         if (!st || (st.deltaBeat === 0 && st.deltaPitch === 0)) return;
+        this._pushHistory();
         if (st.type === 'move') this.selectedNotes.forEach(sn => this._deleteNote(sn.beat, sn.pitch));
 
         this.selectedNotes.forEach(sn => {
@@ -7064,6 +7233,7 @@ if (typeof TextEncoder === 'undefined') {
       }
 
       _toggleNote(clickBeat, pitch, defaultDur, defaultVel) {
+        this._pushHistory();
         const hit = this.notes.find(n => n.pitch === pitch && clickBeat >= n.beat && clickBeat < n.beat + n.dur);
         if (hit) this._deleteNote(hit.beat, hit.pitch);
         else this._insertNote(clickBeat, pitch, defaultDur, defaultVel);
@@ -7308,6 +7478,12 @@ if (typeof TextEncoder === 'undefined') {
     document.getElementById('seq-bpm').addEventListener('input', function () {
       document.getElementById('room-bpm').value = this.value;
       document.getElementById('room-bpm-val').textContent = this.value;
+    });
+
+    document.getElementById('room-loop-len').addEventListener('change', function () {
+      const beats = parseFloat(this.value);
+      if (seq) seq.setLoopBeats(beats);
+      if (_roll) { _roll.loopBeats = beats; if (!_roll._raf) _roll.draw(-1); }
     });
 
     document.getElementById('btn-back').addEventListener('click', () => {
