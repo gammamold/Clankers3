@@ -1294,6 +1294,11 @@
       background: #4a3010;
     }
 
+    .mx-strip[data-inst="voder"] ::before,
+    .mx-strip[data-inst="voder"]::before {
+      background: #603070;
+    }
+
     .mx-name {
       font-family: monospace;
       font-size: .6rem;
@@ -7327,6 +7332,7 @@ if (typeof TextEncoder === 'undefined') {
       { id: 'buchla', label: 'POLY FM', type: 'buchla' },
       { id: 'pads', label: 'POLY\nSYNTH', type: 'pads' },
       { id: 'rhodes', label: 'ORGAN', type: 'rhodes' },
+      { id: 'voder', label: 'VODER', type: 'voder' },
     ];
 
     function buildMixer() {
