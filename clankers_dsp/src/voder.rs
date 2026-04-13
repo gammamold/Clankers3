@@ -223,6 +223,17 @@ impl VoderVoice {
         self.env.set_adsr(p.attack_s, 0.01, 1.0, p.release_s);
         self.env.note_on();
 
+        // Force-compute F1–F3 biquad coefficients immediately so the very first
+        // process() block is never silent.  Reset coeff_block to 3 so the throttle
+        // fires on the next block (wrapping_add(1) → 4, 4 % 4 == 0).
+        let br = p.brightness.clamp(0.5, 1.5);
+        for i in 0..3 {
+            self.resonators[i].set_bpf(self.f_cur[i] * br, self.bw_cur[i], SR);
+        }
+        self.glot_lp.set_lpf1(800.0 + 800.0 * br, SR);
+        self.last_br     = br;
+        self.coeff_block = 3;   // next wrapping_add(1) → 4 → triggers first update
+
         // If no queue, start release after hold_samps (like other instruments)
         if hold_samps > 0 && self.queue.is_empty() {
             // We'll track manually in process()
