@@ -103,3 +103,4 @@ registry.register({ id: 'wasm:bass',   name: 'Pro-One Bass FM',  role: 'bass',  
 registry.register({ id: 'wasm:buchla', name: 'Buchla 259/292',   role: 'poly_fm', type: 'wasm', builtIn: true, state: null });
 registry.register({ id: 'wasm:pads',   name: 'HybridSynth Pads', role: 'pad',     type: 'wasm', builtIn: true, state: null });
 registry.register({ id: 'wasm:rhodes', name: 'Rhodes EP',        role: 'keys',    type: 'wasm', builtIn: true, state: null });
+registry.register({ id: 'wasm:voder',  name: 'Voder',            role: 'voice',   type: 'wasm', builtIn: true, state: null });
