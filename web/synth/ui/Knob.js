@@ -101,6 +101,8 @@ export class Knob {
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
     };
     this._svg.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -109,6 +111,13 @@ export class Knob {
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     });
+    this._svg.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startY    = e.touches[0].clientY;
+      startNorm = this._toNorm(this._value);
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onUp);
+    }, { passive: false });
     this._svg.addEventListener('dblclick', () => {
       this._value = this._default;
       this._draw();
