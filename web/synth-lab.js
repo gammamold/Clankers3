@@ -276,9 +276,10 @@ export class SynthLab {
     row.innerHTML = '';
 
     this._slots.forEach((slot, i) => {
-      const t         = this._slotLegacyT[i];
-      const slotLabel = LEGACY_T_NAMES[t] ?? `SYNTH ${i + 1}`;
-      const state     = slot.adapter?.getState() ?? null;
+      const t           = this._slotLegacyT[i];
+      const slotLabel   = LEGACY_T_NAMES[t] ?? `SYNTH ${i + 1}`;
+      const state       = slot.adapter?.getState() ?? null;
+      const accentStyle = t === 10 ? ' style="color:#f4a261"' : '';
 
       const card = document.createElement('div');
       card.className = 'synth-slot-card' + (this._editingSlot === i ? ' ssc-active' : '');
