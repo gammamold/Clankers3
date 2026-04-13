@@ -171,6 +171,10 @@ pub struct VoderVoice {
     queue:        Vec<(usize, usize)>,
     queue_samps:  usize,           // samples consumed in current phoneme slot
 
+    // Performance: coefficient update throttling
+    coeff_block:  u8,              // wrapping counter; F1-F3 coefficients updated every 4 blocks
+    last_br:      f32,             // last brightness used for glot_lp (skip recompute if unchanged)
+
     freq_hz:      f32,
     active:       bool,
     held:         bool,            // note-on is being held
@@ -195,12 +199,17 @@ impl VoderVoice {
             v_tgt:        1.0,
             queue:        Vec::new(),
             queue_samps:  0,
+            coeff_block:  0,
+            last_br:      -1.0,   // sentinel: force first glot_lp computation
             freq_hz:      220.0,
             active:       false,
             held:         false,
             midi_note:    60,
         };
         v.glot_lp.set_lpf1(1400.0, SR);
+        // F4/F5 are fixed speaker-character formants — pre-compute once, never recompute.
+        v.resonators[3].set_bpf(F4_HZ, F4_BW, SR);
+        v.resonators[4].set_bpf(F5_HZ, F5_BW, SR);
         v
     }
 
@@ -316,22 +325,31 @@ impl VoderVoice {
         }
         self.v_cur = self.v_tgt + (self.v_cur - self.v_tgt) * alpha_n;
 
-        // Apply brightness scale to F1-F3 (F4/F5 are fixed character formants)
+        // Apply brightness scale to F1-F3 (F4/F5 are pre-computed fixed formants)
         let br = p.brightness.clamp(0.5, 1.5);
-        let f_eff  = [self.f_cur[0] * br, self.f_cur[1] * br, self.f_cur[2] * br,
-                      F4_HZ, F5_HZ];
-        let bw_eff = [self.bw_cur[0], self.bw_cur[1], self.bw_cur[2], F4_BW, F5_BW];
 
-        // Recompute biquad coefficients once per block
-        for i in 0..5 {
-            self.resonators[i].set_bpf(f_eff[i], bw_eff[i], SR);
+        // ── Coefficient update throttling ─────────────────────────────────────
+        // F4/F5 biquad coefficients are pre-computed in new() and never change.
+        // glot_lp only recomputes when brightness changes (stable mid-note).
+        // F1-F3 biquads are updated every 4 blocks (~12 ms) — well above the
+        // perceptual threshold given coartic_ms >= 5 ms defaults.
+        self.coeff_block = self.coeff_block.wrapping_add(1);
+        if self.coeff_block % 4 == 0 {
+            let f_eff  = [self.f_cur[0] * br, self.f_cur[1] * br, self.f_cur[2] * br];
+            let bw_eff = [self.bw_cur[0],      self.bw_cur[1],      self.bw_cur[2]];
+            for i in 0..3 {
+                self.resonators[i].set_bpf(f_eff[i], bw_eff[i], SR);
+            }
+        }
+
+        // glot_lp: only call set_lpf1 when brightness actually changed
+        if (br - self.last_br).abs() > 0.001 {
+            self.last_br = br;
+            self.glot_lp.set_lpf1(800.0 + 800.0 * br, SR);
         }
 
         // Effective voicing: phoneme's or manual override
         let voicing = if p.voicing_manual > 0.001 { p.voicing_manual } else { self.v_cur };
-
-        // Spectral tilt cutoff tracks brightness (brighter = wider glottal)
-        self.glot_lp.set_lpf1(800.0 + 800.0 * br, SR);
 
         // ── Sample loop ───────────────────────────────────────────────────────
         let vib_dt    = p.vibrato_rate / SR;
