@@ -3898,6 +3898,23 @@
         </div>
       </div>
 
+      <!-- ── Voder ─────────────────────────────────────────────────────────────── -->
+      <div class="inst">
+        <div class="inst-hdr">VODER <span>[t:5]</span> <button class="ms-btn" data-type="voder"
+            data-ms="m">M</button><button class="ms-btn" data-type="voder" data-ms="s">S</button><span
+            class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="voder" min="0"
+              max="100" value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="voder"><option value="">—</option></select></span></div>
+        <div class="pads" id="voder-pads"></div>
+        <div class="inst-ctrl-wrap" data-inst="voder">
+          <div class="inst-ctrl-tabs">
+            <button class="ctrl-tab ctrl-tab-knobs ct-active" data-inst="voder">KNOBS</button>
+          </div>
+          <div class="inst-knobs-panel" id="voder-knobs-panel">
+            <div class="knob-row" id="voder-knobs"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ── Master FX ─────────────────────────────────────────────────────────── -->
       <div class="grid-sep">MASTER FX</div>
 
@@ -4537,6 +4554,7 @@
     let buchlaNode = null;   // AudioWorkletNode — buchla
     let padsNode = null;   // AudioWorkletNode — pads
     let rhodesNode = null;   // AudioWorkletNode — rhodes
+    let voderNode  = null;   // AudioWorkletNode — voder
     let rack = null;   // MasterFx
 
     function waitForReady(node) {
@@ -4597,7 +4615,8 @@ if (typeof TextEncoder === 'undefined') {
             + `globalThis.ClankersBuchla = ClankersBuchla;\n`
             + `globalThis.ClankersDrums = ClankersDrums;\n`
             + `globalThis.ClankersPads = ClankersPads;\n`
-            + `globalThis.ClankersRhodes = ClankersRhodes;\n`;
+            + `globalThis.ClankersRhodes = ClankersRhodes;\n`
+            + `globalThis.ClankersVoder = ClankersVoder;\n`;
       const glueBlob = new Blob([glue], { type: 'application/javascript' });
       await ctx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
 
@@ -4606,6 +4625,7 @@ if (typeof TextEncoder === 'undefined') {
       await ctx.audioWorklet.addModule('/worklets/buchla-worklet.js');
       await ctx.audioWorklet.addModule('/worklets/pads-worklet.js');
       await ctx.audioWorklet.addModule('/worklets/rhodes-worklet.js');
+      await ctx.audioWorklet.addModule('/worklets/voder-worklet.js');
 
       const seed = (Math.random() * 0xffffffff) >>> 0;
       drumsNode = new AudioWorkletNode(ctx, 'drums-worklet', { processorOptions: { wasmModule, seed }, outputChannelCount: [1] });
@@ -4613,6 +4633,7 @@ if (typeof TextEncoder === 'undefined') {
       buchlaNode = new AudioWorkletNode(ctx, 'buchla-worklet', { processorOptions: { wasmModule } });
       padsNode = new AudioWorkletNode(ctx, 'pads-worklet', { processorOptions: { wasmModule }, outputChannelCount: [2] });
       rhodesNode = new AudioWorkletNode(ctx, 'rhodes-worklet', { processorOptions: { wasmModule }, outputChannelCount: [2] });
+      voderNode = new AudioWorkletNode(ctx, 'voder-worklet', { processorOptions: { wasmModule, seed: seed ^ 0x70de7 }, outputChannelCount: [1] });
 
       await Promise.all([
         waitForReady(drumsNode),
@@ -4620,6 +4641,7 @@ if (typeof TextEncoder === 'undefined') {
         waitForReady(buchlaNode),
         waitForReady(padsNode),
         waitForReady(rhodesNode),
+        waitForReady(voderNode),
       ]);
 
       rack = new MasterFx(ctx);
@@ -4629,6 +4651,7 @@ if (typeof TextEncoder === 'undefined') {
       window._ctx = ctx; window._rack = rack;
       window._drumsNode = drumsNode; window._bassNode = bassNode;
       window._buchlaNode = buchlaNode; window._padsNode = padsNode; window._rhodesNode = rhodesNode;
+      window._voderNode = voderNode;
     }
 
     // ─── DRUMS ─────────────────────────────────────────────────────────────────
@@ -5136,6 +5159,37 @@ if (typeof TextEncoder === 'undefined') {
 
     for (const k of Object.values(rk)) k.onChange = sendRhodesParams;
 
+    // ─── Voder ─────────────────────────────────────────────────────────────────
+
+    function voderCC() { return { 74: 64, 20: 0, 73: 20, 72: 40, 77: 40, 16: 100 }; }
+
+    function triggerVoder(midi, phonemes) {
+      ensureReady().then(() => {
+        const bpm = +document.getElementById('seq-bpm').value;
+        const holdSamples = Math.round(2 * (60 / bpm) * 44100);
+        const ccJson = JSON.stringify(voderCC());
+        voderNode.port.postMessage({ type: 'setParams', ccJson });
+        voderNode.port.postMessage({
+          type: 'trigger', audioTime: ctx.currentTime,
+          midiNote: midi, velocity: 0.8, holdSamples, ccJson,
+          ...(phonemes ? { phonemes } : {}),
+        });
+        midiOut.scheduleNote('voder', midi, 0.8, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+      });
+    }
+
+    const VODER_PADS = [
+      { label: 'C3', midi: 48 }, { label: 'E3', midi: 52 }, { label: 'G3', midi: 55 },
+      { label: 'A3', midi: 57 }, { label: 'C4', midi: 60 }, { label: 'E4', midi: 64 },
+    ];
+    const voderGrid = document.getElementById('voder-pads');
+    VODER_PADS.forEach(({ label, midi }) => {
+      const btn = document.createElement('button');
+      btn.className = 'pad'; btn.textContent = label;
+      btn.addEventListener('click', () => triggerVoder(midi));
+      voderGrid.appendChild(btn);
+    });
+
     function padsCC() {
       return {
         74: pk['p-cutoff'].val, 71: pk['p-res'].val,
@@ -5160,9 +5214,9 @@ if (typeof TextEncoder === 'undefined') {
       if (!seq) {
         seq = new Sequencer(ctx, {
           drums: drumsNode, bass: bassNode,
-          buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode
+          buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode, voder: voderNode
         });
-        seq.liveCC = { bass: bassCC, buchla: buchlaCC, pads: padsCC, rhodes: rhodesCC };
+        seq.liveCC = { bass: bassCC, buchla: buchlaCC, pads: padsCC, rhodes: rhodesCC, voder: voderCC };
         seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
         seq.buchlaOctaveOffset = buchlaOctave * 12;
         seq.synthLab = synthLab;  // enable Synth Lab track playback

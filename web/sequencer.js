@@ -15,6 +15,7 @@
  *   t:1   Poly FM Bass      (WasmInstrumentAdapter → buchla-worklet)
  *   t:6   HybridSynth Pads  (WasmInstrumentAdapter → pads-worklet)
  *   t:3   Rhodes FM piano   (WasmInstrumentAdapter → rhodes-worklet)
+ *   t:5   Voder             (WasmInstrumentAdapter → voder-worklet)
  *   t:7   Synth Lab slot 0  (WebAudioInstrumentAdapter — set by SynthLab)
  *   t:8   Synth Lab slot 1
  *   t:9   Synth Lab slot 2
@@ -77,6 +78,7 @@ export class Sequencer {
       buchla: nodes.buchla ? new WasmInstrumentAdapter(nodes.buchla, 'buchla')                   : null,
       pads:   nodes.pads   ? new WasmInstrumentAdapter(nodes.pads,   'pads')                     : null,
       rhodes: nodes.rhodes ? new WasmInstrumentAdapter(nodes.rhodes, 'rhodes')                   : null,
+      voder:  nodes.voder  ? new WasmInstrumentAdapter(nodes.voder,  'voder')                    : null,
     };
     this._adapters = {
       ...this._defaultAdapters,
@@ -90,6 +92,7 @@ export class Sequencer {
       buchla: nodes.buchla ?? null,
       pads: nodes.pads ?? null,
       rhodes: nodes.rhodes ?? null,
+      voder: nodes.voder ?? null,
     };
 
     this.sheet = null;
@@ -103,9 +106,9 @@ export class Sequencer {
     this._stepIdx = 0;
 
     // Per-instrument mute/solo/volume
-    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
-    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
-    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,   synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0,   synth4: 1.0 };
+    this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, voder: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, voder: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
+    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,   voder: 1.0,   synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0,   synth4: 1.0 };
 
     /**
      * SynthLab instance — set externally.
@@ -171,7 +174,7 @@ export class Sequencer {
       }
     }
     this._instrGains = {};
-    for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
+    for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder']) {
       const g = this.ctx.createGain();
       g.connect(this._masterGain);
       this._instrGains[type] = g;
@@ -301,7 +304,7 @@ export class Sequencer {
   isAudible(type) { return this._isAudible(type); }
 
   _updateGains() {
-    for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes']) {
+    for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder']) {
       if (this._instrGains?.[type]) {
         this._instrGains[type].gain.value = this._isAudible(type) ? this._volumes[type] : 0.0;
       }
@@ -385,6 +388,18 @@ export class Sequencer {
             raw.push({
               beatTime: beat, type: 'rhodes', midiNote: note, velocity: vel,
               ccJson: JSON.stringify(cc), durBeats
+            });
+          }
+        }
+
+        if (track.t === 5) {
+          const durBeats = track.dur ?? step.d ?? 0.5;
+          // track.ph: optional phoneme index array, e.g. [8, 7, 2, 11]
+          const phonemes = Array.isArray(track.ph) ? track.ph : null;
+          for (const note of notes) {
+            raw.push({
+              beatTime: beat, type: 'voder', midiNote: note, velocity: vel,
+              ccJson: JSON.stringify(cc), durBeats, phonemes
             });
           }
         }
@@ -512,6 +527,27 @@ export class Sequencer {
       }
       if (audible && adapter) adapter.scheduleNote(ev.midiNote, ev.velocity, audioTime, holdMs, { ccJson });
       this.midiOut?.scheduleNote(ev.type, ev.midiNote, ev.velocity, audioTime, this.ctx, holdMs);
+
+    } else if (ev.type === 'voder') {
+      const liveGetter = this.liveCC?.voder;
+      let ccJson = ev.ccJson ?? '{}';
+      if (liveGetter) {
+        const liveCC = liveGetter() ?? {};
+        const noteCC = JSON.parse(ccJson);
+        ccJson = JSON.stringify(Object.assign({}, noteCC, liveCC));
+      }
+      const sr          = this.ctx.sampleRate;
+      const holdSamples = Math.round((holdMs / 1000) * sr);
+      if (audible && adapter?.node?.port) {
+        // Post trigger directly so we can include phonemes in the same message
+        adapter.node.port.postMessage({
+          type: 'trigger', audioTime,
+          midiNote: ev.midiNote, velocity: ev.velocity,
+          holdSamples, ccJson,
+          ...(ev.phonemes ? { phonemes: ev.phonemes } : {}),
+        });
+      }
+      this.midiOut?.scheduleNote('voder', ev.midiNote, ev.velocity, audioTime, this.ctx, holdMs);
 
     } else {
       // synth0–synth4: no CC merging, no octave offset
