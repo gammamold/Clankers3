@@ -303,8 +303,8 @@ if (typeof TextEncoder === 'undefined') {
        + glue.replace(/^export\s+class\s/gm, 'class ')
              .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, '')
              .replace(/import\.meta\.url/g, "'unused'");
-  glue += `\nglobalThis.initSync = initSync;\n`
-        + `globalThis.ClankersVoder = ClankersVoder;\n`;
+  glue += `\nglobalThis.initSync = wasm_bindgen.initSync;\n`
+        + `globalThis.ClankersVoder = wasm_bindgen.ClankersVoder;\n`;
 
   const glueBlob = new Blob([glue], { type: 'application/javascript' });
   await audioCtx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
