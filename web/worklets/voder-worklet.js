@@ -46,6 +46,8 @@ class VoderWorkletProcessor extends AudioWorkletProcessor {
             if (!this._engine) return;
             switch (data.type) {
                 case 'trigger':
+                    // Skip zero-velocity flush triggers (sent by WasmInstrumentAdapter.stop())
+                    if ((data.velocity ?? 0) <= 0) break;
                     this._queue.push(data);
                     this._queue.sort((a, b) => a.audioTime - b.audioTime);
                     break;
