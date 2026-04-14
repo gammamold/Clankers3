@@ -101,6 +101,7 @@ export class Sequencer {
     this._bpm = 120;
     this._steps = [];   // compiled event list
     this._loopBeats = 0;
+    this._loopBeatsOverride = 0;   // set by setLoopBeats; survives seq.load() hot-reloads
     this._startTime = 0;
     this._nextBeat = 0;
     this._stepIdx = 0;
@@ -237,7 +238,21 @@ export class Sequencer {
   getMuteState() { return { ...this._mute }; }
   getSoloState() { return { ...this._solo }; }
 
-  setLoopBeats(n) { this._loopBeats = n > 0 ? n : this._totalBeats ?? this._loopBeats; }
+  setLoopBeats(n) {
+    const newBeats = n > 0 ? n : this._totalBeats ?? this._loopBeats;
+    this._loopBeatsOverride = n > 0 ? n : 0;
+    this._loopBeats = newBeats;
+    // Immediately reposition playback into the new loop boundary
+    if (this._timer && this._startTime && this._steps.length) {
+      const elapsed = this.ctx.currentTime - this._startTime;
+      const currentBeat = Math.max(0, elapsed * (this._bpm / 60));
+      const loopIter = Math.floor(currentBeat / newBeats);
+      this._nextBeat = loopIter * newBeats;
+      const beatInLoop = currentBeat - this._nextBeat;
+      const idx = this._steps.findIndex(s => s.beatTime >= beatInLoop && s.beatTime < newBeats);
+      this._stepIdx = idx === -1 ? this._steps.length : idx;
+    }
+  }
 
   getCurrentBeat() {
     if (!this._timer || !this._startTime) return -1;
@@ -445,7 +460,7 @@ export class Sequencer {
     raw.sort((a, b) => a.beatTime - b.beatTime);
     this._steps = raw;
     this._totalBeats = beat;
-    this._loopBeats = sheet.loopBeats ?? beat;
+    this._loopBeats = this._loopBeatsOverride > 0 ? this._loopBeatsOverride : (sheet.loopBeats ?? beat);
     console.log(`[seq] compiled ${raw.length} events (${this._loopBeats} beats @ ${this._bpm} BPM) — streaming`);
   }
 
@@ -521,6 +536,7 @@ export class Sequencer {
       if (audible && adapter) adapter.scheduleNote(drumNote, ev.velocity, audioTime, 100, { voiceId: ev.voiceId });
       this.midiOut?.scheduleNote('drum', ev.voiceId, ev.velocity, audioTime, this.ctx, 100);
       this.modularSync?.sendGate(ev.type, audioTime);
+      if (ev.voiceId === 0) this.onTrigger?.(ev.type);  // glow only on kick
       return;
     }
 
@@ -583,6 +599,7 @@ export class Sequencer {
     }
 
     this.modularSync?.sendGate(ev.type, audioTime);
+    this.onTrigger?.(ev.type);
   }
 }
 

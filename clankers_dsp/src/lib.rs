@@ -437,7 +437,7 @@ fn parse_buchla_params(cc_json: &str) -> BuchlaParams {
         let n = val / 127.0;
         match key {
             74 => p.cutoff_norm = n,
-            20 => p.fold_amount = n * 0.4,
+            20 => p.fold_amount = n,
             19 => p.release_s   = 0.005 + n * 2.995,
             21 => p.filter_mod  = n,
             16 => p.volume      = n,

@@ -849,7 +849,7 @@
       font-family: monospace;
       font-size: 1.6rem;
       color: #888;
-      transition: color .25s, text-shadow .25s;
+      transition: color .6s ease-out, text-shadow .6s ease-out;
       user-select: none;
     }
 
@@ -2973,6 +2973,13 @@
       cursor: not-allowed;
     }
 
+    #btn-ai-auto.ai-auto-on {
+      background: #0a0a2a;
+      border-color: #44f;
+      color: #99f;
+      box-shadow: 0 0 6px #22f6;
+    }
+
     .sle-piano-container {
       display: flex;
       justify-content: center;
@@ -3728,6 +3735,7 @@
         NOTE
         <select id="room-resolution"
           style="background:#0e0e0e;color:#00d4ff;border:1px solid #004060;font-family:monospace;font-size:.72rem;padding:.2rem .35rem;border-radius:2px;cursor:pointer;">
+          <option value="0">OFF</option>
           <option value="0.25">1/16</option>
           <option value="0.5" selected>1/8</option>
           <option value="1">1/4</option>
@@ -3921,7 +3929,7 @@
       <div class="inst">
         <div class="inst-hdr">VODER <span>[t:5]</span> <button class="ms-btn" data-type="voder"
             data-ms="m">M</button><button class="ms-btn" data-type="voder" data-ms="s">S</button><span
-            class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="voder" min="0"
+            class="vol-wrap"><label>VOL</label><input type="range" class="vol-slider" data-type="voder" data-gain-max="0.25" min="0"
               max="100" value="100"></span><span class="midi-ch-wrap"><label>MCH</label><select class="midi-ch-sel" data-type="voder"><option value="">—</option></select></span></div>
         <div class="pads" id="voder-pads"></div>
         <div class="inst-ctrl-wrap" data-inst="voder">
@@ -4376,6 +4384,15 @@
         <button id="btn-evolve">EVOLVE →</button>
         <button id="btn-autoplay" style="background:#0a1a0a;border-color:#1e3e1e;color:#383">▶ AUTO</button>
       </div>
+      <div class="input-row" id="ai-auto-row" style="display:none">
+        <button id="btn-ai-auto"
+          style="background:#0a0a1a;border:1px solid #1e1e4e;color:#44f;font-family:monospace;font-size:.7rem;padding:.3rem .6rem;cursor:pointer;letter-spacing:.06em;">
+          ◈ AI AUTO
+        </button>
+        <span id="ai-auto-indicator"
+          style="display:none;font-family:monospace;font-size:.65rem;color:#66f;align-self:center;margin-left:.4rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">
+        </span>
+      </div>
       <div class="input-row">
         <input id="chat-input" type="text" placeholder="Describe your track or ask the band for changes…" />
         <button id="chat-send">SEND</button>
@@ -4636,13 +4653,13 @@ if (typeof TextEncoder === 'undefined') {
       glue = polyfill + glue.replace(/^export\s+class\s/gm, 'class ')
                   .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, '')
                   .replace(/import\.meta\.url/g, "'unused'");
-      glue += `\nglobalThis.initSync = wasm_bindgen.initSync;\n`
-            + `globalThis.ClankersBass = wasm_bindgen.ClankersBass;\n`
-            + `globalThis.ClankersBuchla = wasm_bindgen.ClankersBuchla;\n`
-            + `globalThis.ClankersDrums = wasm_bindgen.ClankersDrums;\n`
-            + `globalThis.ClankersPads = wasm_bindgen.ClankersPads;\n`
-            + `globalThis.ClankersRhodes = wasm_bindgen.ClankersRhodes;\n`
-            + `globalThis.ClankersVoder = wasm_bindgen.ClankersVoder;\n`;
+      glue += `\nglobalThis.initSync = initSync;\n`
+            + `globalThis.ClankersBass = ClankersBass;\n`
+            + `globalThis.ClankersBuchla = ClankersBuchla;\n`
+            + `globalThis.ClankersDrums = ClankersDrums;\n`
+            + `globalThis.ClankersPads = ClankersPads;\n`
+            + `globalThis.ClankersRhodes = ClankersRhodes;\n`
+            + `globalThis.ClankersVoder = ClankersVoder;\n`;
       const glueBlob = new Blob([glue], { type: 'application/javascript' });
       await ctx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
 
@@ -5274,13 +5291,25 @@ if (typeof TextEncoder === 'undefined') {
     // ─── Sequencer ─────────────────────────────────────────────────────────────
     let seq = null;
 
+    // ── AI AUTO CC override layer ─────────────────────────────────────────────
+    let _llmCC = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
+    let _autoEnabled = false;
+    let _autoTimeout = null;
+
     function getSeq() {
       if (!seq) {
         seq = new Sequencer(ctx, {
           drums: drumsNode, bass: bassNode,
           buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode, voder: voderNode
         });
-        seq.liveCC = { bass: bassCC, buchla: buchlaCC, pads: padsCC, rhodes: rhodesCC, voder: voderCC };
+        seq.liveCC = {
+          bass:   () => Object.assign({}, bassCC(),   _llmCC.bass   ?? {}),
+          buchla: () => Object.assign({}, buchlaCC(), _llmCC.buchla ?? {}),
+          pads:   () => Object.assign({}, padsCC(),   _llmCC.pads   ?? {}),
+          rhodes: () => Object.assign({}, rhodesCC(), _llmCC.rhodes ?? {}),
+          voder:  () => Object.assign({}, voderCC(),  _llmCC.voder  ?? {}),
+        };
+        seq.onTrigger = _pulseFace;
         seq.setVoderLpf(vk['vod-lpf'].val);
         seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
         seq.buchlaOctaveOffset = buchlaOctave * 12;
@@ -5653,7 +5682,7 @@ if (typeof TextEncoder === 'undefined') {
     // ─── Volume sliders ────────────────────────────────────────────────────────
     document.querySelectorAll('.vol-slider').forEach(slider => {
       slider.addEventListener('input', () => {
-        if (seq) seq.setVolume(slider.dataset.type, slider.value / 100);
+        if (seq) seq.setVolume(slider.dataset.type, (slider.value / 100) * (parseFloat(slider.dataset.gainMax) || 1.0));
       });
     });
 
@@ -6089,6 +6118,7 @@ if (typeof TextEncoder === 'undefined') {
       document.getElementById('session-badge').textContent = `[${sessionId.slice(0, 8)}]`;
       chatInput.disabled = false; chatSend.disabled = false;
       document.getElementById('evolve-row').style.display = '';
+      document.getElementById('ai-auto-row').style.display = '';
       const steps = sheet.steps?.length ?? 0;
       chatAppend(`Session ready (${steps} steps @ ${sheet.bpm ?? '?'} BPM). Ask the band to modify it.`, 'msg-sys');
     });
@@ -6152,6 +6182,7 @@ if (typeof TextEncoder === 'undefined') {
           chatHistory = [];
           document.getElementById('session-badge').textContent = `[${sessionId.slice(0, 8)}]`;
           document.getElementById('evolve-row').style.display = '';
+          document.getElementById('ai-auto-row').style.display = '';
           if (!songMode) document.getElementById('btn-mode-song')?.click();
 
           if (data.messages && data.messages.length) {
@@ -6159,6 +6190,7 @@ if (typeof TextEncoder === 'undefined') {
           }
           chatAppend('Session started. The band is ready.', 'msg-sys');
           sheetToSequencer(data.sheet, { autoStore: true, autoPlay: false });
+          if (_autoEnabled) { clearTimeout(_autoTimeout); _autoPoll(); }
         } catch (e) {
           chatAppend('Error: ' + e, 'msg-sys');
         } finally {
@@ -6188,6 +6220,7 @@ if (typeof TextEncoder === 'undefined') {
         chatHistory.push({ role: data.companion, content: data.reply });
         currentSheet = data.sheet;
         sheetToSequencer(data.sheet, { focusMain: false });
+        if (_autoEnabled) { clearTimeout(_autoTimeout); _autoPoll(); }
       } catch (e) {
         chatAppend('Error: ' + e, 'msg-sys');
       } finally {
@@ -6197,6 +6230,71 @@ if (typeof TextEncoder === 'undefined') {
 
     chatSend.addEventListener('click', sendChat);
     chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+    // ── AI AUTO polling ──────────────────────────────────────────────────────
+    function _autoBarMs() {
+      const bpm = seq?._bpm ?? +document.getElementById('seq-bpm').value ?? 120;
+      return (4 * 4 * 60 / bpm) * 1000;  // 4 bars
+    }
+
+    async function _autoPoll() {
+      if (!_autoEnabled) return;
+      if (!seq?.isPlaying) { _autoTimeout = setTimeout(_autoPoll, 2000); return; }
+
+      const apiKey = _bandApiKey();
+      if (!apiKey) { _autoDisable(); return; }
+
+      const ex = currentSheet?.explanation ?? {};
+      try {
+        const res = await fetch('/api/band/automate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            section: ex.section ?? 'verse1',
+            tension: currentSheet?.tension ?? 0.4,
+            energy:  ex.energy  ?? 0.5,
+            key:     ex.key     ?? 'C minor',
+            style:   ex.style   ?? 'electronic',
+            bpm:     seq._bpm   ?? 120,
+            apiKey, model: _bandModel(), provider: _bandProvider(),
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.cc && typeof data.cc === 'object') {
+            for (const instr of ['bass', 'buchla', 'pads', 'rhodes', 'voder']) {
+              if (data.cc[instr]) _llmCC[instr] = data.cc[instr];
+            }
+            const active = Object.keys(data.cc).filter(k => Object.keys(data.cc[k] ?? {}).length);
+            const ind = document.getElementById('ai-auto-indicator');
+            if (ind) ind.textContent = `AI: ${active.join(' · ')}${data.note ? ' · ' + data.note : ''}`;
+          }
+        }
+      } catch (_) { /* hold existing values */ }
+
+      if (_autoEnabled) _autoTimeout = setTimeout(_autoPoll, _autoBarMs());
+    }
+
+    function _autoEnable() {
+      _autoEnabled = true;
+      document.getElementById('btn-ai-auto').classList.add('ai-auto-on');
+      document.getElementById('ai-auto-indicator').style.display = '';
+      clearTimeout(_autoTimeout);
+      _autoPoll();
+    }
+
+    function _autoDisable() {
+      _autoEnabled = false;
+      clearTimeout(_autoTimeout);
+      _autoTimeout = null;
+      _llmCC = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
+      document.getElementById('btn-ai-auto').classList.remove('ai-auto-on');
+      document.getElementById('ai-auto-indicator').style.display = 'none';
+    }
+
+    document.getElementById('btn-ai-auto').addEventListener('click', () => {
+      if (_autoEnabled) _autoDisable(); else _autoEnable();
+    });
 
     // ── EVOLVE: ask the band to mutate for the next section ──────────────────
     let autoPlayOnEvolve = false;
@@ -6232,6 +6330,7 @@ if (typeof TextEncoder === 'undefined') {
         currentSheet = data.sheet;
         if (data.reply) chatAppend(`Conductor: ${data.reply}`, 'msg-band');
         sheetToSequencer(data.sheet, { autoStoreNext: true, autoPlay: autoPlayOnEvolve, focusMain: false });
+        if (_autoEnabled) { clearTimeout(_autoTimeout); _autoPoll(); }
         // Advance section selector to next in arc
         const arcOrder = ['instrumental', 'verse2', 'bridge', 'verse3', 'outro'];
         const sel = document.getElementById('evolve-section');
@@ -6619,6 +6718,16 @@ if (typeof TextEncoder === 'undefined') {
     const ROLL_COLORS = { drum: 185, bass: 185, buchla: 35, pads: 215, rhodes: 50 };
     // drum uses its own hue scheme below (orange)
 
+    // Per-instrument neon colors — single source of truth for piano roll + face glow
+    const INST_COLORS = {
+      drum:   '#ff6600',  // neon orange
+      bass:   '#00d4ff',  // cyan
+      buchla: '#ffe600',  // neon yellow
+      pads:   '#bf5fff',  // neon purple
+      rhodes: '#39ff14',  // neon green
+      voder:  '#ff007f',  // neon pink
+    };
+
     class PianoRoll {
       constructor(canvas) {
         this.cv = canvas;
@@ -6683,7 +6792,7 @@ if (typeof TextEncoder === 'undefined') {
         if (!this._sheet) return;
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-        const res = parseFloat(document.getElementById('room-resolution')?.value ?? '0.25');
+        const res = parseFloat(document.getElementById('room-resolution')?.value ?? '0.25') || 0.015625;
 
         if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
           e.preventDefault();
@@ -6824,9 +6933,10 @@ if (typeof TextEncoder === 'undefined') {
           if (x >= KEY_W + totalBeats * BEAT_W) return; // past loop end
           const y = HEADER + ri * RH + 2;
           const nw = Math.max(5, BEAT_W * 0.18);
-          const L = 10 + (n.vel / 127) * 38;
-          ctx.fillStyle = `hsl(20,80%,${L}%)`;
+          ctx.globalAlpha = 0.3 + (n.vel / 127) * 0.7;
+          ctx.fillStyle = INST_COLORS.drum;
           ctx.fillRect(x, y, nw, RH - 4);
+          ctx.globalAlpha = 1;
           if (n.accent) {
             ctx.fillStyle = 'rgba(255,255,255,0.9)';
             ctx.fillRect(x, y, 3, RH - 4);
@@ -6862,7 +6972,7 @@ if (typeof TextEncoder === 'undefined') {
         this._drawGrid(ctx, W, H, totalBeats, BEAT_W, KEY_W, HEADER);
 
         // notes — clip to loop boundary
-        const hue = ROLL_COLORS[this.instId] ?? 185;
+        const instColor = INST_COLORS[this.instId] ?? '#00d4ff';
         const rollEnd = KEY_W + totalBeats * BEAT_W;
         this.notes.forEach(n => {
           if (n.pitch < pitchMin || n.pitch > pitchMax || this._isHidden(n)) return;
@@ -6873,9 +6983,10 @@ if (typeof TextEncoder === 'undefined') {
           // clip duration so note never draws past the loop boundary
           const maxDur = (totalBeats - n.beat);
           const nw = Math.max(3, Math.min(n.dur, maxDur) * BEAT_W - 2);
-          const L = 10 + (n.vel / 127) * 40;
-          ctx.fillStyle = `hsl(${hue},72%,${L}%)`;
+          ctx.globalAlpha = 0.3 + (n.vel / 127) * 0.7;
+          ctx.fillStyle = instColor;
           ctx.beginPath(); ctx.roundRect(x, y, nw, RH - 2, 2); ctx.fill();
+          ctx.globalAlpha = 1;
           if (n.accent) {
             ctx.fillStyle = 'rgba(255,255,255,0.9)';
             ctx.fillRect(x + 1, y + 1, 3, RH - 4);
@@ -7068,7 +7179,7 @@ if (typeof TextEncoder === 'undefined') {
             startX: pos.cx, startY: pos.cy,
             startClientX: e.clientX, startClientY: e.clientY,
             hasMoved: false,
-            clickBeat: pos.clickBeat, pitch: pos.pitch, dur: parseFloat(document.getElementById('room-resolution')?.value ?? '0.5')
+            clickBeat: pos.clickBeat, pitch: pos.pitch, dur: parseFloat(document.getElementById('room-resolution')?.value) || 0.25
           };
           if (!e.shiftKey) this.selectedNotes = [];
           this.marqueeBox = { x0: pos.cx, y0: pos.cy, x1: pos.cx, y1: pos.cy };
@@ -7153,7 +7264,7 @@ if (typeof TextEncoder === 'undefined') {
           const res = parseFloat(document.getElementById('room-resolution')?.value ?? '0.25');
           const pos = this._getGridPos(e);
           if (pos) {
-            st.deltaBeat = Math.round((pos.clickBeat - st.startPosBeat) / res) * res;
+            st.deltaBeat = res > 0 ? Math.round((pos.clickBeat - st.startPosBeat) / res) * res : pos.clickBeat - st.startPosBeat;
             if (this.isDrum) {
               const startIdx = DRUM_ROWS.findIndex(r => r.midi === st.startPosPitch);
               const curIdx = DRUM_ROWS.findIndex(r => r.midi === pos.pitch);
@@ -7311,7 +7422,23 @@ if (typeof TextEncoder === 'undefined') {
       document.body.className = 'on-' + name;
       // close chat overlay when switching screens
       document.getElementById('chat-overlay').classList.remove('open');
+      // Restart idle glow timer when returning to main, clear when leaving
+      if (name === 'main') _resetFaceIdleTimer();
+      else { clearTimeout(_faceIdleTimer); _faceGlowIdle = false; }
     }
+
+    const CYAN_GLOWS = [
+      '#00ffff', '#00d4ff', '#00e5ff', '#40e0d0',
+      '#7fffd4', '#00ced1', '#1de9b6', '#4dd0e1',
+      '#39ff14', '#00ff41', '#7fff00',
+      '#ff007f', '#ff3399', '#ff69b4', '#ff1493', '#fe2060',
+      '#ff6eb4', '#ff0080', '#fc0fc0',
+      '#ff00ff', '#ff00c8', '#ff10f0', '#ff6fff',
+      '#bf5fff', '#9d00ff', '#c77dff', '#7b2fff',
+      '#ff6600', '#ff9500', '#ff5f00',
+      '#ffe600', '#ffd700', '#ffbf00',
+      '#ff073a',
+    ];
 
     // Build face cards in #faces-row
     function buildFaces(sheet) {
@@ -7333,26 +7460,7 @@ if (typeof TextEncoder === 'undefined') {
             usedTypes.add(tr.t);
       }
 
-      const CYAN_GLOWS = [
-        // cyans / teals
-        '#00ffff', '#00d4ff', '#00e5ff', '#40e0d0',
-        '#7fffd4', '#00ced1', '#1de9b6', '#4dd0e1',
-        // neon greens
-        '#39ff14', '#00ff41', '#7fff00',
-        // neon pinks (hot pink, bubblegum, neon rose, deep pink, flamingo)
-        '#ff007f', '#ff3399', '#ff69b4', '#ff1493', '#fe2060',
-        '#ff6eb4', '#ff0080', '#fc0fc0',
-        // neon magentas / fuchsias
-        '#ff00ff', '#ff00c8', '#ff10f0', '#ff6fff',
-        // neon purples
-        '#bf5fff', '#9d00ff', '#c77dff', '#7b2fff',
-        // neon oranges
-        '#ff6600', '#ff9500', '#ff5f00',
-        // yellows — warmer tone so they pop on dark bg
-        '#ffe600', '#ffd700', '#ffbf00',
-        // neon reds
-        '#ff073a',
-      ];
+      // CYAN_GLOWS is defined outside buildFaces (shared with _pulseFace)
 
       FACES.forEach(f => {
         const card = document.createElement('div');
@@ -7363,7 +7471,7 @@ if (typeof TextEncoder === 'undefined') {
 
         const ascii = card.querySelector('.face-ascii');
         card.addEventListener('mouseenter', () => {
-          const c = CYAN_GLOWS[Math.floor(Math.random() * CYAN_GLOWS.length)];
+          const c = INST_COLORS[f.id] ?? '#00d4ff';
           ascii.style.color = c;
           ascii.style.textShadow = `0 0 6px ${c}, 0 0 14px ${c}, 0 0 30px ${c}99`;
         });
@@ -7372,9 +7480,64 @@ if (typeof TextEncoder === 'undefined') {
           ascii.style.textShadow = '';
         });
 
+        _faceAsciiMap[f.id] = ascii;
         row.appendChild(card);
       });
+      _initFaceGlow();
     }
+
+    // ── Rhythmic face glow ──────────────────────────────────────────────────────
+    const _faceAsciiMap = {};     // instId → .face-ascii DOM element
+    let _faceGlowIdle = false;   // true when user is idle on main screen
+    let _faceIdleTimer = null;
+    const _FACE_IDLE_MS = 3000;
+    const _faceGlowTimers = {};  // instId → pending clear timeout
+
+    function _initFaceGlow() {
+      _faceGlowIdle = false;
+      _resetFaceIdleTimer();
+    }
+
+    function _resetFaceIdleTimer() {
+      clearTimeout(_faceIdleTimer);
+      _faceGlowIdle = false;
+      // Clear any active glows when user interacts
+      for (const id of Object.keys(_faceAsciiMap)) {
+        const el = _faceAsciiMap[id];
+        if (el) { el.style.color = ''; el.style.textShadow = ''; }
+        clearTimeout(_faceGlowTimers[id]);
+      }
+      if (document.body.classList.contains('on-main')) {
+        _faceIdleTimer = setTimeout(() => { _faceGlowIdle = true; }, _FACE_IDLE_MS);
+      }
+    }
+
+    function _pulseFace(instId) {
+      if (!_faceGlowIdle || !document.body.classList.contains('on-main')) return;
+      const el = _faceAsciiMap[instId];
+      if (!el) return;
+      const c = CYAN_GLOWS[Math.floor(Math.random() * CYAN_GLOWS.length)];
+      // Force instant color (bypass transition for the "on" flash)
+      el.style.transition = 'none';
+      el.style.color = c;
+      el.style.textShadow = `0 0 6px ${c}, 0 0 14px ${c}, 0 0 30px ${c}99`;
+      // Re-enable transition and clear after a frame so the fade-out is smooth
+      clearTimeout(_faceGlowTimers[instId]);
+      requestAnimationFrame(() => {
+        el.style.transition = '';
+        _faceGlowTimers[instId] = setTimeout(() => {
+          el.style.color = '';
+          el.style.textShadow = '';
+        }, 180);
+      });
+    }
+
+    // Idle detection — reset on any interaction on the main screen
+    ['mousemove', 'keydown', 'pointerdown'].forEach(evt => {
+      document.addEventListener(evt, () => {
+        if (document.body.classList.contains('on-main')) _resetFaceIdleTimer();
+      }, { passive: true });
+    });
 
     // Reveal faces one by one then transition to main screen
     function revealFaces(sheet, focusMain = true) {
@@ -8047,6 +8210,7 @@ if (typeof TextEncoder === 'undefined') {
       chatInput.disabled = false;
       chatSend.disabled = false;
       document.getElementById('evolve-row').style.display = '';
+      document.getElementById('ai-auto-row').style.display = '';
 
       sheetToSequencer(sheet, { autoStore: true });
 

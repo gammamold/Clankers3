@@ -98,6 +98,9 @@ class VoderWorkletProcessor extends AudioWorkletProcessor {
                 if (ev.ccJson) {
                     try { this._engine.set_params(ev.ccJson); } catch (_) {}
                 }
+                // Trigger first so last_voice is updated before phoneme queue is set
+                this._engine.trigger(ev.midiNote, ev.velocity,
+                                     ev.holdSamples ?? 0, ev.ccJson ?? '{}');
                 if (ev.phonemes) {
                     try {
                         const arr = Array.isArray(ev.phonemes)
@@ -108,8 +111,6 @@ class VoderWorkletProcessor extends AudioWorkletProcessor {
                 } else if (ev.phoneme != null) {
                     try { this._engine.set_phoneme(ev.phoneme); } catch (_) {}
                 }
-                this._engine.trigger(ev.midiNote, ev.velocity,
-                                     ev.holdSamples ?? 0, ev.ccJson ?? '{}');
             }
 
             // Dispatch release events

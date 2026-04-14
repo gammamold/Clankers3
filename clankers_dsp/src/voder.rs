@@ -306,8 +306,9 @@ impl VoderVoice {
                 self.queue_samps = 0;
                 if let Some(&(next_ph, _)) = self.queue.first() {
                     self.set_phoneme(next_ph);
-                } else if self.held {
-                    // All phonemes consumed but note held: stay on last phoneme
+                } else {
+                    // All phonemes consumed — trigger release
+                    self.release();
                 }
             }
         } else if self.held {
