@@ -10,7 +10,7 @@
 - [x] **Settings overlay uses sessionStorage** — API key/model/provider stored client-side; no Python backend required for config. Key verified against `/api/llm` proxy on save.
 - [x] **COEP/COOP headers in `vercel.json`** — `Cross-Origin-Opener-Policy` + `Cross-Origin-Embedder-Policy` added for SharedArrayBuffer / WASM audio worklet support.
 - [x] **Remove hardcoded `localhost:8000`** — frontend API URL now reads `window.BAND_API_URL || ''`; band requests go to `/api/band/*`.
-- [x] **Google / Gemini provider** — `api/llm.js` detects `gemini-*` models but has no proxy implementation yet.
+- [x] **Google / Gemini provider** — `api/llm.js:80-125` implements `proxyGoogle()` converting Anthropic-style body to Gemini `generateContent`; routed at `api/llm.js:131`.
 - [ ] **Authentication** — no auth on any endpoint. Anyone with the URL can call the band functions (though they need their own API key in the request body).
 - [ ] **Session persistence** — `api/band/*.js` are fully stateless; no server-side session history. History is sent by the client (last 4 turns). Long sessions lose older context.
 
@@ -18,7 +18,7 @@
 
 ## DSP / WASM (`clankers_dsp/`)
 
-- [ ] **Voder (formant synth) in WASM** — still Python-only. Port `agents/voder/` DSP to Rust so it can run in the browser.
+- [x] **Voder (formant synth) in WASM** — `clankers_dsp/src/voder.rs` (478 lines) ports the formant synth to Rust with 25 phonemes, parallel resonators, and vibrato; exported via WASM worklet; test page at `web/voder-test.html`.
 - [ ] **Granular / Clouds sampler** — referenced in WEBPLAN (HybridSynth), not implemented in Rust or the browser.
 - [x] **Rhodes worklet registration** — confirm the rhodes worklet is registered and routed in `sequencer.js` (t:3 track type).
 - [ ] **Rebuild WASM** — run `wasm-pack build --release --target web` in `clankers_dsp/` and commit updated `web/wasm/` binaries whenever Rust source changes.
@@ -29,7 +29,7 @@
 
 - [x] **Swing** — grid is straight 16th notes; no swing offset implemented.
 - [ ] **Portamento / slide** — bass SH-101 slide flag in sheet not wired to worklet.
-- [ ] **Accent** — velocity boost for accented steps not propagated to worklets.
+- [~] **Accent** — per-step `velocity` field is propagated through `_sendTrigger` to all worklets (`web/sequencer.js:372-422`), but no dedicated `accent` flag that boosts velocity proportionally; accent must currently be encoded as higher velocity in the sheet.
 - [x] **Loop point control** — currently loops the full sheet; no way to set a shorter loop region.
 - [x] **STOP cleans up** — verify that stopping also silences any held notes in all worklets.
 
@@ -42,7 +42,7 @@
 - [ ] **Arpeggiator** — not implemented in `SynthVoice.js`.
 - [ ] **Full MIDI learn** — `PianoKeys.js` has partial MIDI support; no full MIDI CC learn for knobs.
 - [ ] **Patch browser UI** — no way to browse/search saved presets; just 5 numbered slots.
-- [ ] **Polyphony mode** — `SynthVoice` is monophonic per slot; no chord support.
+- [ ] **Polyphony mode** — `SynthVoice` voice pool exists (`MAX_POLY=5` in `web/synth/core/InstrumentAdapter.js:16`) but each slot is still triggered monophonically per step; no chord/multi-note dispatch.
 
 ---
 
@@ -60,9 +60,9 @@
 ## UI / UX
 
 - [x] **Step visualizer** — the playhead/step highlight during playback; exists in HTML but wiring to sequencer tick is unclear.
-- [ ] **LLM config overlay accessible on all screens** — `#btn-settings` is fixed-position but may be hidden on some screens.
+- [x] **LLM config overlay accessible on all screens** — `#btn-settings` is fixed-position (`web/index.html:3113`) and visible on main/room/synth-lab; intentionally hidden on piano-roll (`web/index.html:3397`).
 - [ ] **Keyboard shortcut help** — no overlay or tooltip listing shortcuts (Space = play/stop, etc.).
-- [ ] **Error states** — no user-facing feedback when API is unreachable or WASM fails to load.
+- [~] **Error states** — HTTP errors from LLM/band calls surface as chat text (`web/index.html:6122-6166`) and audio errors append "⚠ Audio error" (`web/index.html:5314-5317`); no toast/modal/visual indicator and no WASM-load error path.
 - [ ] **Loading indicator** — no spinner or progress while WASM initialises or session is being created.
 
 ---
@@ -102,7 +102,7 @@
 ### Phase 3 — Slot manager + sequencer unification
 - [x] **Refactor `web/synth-lab.js`** — slots hold `WebAudioInstrumentAdapter` instances; add `plug(slotIndex, id)`, `unplug(slotIndex)`, `swap(slotIndex, id)`
 - [x] **Refactor `web/sequencer.js`** — replaced dual dispatch (`_ports` + `synthLab.scheduleNote`) with single `_sendTrigger()` through `_adapters`; removed `synthOverrides` mechanism; added `setAdapter(type, adapter)` / `getAdapter(type)` / `getDefaultAdapter(type)`
-- [ ] **Modify `web/render.js`** — use adapter `connect(offlineCtx)` for offline rendering with custom instruments (offline WebAudio scheduling via OfflineAudioContext not yet implemented)
+- [~] **Modify `web/render.js`** — `web/render.js:194-206` instantiates a Sequencer against an OfflineAudioContext and calls `_sendTrigger()`, but only WASM worklet nodes are wired; Synth Lab `WebAudioInstrumentAdapter`s are **not** plugged in via `seq.setAdapter(...)`, so custom patches still won't render offline.
 
 ### Phase 4 — Library UI
 - [x] Slot cards showing current instrument with ⇄ SWAP and ⏏ UNPLUG buttons
