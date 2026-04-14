@@ -54,7 +54,7 @@ export function makeCurve(type, amount, n = 4096) {
         break;
       }
       default:
-        curve[i] = x;
+        curve[i] = x; // 'none' / clean passthrough
     }
   }
   return curve;
@@ -69,15 +69,18 @@ export class DelayFx {
     this.output = ctx.createGain();
 
     this._dry = ctx.createGain();
-    this._dry.gain.value = 1;   // inline: pass dry through
+    this._dry.gain.value = 1;
 
     this._wet = ctx.createGain();
-    this._wet.gain.value = 0;   // off by default
+    this._wet.gain.value = 0;
 
-    this._delay = ctx.createDelay(4.0);
-    this._delay.delayTime.value = 0.375;
+    // Two delay lines for ping pong (L = primary, R = cross-channel)
+    this._delayL = ctx.createDelay(4.0);
+    this._delayL.delayTime.value = 0.375;
+    this._delayR = ctx.createDelay(4.0);
+    this._delayR.delayTime.value = 0.375;
 
-    // Feedback chain: dc → hp → lp → shape → fbGain → back to delay
+    // Feedback chain: dc → hp → lp → shape → fbGain
     this._dcBlock = ctx.createBiquadFilter();
     this._dcBlock.type = 'highpass';
     this._dcBlock.frequency.value = 20;
@@ -100,6 +103,26 @@ export class DelayFx {
     this._fbGain = ctx.createGain();
     this._fbGain.gain.value = 0.45;
 
+    // Ping pong routing — gain switches control normal vs cross feedback
+    this._fbRouteSelf = ctx.createGain();   // normal mode: 1, ping pong: 0
+    this._fbRouteSelf.gain.value = 1;
+    this._fbRouteCross = ctx.createGain();  // normal mode: 0, ping pong: 1
+    this._fbRouteCross.gain.value = 0;
+    this._fbGainR = ctx.createGain();       // R→L return (ping pong only)
+    this._fbGainR.gain.value = 0;
+
+    // Stereo panners (center in normal mode, ±1 in ping pong)
+    this._panL = ctx.createStereoPanner();
+    this._panL.pan.value = 0;
+    this._panR = ctx.createStereoPanner();
+    this._panR.pan.value = 0;
+
+    // Output filter — tripole LP/HP/BP on the wet signal (allpass = off)
+    this._outFilter = ctx.createBiquadFilter();
+    this._outFilter.type = 'allpass';
+    this._outFilter.frequency.value = 2000;
+    this._outFilter.Q.value = 0.7;
+
     // LFO
     this._lfo = ctx.createOscillator();
     this._lfoDepth = ctx.createGain();
@@ -107,47 +130,70 @@ export class DelayFx {
     this._lfo.frequency.value = 0.3;
     this._lfoDepth.gain.value = 0.002;
     this._lfo.connect(this._lfoDepth);
-    this._lfoDepth.connect(this._delay.delayTime);
+    this._lfoDepth.connect(this._delayL.delayTime);
+    this._lfoDepth.connect(this._delayR.delayTime);
     this._lfo.start();
 
     // Chaos LFO state
     this._chaosMode = false;
     this._chaosTimer = 0;
-    this._chaosPeriod = 0.2;
     this._baseDelay = 0.375;
     this._chaosDepth = 0.05;
 
     // Serialisable param cache
     this._p = {
       time: '1/8', feedback: 0.45, wet: 0, lfo: 'sine',
-      lfo_rate: 0.3, lfo_depth: 0.002, fb_shape: 'none', hp: 80, lp: 6000
+      lfo_rate: 0.3, lfo_depth: 0.002, hp: 80, lp: 6000,
+      ping_pong: false, filter_type: 'off', filter_freq: 2000, filter_q: 0.7
     };
 
-    // Wire
+    // ── Wiring ──────────────────────────────────────────────────────────────────
     this.input.connect(this._dry);
-    this.input.connect(this._delay);
-    this._delay.connect(this._dcBlock);
+    this.input.connect(this._delayL);
+
+    // Feedback chain from L
+    this._delayL.connect(this._dcBlock);
     this._dcBlock.connect(this._fbHp);
     this._fbHp.connect(this._fbLp);
     this._fbLp.connect(this._fbShape);
     this._fbShape.connect(this._fbGain);
-    this._fbGain.connect(this._delay);   // ← feedback loop
-    this._delay.connect(this._wet);
+
+    // Routing: self-feedback (normal) or cross to R (ping pong)
+    this._fbGain.connect(this._fbRouteSelf);
+    this._fbGain.connect(this._fbRouteCross);
+    this._fbRouteSelf.connect(this._delayL);
+    this._fbRouteCross.connect(this._delayR);
+
+    // R → L return feedback (ping pong)
+    this._delayR.connect(this._fbGainR);
+    this._fbGainR.connect(this._delayL);
+
+    // Wet: both delays → panners → wet gain → outFilter → output
+    this._delayL.connect(this._panL);
+    this._delayR.connect(this._panR);
+    this._panL.connect(this._wet);
+    this._panR.connect(this._wet);
+    this._wet.connect(this._outFilter);
+    this._outFilter.connect(this.output);
     this._dry.connect(this.output);
-    this._wet.connect(this.output);
   }
 
   setDelayTime(s, div) {
     const safe = Math.max(0.005, s);
     this._baseDelay = safe;
     if (div) this._p.time = div;
-    if (!this._chaosMode)
-      this._delay.delayTime.setTargetAtTime(safe, this.ctx.currentTime, 0.02);
+    if (!this._chaosMode) {
+      this._delayL.delayTime.setTargetAtTime(safe, this.ctx.currentTime, 0.02);
+      this._delayR.delayTime.setTargetAtTime(safe, this.ctx.currentTime, 0.02);
+    }
   }
 
   setFeedback(v) {
     this._p.feedback = v;
-    this._fbGain.gain.setTargetAtTime(Math.min(0.97, v), this.ctx.currentTime, 0.01);
+    const clamped = Math.min(0.97, v);
+    this._fbGain.gain.setTargetAtTime(clamped, this.ctx.currentTime, 0.01);
+    if (this._p.ping_pong)
+      this._fbGainR.gain.setTargetAtTime(clamped, this.ctx.currentTime, 0.01);
   }
 
   setWet(v) {
@@ -185,14 +231,33 @@ export class DelayFx {
     }
   }
 
-  setFbShape(type, amount) {
-    this._p.fb_shape = type;
-    // Provide a baseline curve so WaveShaper correctly hard-limits values > 1.0 (preventing blowout)
-    this._fbShape.curve = type === 'none' ? makeCurve('none', 0) : makeCurve(type, amount);
-  }
-
   setFbHp(hz) { this._p.hp = hz; this._fbHp.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
   setFbLp(hz) { this._p.lp = hz; this._fbLp.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
+
+  setPingPong(on) {
+    this._p.ping_pong = on;
+    const t = this.ctx.currentTime;
+    this._fbRouteSelf.gain.setTargetAtTime(on ? 0 : 1, t, 0.02);
+    this._fbRouteCross.gain.setTargetAtTime(on ? 1 : 0, t, 0.02);
+    this._fbGainR.gain.setTargetAtTime(on ? Math.min(0.97, this._p.feedback) : 0, t, 0.02);
+    this._panL.pan.setTargetAtTime(on ? -1 : 0, t, 0.05);
+    this._panR.pan.setTargetAtTime(on ? 1 : 0, t, 0.05);
+  }
+
+  setFilterType(type) {
+    this._p.filter_type = type;
+    this._outFilter.type = (type === 'off') ? 'allpass' : type;
+  }
+
+  setFilterFreq(hz) {
+    this._p.filter_freq = hz;
+    this._outFilter.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01);
+  }
+
+  setFilterQ(q) {
+    this._p.filter_q = q;
+    this._outFilter.Q.setTargetAtTime(q, this.ctx.currentTime, 0.01);
+  }
 
   getParams() { return { ...this._p }; }
 
@@ -203,17 +268,21 @@ export class DelayFx {
     if (p.lfo) this.setLfoType(p.lfo);
     if (p.lfo_rate != null) this.setLfoRate(p.lfo_rate);
     if (p.lfo_depth != null) this.setLfoDepth(p.lfo_depth);
-    if (p.fb_shape) this.setFbShape(p.fb_shape, 0.5);
     if (p.hp != null) this.setFbHp(p.hp);
     if (p.lp != null) this.setFbLp(p.lp);
+    if (p.ping_pong != null) this.setPingPong(!!p.ping_pong);
+    if (p.filter_type != null) this.setFilterType(p.filter_type);
+    if (p.filter_freq != null) this.setFilterFreq(p.filter_freq);
+    if (p.filter_q != null) this.setFilterQ(p.filter_q);
   }
 
   tick() {
     if (!this._chaosMode) return;
     this._chaosTimer -= 1 / 60;
     if (this._chaosTimer <= 0) {
-      const t = this._baseDelay + (Math.random() * 2 - 1) * this._chaosDepth;
-      this._delay.delayTime.setTargetAtTime(Math.max(0.005, t), this.ctx.currentTime, 0.04);
+      const t = Math.max(0.005, this._baseDelay + (Math.random() * 2 - 1) * this._chaosDepth);
+      this._delayL.delayTime.setTargetAtTime(t, this.ctx.currentTime, 0.04);
+      this._delayR.delayTime.setTargetAtTime(t, this.ctx.currentTime, 0.04);
       this._chaosTimer = 0.05 + Math.random() * 0.3;
     }
   }

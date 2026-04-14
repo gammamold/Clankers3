@@ -3943,6 +3943,7 @@
         <div class="fx-slot-hdr">
           DELAY
           <button class="fx-on" id="fx-delay-on">ON</button>
+          <button class="fx-on" id="fx-delay-pp" title="Ping Pong">PP</button>
         </div>
         <div class="fx-row">
           <span class="fx-label">TIME</span>
@@ -3975,18 +3976,23 @@
           <div id="fx-delay-ldepth-wrap"></div>
         </div>
         <div class="fx-row">
-          <span class="fx-label">FB</span>
-          <select class="fx-select" id="fx-delay-fshape">
-            <option value="none">CLEAN</option>
-            <option value="soft">SOFT</option>
-            <option value="hard">HARD</option>
-            <option value="fold">FOLD</option>
-            <option value="bit">BIT</option>
-          </select>
-          <span class="fx-label">HP</span>
+          <span class="fx-label">FB HP</span>
           <div id="fx-delay-hp-wrap"></div>
           <span class="fx-label">LP</span>
           <div id="fx-delay-lp-wrap"></div>
+        </div>
+        <div class="fx-row">
+          <span class="fx-label">FILTER</span>
+          <select class="fx-select" id="fx-delay-ftype">
+            <option value="off">OFF</option>
+            <option value="lowpass">LP</option>
+            <option value="highpass">HP</option>
+            <option value="bandpass">BP</option>
+          </select>
+          <span class="fx-label">FREQ</span>
+          <div id="fx-delay-ffreq-wrap"></div>
+          <span class="fx-label">Q</span>
+          <div id="fx-delay-fq-wrap"></div>
         </div>
       </div>
 
@@ -4881,6 +4887,17 @@ if (typeof TextEncoder === 'undefined') {
       { id: 'b-oct', label: 'OCT', min: -2, max: 2, value: 0, step: 1 },
     ])['b-oct'];
 
+    const _byzK = makeKnobGroup(_bassContainer, 'TONE', [
+      { id: 'byz-fmidx-k', label: 'FM IDX', min: 0, max: 127, value: 32, step: 1 },
+      { id: 'byz-cutoff-k', label: 'CUTOFF', min: 0, max: 127, value: 48, step: 1 },
+      { id: 'byz-fdec-k',   label: 'F.DEC',  min: 0, max: 127, value: 30, step: 1 },
+      { id: 'byz-adec-k',   label: 'A.DEC',  min: 0, max: 127, value: 50, step: 1 },
+    ]);
+    _byzK['byz-fmidx-k'].onChange = v => { byz['byz-fmidx'].val = Math.round(v); sendBassParams(); bassXY?.syncDot(); };
+    _byzK['byz-cutoff-k'].onChange = v => { byz['byz-cutoff'].val = Math.round(v); sendBassParams(); bassXY?.syncDot(); };
+    _byzK['byz-fdec-k'].onChange   = v => { byz['byz-fdec'].val   = Math.round(v); sendBassParams(); bassXY?.syncDot(); };
+    _byzK['byz-adec-k'].onChange   = v => { byz['byz-adec'].val   = Math.round(v); sendBassParams(); bassXY?.syncDot(); };
+
     const bassXY = new XYPad({
       accentColor: '#00b4ff',
       profiles: [
@@ -4889,12 +4906,12 @@ if (typeof TextEncoder === 'undefined') {
           x: {
             label: 'FM+CUT', min: 0, max: 127,
             get: () => byz['byz-fmidx'].val,
-            set: v => { byz['byz-fmidx'].val = Math.round(v); byz['byz-cutoff'].val = Math.round(v); sendBassParams(); }
+            set: v => { byz['byz-fmidx'].val = Math.round(v); byz['byz-cutoff'].val = Math.round(v); _byzK['byz-fmidx-k']?.setVal(Math.round(v)); _byzK['byz-cutoff-k']?.setVal(Math.round(v)); sendBassParams(); }
           },
           y: {
             label: 'DEC', min: 0, max: 127,
             get: () => byz['byz-fdec'].val,
-            set: v => { byz['byz-fdec'].val = Math.round(v); byz['byz-adec'].val = Math.round(v); sendBassParams(); }
+            set: v => { byz['byz-fdec'].val = Math.round(v); byz['byz-adec'].val = Math.round(v); _byzK['byz-fdec-k']?.setVal(Math.round(v)); _byzK['byz-adec-k']?.setVal(Math.round(v)); sendBassParams(); }
           }
         },
         {
@@ -4902,12 +4919,12 @@ if (typeof TextEncoder === 'undefined') {
           x: {
             label: 'FM IDX', min: 0, max: 127,
             get: () => byz['byz-fmidx'].val,
-            set: v => { byz['byz-fmidx'].val = Math.round(v); sendBassParams(); }
+            set: v => { byz['byz-fmidx'].val = Math.round(v); _byzK['byz-fmidx-k']?.setVal(Math.round(v)); sendBassParams(); }
           },
           y: {
             label: 'CUTOFF', min: 0, max: 127,
             get: () => byz['byz-cutoff'].val,
-            set: v => { byz['byz-cutoff'].val = Math.round(v); sendBassParams(); }
+            set: v => { byz['byz-cutoff'].val = Math.round(v); _byzK['byz-cutoff-k']?.setVal(Math.round(v)); sendBassParams(); }
           }
         },
         {
@@ -4915,12 +4932,12 @@ if (typeof TextEncoder === 'undefined') {
           x: {
             label: 'F.DEC', min: 0, max: 127,
             get: () => byz['byz-fdec'].val,
-            set: v => { byz['byz-fdec'].val = Math.round(v); sendBassParams(); }
+            set: v => { byz['byz-fdec'].val = Math.round(v); _byzK['byz-fdec-k']?.setVal(Math.round(v)); sendBassParams(); }
           },
           y: {
             label: 'A.DEC', min: 0, max: 127,
             get: () => byz['byz-adec'].val,
-            set: v => { byz['byz-adec'].val = Math.round(v); sendBassParams(); }
+            set: v => { byz['byz-adec'].val = Math.round(v); _byzK['byz-adec-k']?.setVal(Math.round(v)); sendBassParams(); }
           }
         },
       ],
@@ -6263,21 +6280,8 @@ if (typeof TextEncoder === 'undefined') {
       _sendKnobs[type] = knobs;
     }
 
-    // ─── Octave knobs (in sends rows — the authoritative oct controls) ─────────
+    // ─── Octave knobs (in sends rows for buchla and pads) ────────────────────
     {
-      const bassOctSend = makeKnobGroup(
-        document.getElementById('bass-sends'), 'OCT',
-        [{ id: 'b-oct-s', label: 'OCT', min: -2, max: 2, value: 0, step: 1 }]
-      )['b-oct-s'];
-      bassOctSend.onChange = v => {
-        bassOctKnob.setVal(v);   // keep hidden knob val in sync (used by triggerBass)
-        sendBassParams();
-        if (seq) seq.bassOctaveOffset = 48 + v * 12;
-      };
-      // Also keep sends knob display in sync when bassOctKnob changes (e.g. project restore)
-      const _origBassOctOnChange = bassOctKnob.onChange;
-      bassOctKnob.onChange = () => { bassOctSend.setVal(bassOctKnob.val); _origBassOctOnChange(); };
-
       buchlaOctSend = makeKnobGroup(
         document.getElementById('buchla-sends'), 'OCT',
         [{ id: 'buc-oct-s', label: 'OCT', min: -2, max: 2, value: 0, step: 1 }]
@@ -6309,15 +6313,18 @@ if (typeof TextEncoder === 'undefined') {
       const d = fx.delay;
       if (d) {
         if (d.on != null) { _fxOn[0] = !!d.on; document.getElementById('fx-delay-on')?.classList.toggle('active', _fxOn[0]); }
+        if (d.ping_pong != null) document.getElementById('fx-delay-pp')?.classList.toggle('active', !!d.ping_pong);
         if (d.time) document.getElementById('fx-delay-time').value = d.time;
         if (d.lfo) document.getElementById('fx-delay-ltype').value = d.lfo;
-        if (d.fb_shape) document.getElementById('fx-delay-fshape').value = d.fb_shape;
+        if (d.filter_type) document.getElementById('fx-delay-ftype').value = d.filter_type;
         if (d.feedback != null) _fxK.d_fdbk?.setVal(d.feedback);
         if (d.wet != null) _fxK.d_wet?.setVal(d.wet);
         if (d.lfo_rate != null) _fxK.d_lrate?.setVal(d.lfo_rate);
         if (d.lfo_depth != null) _fxK.d_ldepth?.setVal(d.lfo_depth);
         if (d.hp != null) _fxK.d_hp?.setVal(d.hp);
         if (d.lp != null) _fxK.d_lp?.setVal(d.lp);
+        if (d.filter_freq != null) _fxK.d_ffreq?.setVal(d.filter_freq);
+        if (d.filter_q != null) _fxK.d_fq?.setVal(d.filter_q);
         // Enforce audio wet matches on-state (rack.setParams sets wet unconditionally)
         rack.delay().setWet(_fxOn[0] ? (_fxK.d_wet?.val ?? 0) : 0);
       }
@@ -6346,12 +6353,17 @@ if (typeof TextEncoder === 'undefined') {
       const hpKnob = _fxK.d_hp = new Knob(document.getElementById('fx-delay-hp-wrap'), { label: '', min: 20, max: 2000, value: 80, step: 1 });
       const lpKnob = _fxK.d_lp = new Knob(document.getElementById('fx-delay-lp-wrap'), { label: '', min: 200, max: 18000, value: 6000, step: 10 });
 
+      const ffreqKnob = _fxK.d_ffreq = new Knob(document.getElementById('fx-delay-ffreq-wrap'), { label: '', min: 100, max: 10000, value: 2000, step: 10 });
+      const fqKnob = _fxK.d_fq = new Knob(document.getElementById('fx-delay-fq-wrap'), { label: '', min: 0.1, max: 10, value: 0.7, step: 0.1 });
+
       fdbkKnob.onChange = v => delay.setFeedback(v);
       wetKnob0.onChange = v => { if (_fxOn[0]) delay.setWet(v); };
       lrateKnob.onChange = v => delay.setLfoRate(v);
       ldepthKnob.onChange = v => delay.setLfoDepth(v);
       hpKnob.onChange = v => delay.setFbHp(v);
       lpKnob.onChange = v => delay.setFbLp(v);
+      ffreqKnob.onChange = v => delay.setFilterFreq(v);
+      fqKnob.onChange = v => delay.setFilterQ(v);
 
       document.getElementById('fx-delay-time').addEventListener('change', function () {
         delay.setDelayTime(bpmDelaySeconds(this.value));
@@ -6359,13 +6371,17 @@ if (typeof TextEncoder === 'undefined') {
       document.getElementById('fx-delay-ltype').addEventListener('change', function () {
         delay.setLfoType(this.value);
       });
-      document.getElementById('fx-delay-fshape').addEventListener('change', function () {
-        delay.setFbShape(this.value, 0.5);
+      document.getElementById('fx-delay-ftype').addEventListener('change', function () {
+        delay.setFilterType(this.value);
       });
       document.getElementById('fx-delay-on').addEventListener('click', function () {
         _fxOn[0] = !_fxOn[0];
         this.classList.toggle('active', _fxOn[0]);
         delay.setWet(_fxOn[0] ? _fxK.d_wet.val : 0);
+      });
+      document.getElementById('fx-delay-pp').addEventListener('click', function () {
+        delay.setPingPong(!delay._p.ping_pong);
+        this.classList.toggle('active', delay._p.ping_pong);
       });
 
       // ── MASTER WAVESHAPER ────────────────────────────────────────────────────
@@ -8151,6 +8167,10 @@ if (typeof TextEncoder === 'undefined') {
              byz['byz-cutoff'].val = p.bassYZ.cutoff;
              byz['byz-fdec'].val = p.bassYZ.fdec;
              byz['byz-adec'].val = p.bassYZ.adec;
+             _byzK['byz-fmidx-k']?.setVal(p.bassYZ.fmidx);
+             _byzK['byz-cutoff-k']?.setVal(p.bassYZ.cutoff);
+             _byzK['byz-fdec-k']?.setVal(p.bassYZ.fdec);
+             _byzK['byz-adec-k']?.setVal(p.bassYZ.adec);
              if (typeof bassXY !== 'undefined') bassXY.syncDot();
              sendBassParams();
           }
