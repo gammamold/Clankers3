@@ -28,8 +28,8 @@
 ## Sequencer (`web/sequencer.js`)
 
 - [x] **Swing** — grid is straight 16th notes; no swing offset implemented.
-- [ ] **Portamento / slide** — bass SH-101 slide flag in sheet not wired to worklet.
-- [~] **Accent** — per-step `velocity` field is propagated through `_sendTrigger` to all worklets (`web/sequencer.js:372-422`), but no dedicated `accent` flag that boosts velocity proportionally; accent must currently be encoded as higher velocity in the sheet.
+- [x] **Portamento / slide** — `track.s` slide flag compiled into events (`web/sequencer.js:367,388`), forwarded as `slideSamples` through `WasmInstrumentAdapter` (`web/synth/core/InstrumentAdapter.js`); bass worklet routes to new `ClankersBass::trigger_slide` which glides pitch on the previously-sounding voice (`clankers_dsp/src/bass.rs` `slide_to`, `trigger_slide`), preserving phases/envelopes for TB-303/SH-101 legato.
+- [x] **Accent** — `track.a` boosts velocity ×1.3 (clamped) through `_sendTrigger` to every worklet, and additionally boosts CC74 cutoff +20 for bass/buchla at compile time (`web/sequencer.js:366-400`) for authentic acid character.
 - [x] **Loop point control** — currently loops the full sheet; no way to set a shorter loop region.
 - [x] **STOP cleans up** — verify that stopping also silences any held notes in all worklets.
 

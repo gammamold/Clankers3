@@ -116,6 +116,28 @@ impl ClankersBass {
         self.engine.trigger(midi_note, velocity, hold_samples as usize, &self.params);
     }
 
+    /// Slide/portamento trigger — glides pitch from the previously-triggered
+    /// voice to `midi_note` over `glide_samples`, preserving envelopes
+    /// (TB-303/SH-101 legato feel). Falls back to normal trigger if no voice
+    /// is currently sounding.
+    pub fn trigger_slide(
+        &mut self,
+        midi_note:     u8,
+        velocity:      f32,
+        hold_samples:  u32,
+        glide_samples: u32,
+        cc_json:       &str,
+    ) {
+        self.params = parse_bass_params(cc_json);
+        self.engine.trigger_slide(
+            midi_note,
+            velocity,
+            hold_samples as usize,
+            glide_samples as usize,
+            &self.params,
+        );
+    }
+
     /// Render n_samples of audio using stored params. Returns mono Float32Array.
     pub fn render(&mut self, n_samples: u32) -> Float32Array {
         let n = n_samples as usize;

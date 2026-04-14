@@ -12,6 +12,7 @@ export const clankersbass_render: (a: number, b: number) => any;
 export const clankersbass_set_params: (a: number, b: number, c: number) => void;
 export const clankersbass_trigger: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
 export const clankersbass_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
+export const clankersbass_trigger_slide: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
 export const clankersbuchla_new: () => number;
 export const clankersbuchla_process: (a: number, b: number) => any;
 export const clankersbuchla_set_params: (a: number, b: number, c: number) => void;

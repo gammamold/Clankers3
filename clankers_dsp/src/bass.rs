@@ -37,6 +37,8 @@ pub struct BassVoice {
     amp_env:        Envelope,
     flt_env:        Envelope,
     freq:           f32,
+    target_freq:    f32,
+    glide_coef:     f32,  // per-sample one-pole smoothing coef (0 = no glide)
     vel:            f32,
     hold_remaining: usize,
     active:         bool,
@@ -51,6 +53,8 @@ impl BassVoice {
             amp_env:        Envelope::new(SR),
             flt_env:        Envelope::new(SR),
             freq:           110.0,
+            target_freq:    110.0,
+            glide_coef:     0.0,
             vel:            1.0,
             hold_remaining: 0,
             active:         false,
@@ -59,6 +63,8 @@ impl BassVoice {
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &BassParams) {
         self.freq          = midi_to_hz(midi_note);
+        self.target_freq   = self.freq;
+        self.glide_coef    = 0.0;
         self.vel           = velocity;
         self.carrier_phase = 0.0;
         self.mod_phase     = 0.0;
@@ -76,6 +82,26 @@ impl BassVoice {
         self.active         = true;
     }
 
+    /// Slide/portamento: retarget pitch over `glide_samples` while preserving
+    /// oscillator phases and envelopes (TB-303/SH-101 style legato).
+    /// Extends hold without re-triggering amp/filter envelopes.
+    pub fn slide_to(&mut self, midi_note: u8, hold_samples: usize, glide_samples: usize) {
+        self.target_freq = midi_to_hz(midi_note);
+        // One-pole coefficient so ~99% of the glide completes in glide_samples.
+        // exp(-5/N) gives ≈99.3% convergence in N samples.
+        self.glide_coef = if glide_samples > 0 {
+            1.0 - (-5.0 / glide_samples as f32).exp()
+        } else {
+            1.0
+        };
+        self.hold_remaining = hold_samples;
+        // Keep envelopes alive — no note_on — legato feel.
+        // If envelope faded out already, re-arm amp softly so the slid note is audible.
+        if !self.amp_env.is_active() {
+            self.amp_env.note_on();
+        }
+    }
+
     pub fn release(&mut self) {
         self.amp_env.note_off();
         self.flt_env.note_off();
@@ -85,11 +111,20 @@ impl BassVoice {
         const FM_RATIO: f32 = 2.0;  // modulator one octave above carrier
         const TAU:      f32 = core::f32::consts::TAU;
 
-        let dt_carrier = self.freq / SR;
-        let dt_mod     = self.freq * FM_RATIO / SR;
-
         for s in out.iter_mut() {
             if !self.active { break; }
+
+            // Portamento: smooth freq toward target if glide is active
+            if self.glide_coef > 0.0 {
+                self.freq += (self.target_freq - self.freq) * self.glide_coef;
+                if (self.target_freq - self.freq).abs() < 0.1 {
+                    self.freq       = self.target_freq;
+                    self.glide_coef = 0.0;
+                }
+            }
+
+            let dt_carrier = self.freq / SR;
+            let dt_mod     = self.freq * FM_RATIO / SR;
 
             // Auto-release after hold duration
             if self.hold_remaining > 0 {
@@ -133,12 +168,13 @@ impl BassVoice {
 pub struct BassEngine {
     voices:     Vec<BassVoice>,
     next_voice: usize,
+    last_voice: Option<usize>,  // most recently triggered voice (for slide target)
 }
 
 impl BassEngine {
     pub fn new(seed: u32) -> Self {
         let voices = (0..8).map(|i| BassVoice::new(seed.wrapping_add(i * 1234))).collect();
-        BassEngine { voices, next_voice: 0 }
+        BassEngine { voices, next_voice: 0, last_voice: None }
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &BassParams) {
@@ -150,6 +186,28 @@ impl BassEngine {
                 v
             });
         self.voices[idx].trigger(midi_note, velocity, hold_samples, p);
+        self.last_voice = Some(idx);
+    }
+
+    /// Slide into a new note: if the most recently triggered voice is still
+    /// sounding, glide its pitch to the new note over `glide_samples`
+    /// (preserving phases/envelopes).  Otherwise fall back to a fresh trigger.
+    pub fn trigger_slide(
+        &mut self,
+        midi_note:     u8,
+        velocity:      f32,
+        hold_samples:  usize,
+        glide_samples: usize,
+        p:             &BassParams,
+    ) {
+        if let Some(idx) = self.last_voice {
+            if self.voices[idx].is_active() {
+                self.voices[idx].slide_to(midi_note, hold_samples, glide_samples);
+                return;
+            }
+        }
+        // No active predecessor — behave like a normal trigger.
+        self.trigger(midi_note, velocity, hold_samples, p);
     }
 
     pub fn process(&mut self, buf: &mut [f32], p: &BassParams) {

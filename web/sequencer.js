@@ -363,7 +363,12 @@ export class Sequencer {
 
       for (const track of step.tracks ?? []) {
         const notes = track.n ?? [];
-        const vel = Math.min(1.0, ((track.v ?? 100) / 127) * (track.a ? 1.3 : 1.0));
+        const accent = !!track.a;
+        const slide  = !!track.s;
+        // Accent: boost velocity ~1.3× (clamped). For filter-sweep instruments
+        // (bass, buchla) we also boost CC74 cutoff +20 below for authentic
+        // TB-303/SH-101 character.
+        const vel = Math.min(1.0, ((track.v ?? 100) / 127) * (accent ? 1.3 : 1.0));
         const cc = Object.assign({}, track.cc ?? {}, _evalAutomation(autoMap[track.t], beat));
 
         if (track.t === 10) {
@@ -375,20 +380,24 @@ export class Sequencer {
 
         if (track.t === 2) {
           const durBeats = track.dur ?? d;
+          // Accent on bass: boost CC74 (cutoff) by +20 for a brighter hit
+          const bassCC = accent ? Object.assign({}, cc, { 74: Math.min(127, (cc[74] ?? 0) + 20) }) : cc;
           for (const note of notes) {
             raw.push({
               beatTime: beat, type: 'bass', midiNote: note, velocity: vel,
-              ccJson: JSON.stringify(cc), durBeats
+              ccJson: JSON.stringify(bassCC), durBeats, slide
             });
           }
         }
 
         if (track.t === 1) {
           const durBeats = track.dur ?? d;
+          // Accent on buchla: boost CC74 (cutoff) by +20
+          const buchlaCC = accent ? Object.assign({}, cc, { 74: Math.min(127, (cc[74] ?? 0) + 20) }) : cc;
           for (const note of notes) {
             raw.push({
               beatTime: beat, type: 'buchla', midiNote: note, velocity: vel,
-              ccJson: JSON.stringify(cc), durBeats
+              ccJson: JSON.stringify(buchlaCC), durBeats
             });
           }
         }
@@ -541,7 +550,9 @@ export class Sequencer {
       // Apply octave offset
       const offset = ev.type === 'bass' ? (this.bassOctaveOffset ?? 0) : (this.buchlaOctaveOffset ?? 0);
       const midi = Math.max(0, Math.min(127, ev.midiNote + offset));
-      if (audible && adapter) adapter.scheduleNote(midi, ev.velocity, audioTime, holdMs, { ccJson });
+      // Slide: ~40 ms glide for bass; ignored by buchla (pluck/percussive)
+      const opts = ev.slide && ev.type === 'bass' ? { ccJson, slideMs: 40 } : { ccJson };
+      if (audible && adapter) adapter.scheduleNote(midi, ev.velocity, audioTime, holdMs, opts);
       this.midiOut?.scheduleNote(ev.type, midi, ev.velocity, audioTime, this.ctx, holdMs);
 
     } else if (ev.type === 'pads' || ev.type === 'rhodes') {

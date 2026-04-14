@@ -4,7 +4,9 @@
  * Real-time streaming Pro-One bass. Params update live on playing voices.
  *
  * Messages IN:
- *   { type:'trigger', audioTime, midiNote, velocity, holdSamples, ccJson }
+ *   { type:'trigger', audioTime, midiNote, velocity, holdSamples, ccJson,
+ *     slideSamples? }   — slideSamples > 0 engages TB-303-style portamento
+ *                         into the previously-sounding voice
  *   { type:'setParams', ccJson }   — live knob update (affects playing voices)
  *   { type:'stop' }
  *
@@ -60,8 +62,15 @@ class BassWorkletProcessor extends AudioWorkletProcessor {
             const blockEnd = currentTime + out.length / sampleRate;
             while (this._queue.length && this._queue[0].audioTime <= blockEnd) {
                 const ev = this._queue.shift();
-                this._engine.trigger(ev.midiNote, ev.velocity,
-                                     ev.holdSamples ?? 0, ev.ccJson ?? '{}');
+                if (ev.slideSamples && ev.slideSamples > 0) {
+                    this._engine.trigger_slide(ev.midiNote, ev.velocity,
+                                               ev.holdSamples ?? 0,
+                                               ev.slideSamples,
+                                               ev.ccJson ?? '{}');
+                } else {
+                    this._engine.trigger(ev.midiNote, ev.velocity,
+                                         ev.holdSamples ?? 0, ev.ccJson ?? '{}');
+                }
             }
 
             const buf = this._engine.render(out.length);

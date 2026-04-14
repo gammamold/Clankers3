@@ -129,10 +129,15 @@ export class WasmInstrumentAdapter extends InstrumentAdapter {
       const sr          = this._node.context.sampleRate;
       const holdSamples = Math.round((holdMs / 1000) * sr);
       const midi        = Math.max(0, Math.min(127, midiNote + this._octaveOffset));
+      // Optional portamento: slide pitch from previous note over slideMs
+      const slideSamples = opts.slideMs
+        ? Math.round((opts.slideMs / 1000) * sr)
+        : 0;
       this._node.port.postMessage({
         type: 'trigger', audioTime,
         midiNote: midi, velocity, holdSamples,
         ccJson: opts.ccJson ?? '{}',
+        ...(slideSamples > 0 ? { slideSamples } : {}),
       });
     }
   }
