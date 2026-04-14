@@ -50,6 +50,12 @@ BASS RULES:
   - Subsequent bass notes: only per-note CCs if needed (e.g. {"74":50,"23":26})
   - MIDI 0–23 primarily. Max 24 for fills.
   - Use "dur" on bass notes to sustain across steps.
+  - SLIDE (t:2 only): add "s":1 to glide pitch from the previously-sounding bass note (~40 ms portamento, TB-303/SH-101 style). Requires the prior note to still be holding via "dur" reaching into this step. Pair with "a":1 for classic acid squelch — alternating accented/slid notes. Ignored when no prior bass note is active.
+
+ACCENT / SLIDE — track flags:
+  "a":1 on any track → velocity × 1.3 (clamped) and +20 CC74 cutoff for bass/buchla.
+  "s":1 on t:2 bass → pitch slides from the previous sounding bass note over ~40 ms.
+  Omit both for normal notes. Use sparingly — accents/slides lose impact if over-used.
 
 PADS & RHODES:
   - Pads (t:6) and Rhodes (t:3): ALWAYS include "dur". One trigger, long hold.

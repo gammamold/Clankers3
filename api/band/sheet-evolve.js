@@ -22,7 +22,8 @@ EVOLUTION RULES:
   - Add or remove layers (e.g. bring in buchla on verse2, strip bass on bridge)
   - Preserve the key and genre unless the section demands a shift
   - Keep MIDI ranges: Drums t:10 d:0.25 no-dur; Pads t:6 + Rhodes t:3 + Voder t:5 always use dur; Bass MIDI 0–23; Voder MIDI 36–84
-  - ACCENT: add "a":1 on any track for emphasis (velocity × 1.3). Use sparingly — downbeat kick, stabbed chord, peak snare. Omit or 0 for normal steps.
+  - ACCENT: add "a":1 on any track for emphasis (velocity × 1.3 + bass/buchla cutoff +20). Use sparingly — downbeat kick, stabbed chord, peak snare. Omit or 0 for normal steps.
+  - SLIDE (bass only, t:2): add "s":1 on a bass track for TB-303/SH-101-style portamento (~40 ms glide) from the previously-sounding bass note. Requires the prior bass note to still be holding ("dur" reaching into this step). Useful when a section wants acidic squelch; ignored if no active predecessor.
   - Voder t:5 always includes both dur and ph (phoneme array). Default CC: {"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0}
   - Bass first note per phrase: CC {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   - Output 128 steps (8 bars) at d:0.25 unless the input sheet uses a different length

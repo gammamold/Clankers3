@@ -64,7 +64,8 @@ RULES when editing steps:
   RESTS: Empty step slots are fine and expected. Use { "d": 0.25, "tracks": [] } for rests. NEVER collapse rests by enlarging d. NEVER make the array shorter than the requested length.
   HOLDS: For sustained voices (pads t:6, rhodes t:3, bass t:2, voder t:5), use the "dur" field on the track to hold a note across multiple slots — e.g. a 1-bar pad chord placed on slot 0 with dur:4. Drums (t:10) never use dur.
   Pads (t:6), Rhodes (t:3), and Voder (t:5) always include dur and ph.
-  ACCENT: add "a":1 on any track to mark it as accented (velocity × 1.3 in the engine). Use sparingly for emphasis — e.g. the downbeat kick, a stabbed chord, a peak snare hit. Omit or use 0 for normal steps.
+  ACCENT: add "a":1 on any track to mark it as accented (velocity × 1.3 + bass/buchla cutoff +20 in the engine). Use sparingly for emphasis — e.g. the downbeat kick, a stabbed chord, a peak snare hit. Omit or use 0 for normal steps.
+  SLIDE (bass only, t:2): add "s":1 on a bass track to glide pitch from the previously-sounding bass note (TB-303/SH-101 portamento, ~40 ms). Requires the previous bass note to still be holding — typically use "dur" on the prior note that reaches into this step. Essential for acid lines: alternate accented/slid notes to get the squelch. Ignored when no prior note is active.
   Bass first note per phrase needs full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   Bass MIDI 0-23 primarily.
 
