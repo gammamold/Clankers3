@@ -6308,9 +6308,12 @@ if (typeof TextEncoder === 'undefined') {
     document.getElementById('btn-evolve').addEventListener('click', async () => {
       if (!sessionId) return;
       const section = document.getElementById('evolve-section').value;
+      const hint = chatInput.value.trim();
       const btn = document.getElementById('btn-evolve');
       btn.disabled = true;
       btn.textContent = 'thinking…';
+      if (hint) chatAppend(`You (evolve hint): ${hint}`, 'msg-user');
+      chatInput.value = '';
       chatAppend(`Conductor: evolving to ${section}…`, 'msg-sys');
       try {
         const res = await fetch('/api/band/sheet-evolve', {
@@ -6319,6 +6322,7 @@ if (typeof TextEncoder === 'undefined') {
           body: JSON.stringify({
             sheet: currentSheet,
             section,
+            hint: hint || undefined,
             synth_context: _synthLabContext(),
             apiKey: _bandApiKey(),
             model: _bandModel(),

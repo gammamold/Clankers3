@@ -49,6 +49,7 @@ module.exports = async function handler(req, res) {
   const {
     sheet,
     section,
+    hint = '',
     synth_context = '',
     apiKey,
     model = 'claude-haiku-4-5-20251001',
@@ -62,6 +63,7 @@ module.exports = async function handler(req, res) {
   const prevSection = sheet.explanation?.section ?? 'previous section';
   const userContent = [
     `TARGET SECTION: ${section}`,
+    hint ? `SPECIAL REQUEST FROM USER: ${hint}` : '',
     `Current sheet (previous section: ${prevSection}):\n${JSON.stringify(sheet, null, 2)}`,
     synth_context || '',
     `Generate a FULL EVOLVED SHEET for "${section}". This must sound distinctly different from the ${prevSection} above — different rhythmic density, pattern structure, and arrangement. Set explanation.section to "${section}". Output valid JSON only.`,
