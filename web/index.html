@@ -3552,7 +3552,10 @@
   <!-- ─── REACH THE OUTSIDE — MIDI settings ───────────────── -->
   <button id="btn-reach-outside" title="MIDI Settings">⬡ REACH THE OUTSIDE</button>
   <div id="panel-reach-outside">
-    <h3>⬡ REACH THE OUTSIDE</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;">
+      <h3 style="margin:0;">⬡ REACH THE OUTSIDE</h3>
+      <button id="btn-rto-close" style="background:none;border:1px solid #1a3a4a;color:#00d4ff;font-family:monospace;font-size:.65rem;padding:.2rem .5rem;cursor:pointer;border-radius:3px;letter-spacing:.08em;">× CLOSE</button>
+    </div>
 
     <!-- MIDI Input -->
     <div id="rto-input-section" style="margin-bottom:1.2rem;padding-bottom:.8rem;border-bottom:1px solid #1a1a2e;">
@@ -5883,6 +5886,12 @@ if (typeof TextEncoder === 'undefined') {
       if (open) _refreshRtoPorts();
     });
 
+    document.getElementById('btn-rto-close').addEventListener('click', () => {
+      document.getElementById('panel-reach-outside').classList.remove('rto-open', 'rto-from-menu');
+      document.getElementById('btn-reach-outside').classList.remove('rto-active');
+      document.getElementById('menu-item-reach-outside')?.classList.remove('rto-active');
+    });
+
     // Re-populate on device plug/unplug
     window.addEventListener('midi-ports-changed', _refreshRtoPorts);
 
@@ -8189,6 +8198,15 @@ if (typeof TextEncoder === 'undefined') {
           if (p.songSequence) {
              songArrangement = p.songSequence.arrangement || [];
              patternBank.splice(0, patternBank.length, ...(p.songSequence.patternBank || []));
+             patternBank.forEach((pat, i) => {
+               if (pat) {
+                 patBtns[i].textContent = `P${i + 1} ${pat.label}`.slice(0, 11);
+                 patBtns[i].classList.add('has-pat');
+               } else {
+                 patBtns[i].textContent = `P${i + 1}`;
+                 patBtns[i].classList.remove('has-pat');
+               }
+             });
              songRepeat = !!p.songSequence.songRepeat;
              document.getElementById('btn-arr-repeat').classList.toggle('mode-active', songRepeat);
              setMode(p.songSequence.songMode ? 'song' : 'loop');

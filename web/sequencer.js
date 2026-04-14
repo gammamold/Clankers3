@@ -108,7 +108,7 @@ export class Sequencer {
     // Per-instrument mute/solo/volume
     this._mute    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, voder: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
     this._solo    = { drum: false, bass: false, buchla: false, pads: false, rhodes: false, voder: false, synth0: false, synth1: false, synth2: false, synth3: false, synth4: false };
-    this._volumes = { drum: 1.0,   bass: 1.0,   buchla: 1.0,   pads: 1.0,   rhodes: 1.0,   voder: 1.0,   synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0,   synth4: 1.0 };
+    this._volumes = { drum: 0.9,   bass: 1.0,   buchla: 0.8,   pads: 1.0,   rhodes: 1.0,   voder: 0.4,   synth0: 1.0,   synth1: 1.0,   synth2: 1.0,   synth3: 1.0,   synth4: 1.0 };
 
     /**
      * SynthLab instance — set externally.
