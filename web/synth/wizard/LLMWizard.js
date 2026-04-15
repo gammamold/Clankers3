@@ -1,17 +1,74 @@
 /**
- * LLMWizard — chat UI powered by Claude.
+ * LLMWizard — provider-agnostic chat UI.
  * Shows a conversation interface, calls the LLM, and fires onComplete(state)
  * when the LLM outputs a SYNTH_JSON block.
  */
 import { callLLM, extractSynthJSON, MODELS } from './SynthAgent.js';
+
+// Per-provider metadata that drives the UI copy, placeholder, key validation,
+// and "get an API key" link. Keep in sync with api/llm.js detectProvider().
+const PROVIDERS = {
+  anthropic: {
+    name:        'Claude',
+    company:     'Anthropic',
+    placeholder: 'sk-ant-...',
+    keyUrl:      'https://console.anthropic.com/settings/keys',
+    keyHint:     'Key must start with sk-',
+    validate:    v => v.startsWith('sk-'),
+  },
+  openai: {
+    name:        'GPT',
+    company:     'OpenAI',
+    placeholder: 'sk-...',
+    keyUrl:      'https://platform.openai.com/api-keys',
+    keyHint:     'Key must start with sk-',
+    validate:    v => v.startsWith('sk-'),
+  },
+  google: {
+    name:        'Gemini',
+    company:     'Google',
+    placeholder: 'Gemini API key',
+    keyUrl:      'https://aistudio.google.com/app/apikey',
+    keyHint:     'Enter a Gemini API key',
+    validate:    v => v.length > 0,
+  },
+  minimax: {
+    name:        'MiniMax',
+    company:     'MiniMax',
+    placeholder: 'MiniMax API key',
+    keyUrl:      'https://www.minimax.io/platform',
+    keyHint:     'Enter a MiniMax API key',
+    validate:    v => v.length > 0,
+  },
+};
+
+// Mirror of detectProvider() in api/llm.js, for client-side UI decisions.
+function providerOf(model) {
+  const m = (model || '').toLowerCase();
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3')) return 'openai';
+  if (m.startsWith('gemini')) return 'google';
+  if (m.startsWith('minimax')) return 'minimax';
+  return 'anthropic';
+}
+
+const infoFor  = model => PROVIDERS[providerOf(model)] || PROVIDERS.anthropic;
+const keyStore = provider => `clankers_api_key_${provider}`;
+
+// Visible model options, in display order. Label is shown in the dropdowns.
+const MODEL_OPTIONS = [
+  [MODELS.haiku,     'Haiku',         'Haiku — fast & cheap'],
+  [MODELS.sonnet,    'Sonnet',        'Sonnet — smarter designs'],
+  [MODELS.minimax25, 'MiniMax M2.5',  'MiniMax M2.5 — open-weight alt'],
+  [MODELS.minimax27, 'MiniMax M2.7',  'MiniMax M2.7 — newer open-weight'],
+];
 
 export class LLMWizard {
   constructor(onComplete, prefill = null) {
     this.onComplete = onComplete;
     this._prefill   = prefill;
     this._messages  = [];
-    this._apiKey    = sessionStorage.getItem('clankers_api_key') || '';
     this._model     = sessionStorage.getItem('clankers_model') || MODELS.haiku;
+    this._apiKey    = sessionStorage.getItem(keyStore(providerOf(this._model))) || '';
     this.el         = null;
     this._inputEl   = null;
     this._feedEl    = null;
@@ -38,32 +95,51 @@ export class LLMWizard {
     wrap.innerHTML = `
       <div class="key-setup-inner">
         <div class="key-logo">⬡</div>
-        <h2 class="key-title">Connect to Claude</h2>
-        <p class="key-desc">The Synth Designer uses the Claude API to understand your requests and build instruments. Enter your Anthropic API key to get started.</p>
-        <input type="password" class="key-input" placeholder="sk-ant-..." autocomplete="off"/>
+        <h2 class="key-title"></h2>
+        <p class="key-desc"></p>
+        <input type="password" class="key-input" autocomplete="off"/>
         <div class="key-model-row">
           <label class="key-model-label">Model</label>
-          <select class="key-model-select">
-            <option value="${MODELS.haiku}">Haiku — fast &amp; cheap</option>
-            <option value="${MODELS.sonnet}">Sonnet — smarter designs</option>
-            <option value="${MODELS.minimax}">MiniMax M2.5 — open-weight alt</option>
-          </select>
+          <select class="key-model-select"></select>
         </div>
         <button class="key-btn">Connect</button>
-        <a class="key-link" href="https://console.anthropic.com/settings/keys" target="_blank">Get an API key →</a>
+        <a class="key-link" target="_blank">Get an API key →</a>
       </div>
     `;
     container.appendChild(wrap);
 
-    const input    = wrap.querySelector('.key-input');
+    const titleEl = wrap.querySelector('.key-title');
+    const descEl  = wrap.querySelector('.key-desc');
+    const input   = wrap.querySelector('.key-input');
     const modelSel = wrap.querySelector('.key-model-select');
-    const btn      = wrap.querySelector('.key-btn');
+    const btn     = wrap.querySelector('.key-btn');
+    const linkEl  = wrap.querySelector('.key-link');
 
-    // Restore saved model selection
+    // Populate the model dropdown from MODEL_OPTIONS.
+    for (const [val, , longLabel] of MODEL_OPTIONS) {
+      const opt = document.createElement('option');
+      opt.value = val; opt.textContent = longLabel;
+      modelSel.appendChild(opt);
+    }
+
+    // Apply copy/placeholder/link for the currently-selected model's provider,
+    // and restore any key the user has already entered for that provider.
+    const applyProviderCopy = () => {
+      const p = infoFor(this._model);
+      titleEl.textContent = `Connect to ${p.name}`;
+      descEl.textContent  = `The Synth Designer uses the ${p.name} API to understand your requests and build instruments. Enter your ${p.company} API key to get started.`;
+      input.placeholder   = p.placeholder;
+      linkEl.href         = p.keyUrl;
+      input.value         = sessionStorage.getItem(keyStore(providerOf(this._model))) || '';
+      input.style.borderColor = '';
+    };
+
     modelSel.value = this._model;
+    applyProviderCopy();
     modelSel.addEventListener('change', () => {
       this._model = modelSel.value;
       sessionStorage.setItem('clankers_model', this._model);
+      applyProviderCopy();
     });
 
     // Error label below the button
@@ -73,12 +149,11 @@ export class LLMWizard {
 
     const connect = async () => {
       const val = input.value.trim();
+      const p   = infoFor(this._model);
       errEl.textContent = '';
-      // MiniMax keys are JWT-style tokens (not sk-prefixed); only enforce sk- for Anthropic/OpenAI.
-      const isMinimax = this._model === MODELS.minimax;
-      if (!val || (!isMinimax && !val.startsWith('sk-'))) {
+      if (!val || !p.validate(val)) {
         input.style.borderColor = '#e63946';
-        errEl.textContent = isMinimax ? 'Enter a MiniMax API key' : 'Key must start with sk-';
+        errEl.textContent = p.keyHint;
         return;
       }
       btn.disabled = true;
@@ -95,7 +170,7 @@ export class LLMWizard {
         if (!probe.ok && probe.status !== 400) throw new Error(`Server error ${probe.status}`);
         // All good — open chat
         this._apiKey = val;
-        sessionStorage.setItem('clankers_api_key', val);
+        sessionStorage.setItem(keyStore(providerOf(this._model)), val);
         this._renderChat(container);
         this._greet();
       } catch (err) {
@@ -121,28 +196,41 @@ export class LLMWizard {
     header.innerHTML = `
       <span class="chat-logo">⬡</span>
       <span class="chat-title">SYNTH DESIGNER</span>
-      <span class="chat-sub">Powered by Claude</span>
+      <span class="chat-sub"></span>
       <select class="chat-model-select" title="Switch model"></select>
       <button class="chat-key-reset" title="Change API key">⚙</button>
     `;
+    const subEl        = header.querySelector('.chat-sub');
     const chatModelSel = header.querySelector('.chat-model-select');
-    [
-      [MODELS.haiku,   'Haiku'],
-      [MODELS.sonnet,  'Sonnet'],
-      [MODELS.minimax, 'MiniMax M2.5'],
-    ].forEach(([val, label]) => {
+    subEl.textContent  = `Powered by ${infoFor(this._model).name}`;
+    for (const [val, shortLabel] of MODEL_OPTIONS) {
       const opt = document.createElement('option');
-      opt.value = val; opt.textContent = label;
+      opt.value = val; opt.textContent = shortLabel;
       if (val === this._model) opt.selected = true;
       chatModelSel.appendChild(opt);
-    });
+    }
     chatModelSel.addEventListener('change', () => {
-      this._model = chatModelSel.value;
+      const newModel = chatModelSel.value;
+      const prevProvider = providerOf(this._model);
+      const newProvider  = providerOf(newModel);
+      this._model = newModel;
       sessionStorage.setItem('clankers_model', this._model);
+      subEl.textContent = `Powered by ${infoFor(this._model).name}`;
+      if (prevProvider !== newProvider) {
+        // Switching providers — use this provider's saved key, or prompt for one.
+        const nextKey = sessionStorage.getItem(keyStore(newProvider));
+        if (nextKey) {
+          this._apiKey = nextKey;
+        } else {
+          this._apiKey = '';
+          this._messages = [];
+          this._renderKeySetup(container);
+        }
+      }
     });
 
     header.querySelector('.chat-key-reset').addEventListener('click', () => {
-      sessionStorage.removeItem('clankers_api_key');
+      sessionStorage.removeItem(keyStore(providerOf(this._model)));
       this._apiKey = '';
       this._messages = [];
       this._renderKeySetup(container);
@@ -223,7 +311,7 @@ export class LLMWizard {
     } catch (err) {
       this._addMessage('error', `Error: ${err.message}`);
       if (err.message.includes('401') || err.message.includes('API key')) {
-        sessionStorage.removeItem('clankers_api_key');
+        sessionStorage.removeItem(keyStore(providerOf(this._model)));
       }
     } finally {
       this._setThinking(false);
