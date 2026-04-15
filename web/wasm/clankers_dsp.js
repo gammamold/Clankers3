@@ -504,14 +504,13 @@ export class ClankersVoder {
     }
 }
 if (Symbol.dispose) ClankersVoder.prototype[Symbol.dispose] = ClankersVoder.prototype.free;
-
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
-        __wbg___wbindgen_throw_6ddd609b62940d55: function(arg0, arg1) {
+        __wbg___wbindgen_throw_6b64449b9b9ed33c: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
-        __wbg_new_from_slice_ff2c15e8e05ffdfc: function(arg0, arg1) {
+        __wbg_new_from_slice_b6858b485924da4e: function(arg0, arg1) {
             const ret = new Float32Array(getArrayF32FromWasm0(arg0, arg1));
             return ret;
         },
