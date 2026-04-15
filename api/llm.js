@@ -1,7 +1,7 @@
-// Vercel serverless function: proxy POST /api/llm → Anthropic or OpenAI API
+// Vercel serverless function: proxy POST /api/llm → Anthropic / OpenAI / Google / MiniMax
 // Avoids COEP cross-origin restriction in the browser.
 // Body: { apiKey, provider?, model, messages, system?, max_tokens, ... }
-// provider defaults to 'anthropic'; pass 'openai' for OpenAI models.
+// provider defaults to 'anthropic'; pass 'openai', 'google', or 'minimax' to override.
 const https = require('https');
 
 function proxyAnthropic(apiKey, payload) {
@@ -137,11 +137,56 @@ function proxyGoogle(apiKey, payload) {
   });
 }
 
+function proxyMinimax(apiKey, payload) {
+  // MiniMax exposes an OpenAI-compatible chat completions endpoint.
+  const inputMsgs = payload.messages || [];
+  const messages = payload.system
+    ? [{ role: 'system', content: payload.system }, ...inputMsgs]
+    : inputMsgs;
+  const body = { model: payload.model, messages, max_tokens: payload.max_tokens };
+  const postData = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.minimax.io',
+      path:     '/v1/text/chatcompletion_v2',
+      method:   'POST',
+      headers: {
+        'Authorization':  `Bearer ${apiKey}`,
+        'content-type':   'application/json',
+        'content-length': Buffer.byteLength(postData),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode === 200 && parsed.choices) {
+            const normalised = {
+              content: [{ type: 'text', text: parsed.choices[0].message.content }],
+              model:   parsed.model,
+            };
+            resolve({ status: 200, body: JSON.stringify(normalised) });
+          } else {
+            resolve({ status: res.statusCode, body: data });
+          }
+        } catch (e) {
+          resolve({ status: res.statusCode, body: data });
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+}
+
 function detectProvider(payload) {
   if (payload.provider) return payload.provider;
   const m = payload.model || '';
   if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3')) return 'openai';
   if (m.startsWith('gemini')) return 'google';
+  if (m.toLowerCase().startsWith('minimax')) return 'minimax';
   return 'anthropic';
 }
 
@@ -159,6 +204,8 @@ module.exports = async function handler(req, res) {
       result = await proxyOpenAI(apiKey, payload);
     } else if (provider === 'google') {
       result = await proxyGoogle(apiKey, payload);
+    } else if (provider === 'minimax') {
+      result = await proxyMinimax(apiKey, payload);
     } else {
       result = await proxyAnthropic(apiKey, payload);
     }
