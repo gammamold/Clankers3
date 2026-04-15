@@ -30,15 +30,28 @@ function proxyAnthropic(apiKey, payload) {
 }
 
 function proxyOpenAI(apiKey, payload) {
+  const m = payload.model || '';
+  const isReasoning = m.startsWith('o1') || m.startsWith('o3');
+
   // Convert Anthropic-style body to OpenAI chat completions format
-  const messages = payload.system
-    ? [{ role: 'system', content: payload.system }, ...(payload.messages || [])]
-    : (payload.messages || []);
-  const body = {
-    model:      payload.model,
-    max_tokens: payload.max_tokens,
-    messages,
-  };
+  const inputMsgs = payload.messages || [];
+  let messages;
+  if (isReasoning) {
+    // Reasoning models reject the system role — fold it into the first user message
+    const [first, ...rest] = inputMsgs;
+    messages = payload.system && first
+      ? [{ role: first.role || 'user', content: `${payload.system}\n\n${first.content}` }, ...rest]
+      : inputMsgs;
+  } else {
+    messages = payload.system
+      ? [{ role: 'system', content: payload.system }, ...inputMsgs]
+      : inputMsgs;
+  }
+
+  const body = { model: m, messages };
+  // Reasoning models use max_completion_tokens; older models use max_tokens
+  if (isReasoning) body.max_completion_tokens = payload.max_tokens;
+  else body.max_tokens = payload.max_tokens;
   const postData = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const req = https.request({
