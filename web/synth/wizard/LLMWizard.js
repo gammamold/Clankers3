@@ -46,6 +46,7 @@ export class LLMWizard {
           <select class="key-model-select">
             <option value="${MODELS.haiku}">Haiku — fast &amp; cheap</option>
             <option value="${MODELS.sonnet}">Sonnet — smarter designs</option>
+            <option value="${MODELS.minimax}">MiniMax M2.5 — open-weight alt</option>
           </select>
         </div>
         <button class="key-btn">Connect</button>
@@ -73,9 +74,11 @@ export class LLMWizard {
     const connect = async () => {
       const val = input.value.trim();
       errEl.textContent = '';
-      if (!val.startsWith('sk-')) {
+      // MiniMax keys are JWT-style tokens (not sk-prefixed); only enforce sk- for Anthropic/OpenAI.
+      const isMinimax = this._model === MODELS.minimax;
+      if (!val || (!isMinimax && !val.startsWith('sk-'))) {
         input.style.borderColor = '#e63946';
-        errEl.textContent = 'Key must start with sk-';
+        errEl.textContent = isMinimax ? 'Enter a MiniMax API key' : 'Key must start with sk-';
         return;
       }
       btn.disabled = true;
@@ -124,8 +127,9 @@ export class LLMWizard {
     `;
     const chatModelSel = header.querySelector('.chat-model-select');
     [
-      [MODELS.haiku,  'Haiku'],
-      [MODELS.sonnet, 'Sonnet'],
+      [MODELS.haiku,   'Haiku'],
+      [MODELS.sonnet,  'Sonnet'],
+      [MODELS.minimax, 'MiniMax M2.5'],
     ].forEach(([val, label]) => {
       const opt = document.createElement('option');
       opt.value = val; opt.textContent = label;

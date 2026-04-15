@@ -6,8 +6,10 @@ function callLLM(provider, apiKey, model, system, messages, maxTokens) {
   let p = provider || 'anthropic';
   if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3')) p = 'openai';
   else if (m.startsWith('gemini')) p = 'google';
+  else if (m.toLowerCase().startsWith('minimax')) p = 'minimax';
   if (p === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
   if (p === 'google') return callGemini(apiKey, model, system, messages, maxTokens);
+  if (p === 'minimax') return callMinimax(apiKey, model, system, messages, maxTokens);
   return callAnthropic(apiKey, model, system, messages, maxTokens);
 }
 
@@ -136,6 +138,42 @@ function callGemini(apiKey, model, system, messages, maxTokens) {
             reject(new Error(parsed.error?.message || `Gemini ${res.statusCode}`));
           } else {
             resolve(parsed.candidates[0].content.parts[0].text);
+          }
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+function callMinimax(apiKey, model, system, messages, maxTokens) {
+  // MiniMax exposes an OpenAI-compatible chat completions endpoint.
+  const mmMsgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
+  const payload = JSON.stringify({ model, messages: mmMsgs, max_tokens: maxTokens });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.minimax.io',
+      path: '/v1/text/chatcompletion_v2',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode !== 200) {
+            reject(new Error(parsed.error?.message || parsed.base_resp?.status_msg || `MiniMax ${res.statusCode}`));
+          } else {
+            const content = parsed.choices?.[0]?.message?.content;
+            if (content == null) reject(new Error('MiniMax returned no content'));
+            else resolve(content);
           }
         } catch (e) { reject(e); }
       });

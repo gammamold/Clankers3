@@ -167,8 +167,9 @@ export function extractSynthJSON(text) {
  * messages: [{role, content}]
  */
 export const MODELS = {
-  haiku:  'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-6',
+  haiku:   'claude-haiku-4-5-20251001',
+  sonnet:  'claude-sonnet-4-6',
+  minimax: 'MiniMax-M2.5',
 };
 
 export async function callLLM(apiKey, messages, model = MODELS.haiku) {
