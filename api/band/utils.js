@@ -45,8 +45,32 @@ function callAnthropic(apiKey, model, system, messages, maxTokens) {
 }
 
 function callOpenAI(apiKey, model, system, messages, maxTokens) {
-  const openaiMsgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
-  const payload = JSON.stringify({ model, max_tokens: maxTokens, messages: openaiMsgs });
+  const m = model || '';
+  // o1/o3 reasoning models: no system role, use max_completion_tokens
+  const isReasoning = m.startsWith('o1') || m.startsWith('o3');
+
+  let openaiMsgs;
+  if (isReasoning) {
+    // Fold system prompt into the first user message (reasoning models reject system role)
+    const [first, ...rest] = messages;
+    openaiMsgs = system && first
+      ? [{ role: first.role || 'user', content: `${system}\n\n${first.content}` }, ...rest]
+      : messages;
+  } else {
+    openaiMsgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
+  }
+
+  const body = { model, messages: openaiMsgs };
+  if (isReasoning) body.max_completion_tokens = maxTokens;
+  else body.max_tokens = maxTokens;
+
+  // Enable JSON mode when supported — guarantees valid JSON output
+  // Supported on gpt-4o*, gpt-4-turbo*, gpt-3.5-turbo, o1 (2024-12+), o3-mini
+  if (m.startsWith('gpt-4') || m.startsWith('gpt-3.5') || m === 'o1' || m.startsWith('o3')) {
+    body.response_format = { type: 'json_object' };
+  }
+
+  const payload = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.openai.com',
@@ -66,7 +90,13 @@ function callOpenAI(apiKey, model, system, messages, maxTokens) {
           if (res.statusCode !== 200) {
             reject(new Error(parsed.error?.message || `OpenAI ${res.statusCode}`));
           } else {
-            resolve(parsed.choices[0].message.content);
+            const content = parsed.choices?.[0]?.message?.content;
+            if (content == null) {
+              const finish = parsed.choices?.[0]?.finish_reason;
+              reject(new Error(`OpenAI returned no content${finish ? ` (finish_reason: ${finish})` : ''}`));
+            } else {
+              resolve(content);
+            }
           }
         } catch (e) { reject(e); }
       });
@@ -117,13 +147,18 @@ function callGemini(apiKey, model, system, messages, maxTokens) {
 }
 
 function extractAndRepairJSON(response) {
-  const start = response.indexOf('{');
-  if (start === -1) throw new Error('No JSON in response');
+  if (typeof response !== 'string' || !response) throw new Error('Empty LLM response');
+
+  // Strip common markdown code fences (```json ... ``` or ``` ... ```)
+  let text = response.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+
+  const start = text.indexOf('{');
+  if (start === -1) throw new Error('No JSON object in response');
 
   // Find outermost closing brace by scanning (not greedy regex)
   let depth = 0, inStr = false, esc = false, end = -1;
-  for (let i = start; i < response.length; i++) {
-    const c = response[i];
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
     if (esc)        { esc = false; continue; }
     if (c === '\\') { esc = true;  continue; }
     if (c === '"')  { inStr = !inStr; continue; }
@@ -133,30 +168,82 @@ function extractAndRepairJSON(response) {
     }
   }
 
-  const s = end >= 0 ? response.slice(start, end + 1) : response.slice(start);
-  try { return JSON.parse(s); } catch (e) { /* fall through to repair */ }
+  const s = end >= 0 ? text.slice(start, end + 1) : text.slice(start);
 
-  if (end >= 0) throw new Error('Malformed JSON');
+  // Attempt 1: parse as-is
+  try { return JSON.parse(s); } catch (_) { /* fall through */ }
 
-  // Truncated JSON — rebuild closing sequence using a nesting stack
-  const stack = [];
+  // Attempt 2: strip trailing commas before ] or } (common LLM mistake)
+  try { return JSON.parse(s.replace(/,(\s*[\]}])/g, '$1')); } catch (_) { /* fall through */ }
+
+  // Attempt 3: rebuild closing sequence. Walk forward tracking depth + string state,
+  // then truncate back to a safe boundary (after a closed brace/bracket) and append
+  // the needed closers for still-open structures.
+  const stack = [];          // all '{'/'[' seen in order (true=object, false=array)
+  let cutIdx = -1;           // position immediately after last closed brace/bracket
+  let stackLenAtCut = 0;     // stack length at that point
   inStr = false; esc = false;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (esc)        { esc = false; continue; }
     if (c === '\\') { esc = true;  continue; }
     if (c === '"')  { inStr = !inStr; continue; }
-    if (!inStr) {
-      if      (c === '{') stack.push('}');
-      else if (c === '[') stack.push(']');
-      else if (c === '}' || c === ']') stack.pop();
+    if (inStr) continue;
+    if (c === '{') stack.push(true);
+    else if (c === '[') stack.push(false);
+    else if (c === '}' || c === ']') {
+      stack.pop();
+      // Safe: we just completed a value. Next valid token is ',' or another closer.
+      cutIdx = i + 1;
+      stackLenAtCut = stack.length;
     }
   }
 
-  let t = s.trimEnd();
-  if (t.endsWith(',')) t = t.slice(0, -1).trimEnd();
-  const repaired = t + stack.reverse().join('');
-  return JSON.parse(repaired);
+  // If no closed structures yet but we have open ones, try treating the whole
+  // slice as the candidate — the trailing-cruft stripper + closers may fix it.
+  if (cutIdx < 0) {
+    if (!stack.length) throw new Error('Malformed JSON: no complete values found');
+    cutIdx = s.length;
+    stackLenAtCut = stack.length;
+  }
+
+  let t = s.slice(0, cutIdx).trimEnd();
+  // Strip trailing structural cruft: commas, colons, whitespace, and partial tokens
+  // that aren't valid value endings (bare keys, half-numbers).
+  while (t.length && /[,:\s]$/.test(t)) t = t.slice(0, -1).trimEnd();
+
+  // If we trimmed back to a point inside a partial key/value, walk back further.
+  // A safe end point: a digit, a closing } or ], a closing ", or true/false/null.
+  const safeTail = /[}\]"0-9]$|true$|false$|null$/;
+  while (t.length && !safeTail.test(t)) {
+    // Drop one char and re-trim whitespace/commas
+    t = t.slice(0, -1).trimEnd();
+    while (t.length && /[,:\s]$/.test(t)) t = t.slice(0, -1).trimEnd();
+  }
+
+  // Close any remaining open structures
+  const closers = stack.slice(0, stackLenAtCut)
+    .map(isObj => isObj ? '}' : ']')
+    .reverse()
+    .join('');
+  let repaired = t + closers;
+
+  try { return JSON.parse(repaired); } catch (_) { /* one more pass */ }
+
+  // Final fallback: strip any trailing incomplete property from each trailing
+  // object/array (covers ,"key" or ,"key": or a dangling key with no value).
+  for (let i = 0; i < 8; i++) {
+    const before = repaired;
+    // Remove a trailing partial property at the end of an object:
+    //   ,"key"}   ,"key":}   ,"key":partial}
+    repaired = repaired.replace(/,\s*"[^"\\]*"\s*:?\s*[^,}\]]*?\s*\}/, '}');
+    // Same for array: ,partial]
+    repaired = repaired.replace(/,\s*[^,}\]]*?\s*\]/, ']');
+    if (repaired === before) break;
+    try { return JSON.parse(repaired); } catch (_) { /* try again */ }
+  }
+
+  throw new Error('Malformed JSON: could not repair');
 }
 
 // Canonical sheet normalization:

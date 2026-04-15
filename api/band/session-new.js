@@ -149,7 +149,8 @@ module.exports = async function handler(req, res) {
       try {
         sheet = extractAndRepairJSON(conductorReply);
       } catch (err) {
-        throw new Error('Failed to parse conductor JSON');
+        console.error('Failed to parse conductor JSON:', err.message, '\nResponse preview:', (conductorReply || '').slice(0, 500));
+        throw new Error(`Failed to parse conductor JSON: ${err.message}`);
       }
       if (!sheet.tension) sheet.tension = SECTION_TENSION[section] ?? 0.35;
       normalizeSheet(sheet);
@@ -168,7 +169,8 @@ module.exports = async function handler(req, res) {
       try {
         sheet = extractAndRepairJSON(response);
       } catch (err) {
-        throw new Error('Failed to parse generation JSON');
+        console.error('Failed to parse generation JSON:', err.message, '\nResponse preview:', (response || '').slice(0, 500));
+        throw new Error(`Failed to parse generation JSON: ${err.message}`);
       }
       if (!sheet.tension) sheet.tension = SECTION_TENSION[section] ?? 0.35;
       normalizeSheet(sheet);
