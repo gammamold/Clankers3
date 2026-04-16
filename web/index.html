@@ -3544,12 +3544,15 @@
         flex-direction: column;
       }
 
-      /* Sidebar becomes a horizontal strip */
+      /* Sidebar becomes a horizontal strip that wraps into two rows:
+         Row 1: ← BACK + synth slot cards (horizontal scroll)
+         Row 2: Send FX cards (horizontal)                        */
       #synth-slots-sidebar {
         width: 100%;
         height: auto;
         flex-shrink: 0;
         flex-direction: row;
+        flex-wrap: wrap;
         align-items: stretch;
         overflow-y: visible;
         border-right: none;
@@ -3558,6 +3561,9 @@
 
       /* Hide the "— SYNTH LAB —" title — save the vertical space */
       #synth-slots-hdr { display: none; }
+
+      /* Hide the "— SEND FX —" header on mobile too */
+      #synth-fx-hdr { display: none; }
 
       /* Slot cards scroll left-to-right */
       #synth-slots-row {
@@ -3588,6 +3594,33 @@
         width: auto;
         white-space: nowrap;
         margin: .4rem .5rem;
+      }
+
+      /* FX row wraps to second line, displayed as horizontal strip */
+      #synth-fx-row {
+        flex-direction: row;
+        width: 100%;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding: .3rem .5rem;
+        gap: .35rem;
+        align-items: center;
+        border-top: 1px solid #1a1a1a;
+      }
+      #synth-fx-row::-webkit-scrollbar { display: none; }
+
+      /* FX cards become compact horizontal chips */
+      .sfx-card {
+        min-width: 130px;
+        flex-shrink: 0;
+      }
+
+      /* Add FX button: inline chip instead of full-width block */
+      .sfx-add-btn {
+        flex-shrink: 0;
+        width: auto;
+        white-space: nowrap;
+        padding: .3rem .6rem;
       }
 
       /* Editor fills the rest of the screen height */
