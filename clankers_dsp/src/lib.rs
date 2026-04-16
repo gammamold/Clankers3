@@ -2,8 +2,10 @@ mod bass;
 mod biquad;
 mod buchla;
 mod chorus;
+mod delay;
 mod drums;
 mod envelope;
+mod graph;
 mod lpg;
 mod moog_ladder;
 mod ms20_filter;
@@ -20,6 +22,7 @@ mod wavefolder;
 use bass::{BassEngine, BassParams};
 use buchla::{BuchlaEngine, BuchlaParams};
 use drums::DrumsEngine;
+use graph::engine::SynthGraph;
 use pads::{PadsEngine, PadsParams};
 use rhodes::{RhodesEngine, RhodesParams};
 use js_sys::Float32Array;
@@ -588,4 +591,61 @@ fn parse_phoneme_array(s: &str) -> Vec<usize> {
         }
     }
     out
+}
+
+// ── SynthGraph ───────────────────────────────────────────────────────────────
+
+/// Graph-based modular synth — LLM designs the signal chain, WASM executes it.
+///
+/// The LLM outputs a JSON graph describing nodes (oscillators, filters, envelopes,
+/// effects) and connections between them. This engine instantiates the graph as
+/// a polyphonic instrument with per-sample processing.
+///
+/// Streaming API:
+///   set_param(param_index, value)          — update a parameter live
+///   trigger(midi_note, vel, hold_samples)  — trigger a voice
+///   process_stereo(n_samples)              — render → interleaved stereo Float32Array
+///   param_info()                           — JSON array of param descriptors
+///   param_count()                          — number of tweakable params
+#[wasm_bindgen]
+pub struct ClankersSynthGraph {
+    engine: SynthGraph,
+}
+
+#[wasm_bindgen]
+impl ClankersSynthGraph {
+    /// Construct from graph JSON + number of polyphonic voices (1-16).
+    #[wasm_bindgen(constructor)]
+    pub fn new(graph_json: &str, num_voices: u8) -> Result<ClankersSynthGraph, JsError> {
+        SynthGraph::new(graph_json, num_voices)
+            .map(|engine| ClankersSynthGraph { engine })
+            .map_err(|e| JsError::new(&e))
+    }
+
+    /// Update a parameter by flat index (see param_info for the mapping).
+    pub fn set_param(&mut self, param_index: u32, value: f32) {
+        self.engine.set_param(param_index as usize, value);
+    }
+
+    /// Trigger a note. hold_samples: note-on duration in samples (0 = use envelope only).
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: u32) {
+        self.engine.trigger(midi_note, velocity, hold_samples);
+    }
+
+    /// Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+    pub fn process_stereo(&mut self, n_samples: u32) -> Float32Array {
+        let buf = self.engine.process_stereo(n_samples as usize);
+        Float32Array::from(buf.as_slice())
+    }
+
+    /// Returns JSON array of param descriptors:
+    /// [{"index":0,"node":"osc1","param":"waveform","min":0,"max":4,"default":0}, ...]
+    pub fn param_info(&self) -> String {
+        self.engine.param_info_json()
+    }
+
+    /// Number of tweakable parameters.
+    pub fn param_count(&self) -> u32 {
+        self.engine.param_count() as u32
+    }
 }

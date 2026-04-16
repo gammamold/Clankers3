@@ -15,6 +15,7 @@
 
 import { buildClankersMeta }       from './synth/core/ClankersBridge.js';
 import { WebAudioInstrumentAdapter } from './synth/core/InstrumentAdapter.js';
+import { WasmGraphAdapter }          from './synth/core/WasmGraphAdapter.js';
 import { registry }                  from './synth/core/InstrumentRegistry.js';
 import { ModulePanel }               from './synth/ui/ModulePanel.js';
 import { PianoKeys }                 from './synth/ui/PianoKeys.js';
@@ -68,13 +69,36 @@ export class SynthLab {
 
   // ── Adapter helpers ──────────────────────────────────────────────────────────
 
-  /** Build a new WebAudioInstrumentAdapter for a slot and wire it to slot.gain. */
+  /** Build a new adapter for a slot and wire it to slot.gain. */
   _loadAdapter(slot, patchState) {
     this._unloadAdapter(slot);
     if (!this._ctx) return;
     const id = `slot:${slot.index}`;
-    slot.adapter = new WebAudioInstrumentAdapter(this._ctx, patchState, id);
-    slot.adapter.connect(slot.gain);
+
+    if (patchState.type === 'wasm_graph') {
+      // Graph-based WASM synth — async init
+      const graphJson = typeof patchState.graphJson === 'string'
+        ? patchState.graphJson : JSON.stringify(patchState);
+      const adapter = new WasmGraphAdapter(this._ctx, graphJson, {
+        numVoices: patchState.num_voices || 4,
+        id,
+      });
+      slot.adapter = adapter;
+      // Init async — wire up when ready
+      if (window._wasmModule) {
+        adapter.init(window._wasmModule).then(() => {
+          adapter.connect(slot.gain);
+          console.log(`[SynthLab] WASM graph adapter ready for slot ${slot.index}`);
+        }).catch(e => {
+          console.error(`[SynthLab] Graph init failed:`, e);
+        });
+      } else {
+        console.warn('[SynthLab] WASM module not available for graph adapter');
+      }
+    } else {
+      slot.adapter = new WebAudioInstrumentAdapter(this._ctx, patchState, id);
+      slot.adapter.connect(slot.gain);
+    }
   }
 
   /** Disconnect and discard the current adapter for a slot. */
@@ -198,7 +222,7 @@ export class SynthLab {
   plug(slotIndex, registryId) {
     const desc = registry.get(registryId);
     if (!desc) { console.warn(`[SynthLab] plug: unknown id "${registryId}"`); return; }
-    if (desc.type !== 'webaudio' || !desc.state) {
+    if ((desc.type !== 'webaudio' && desc.type !== 'wasm_graph') || !desc.state) {
       console.warn(`[SynthLab] plug: "${registryId}" has no patch state`); return;
     }
     this.loadPatch(slotIndex, desc.state);
@@ -235,7 +259,7 @@ export class SynthLab {
         id,
         name:    patchState.name || 'Untitled',
         role,
-        type:    'webaudio',
+        type:    patchState.type === 'wasm_graph' ? 'wasm_graph' : 'webaudio',
         builtIn: false,
         state:   JSON.parse(JSON.stringify(patchState)),
       });
@@ -384,37 +408,46 @@ export class SynthLab {
     rack.className = 'sle-rack module-rack';
     rackArea.appendChild(rack);
     ed.appendChild(rackArea);
-    slot.panels = this._renderPanels(slot, rack);
+
+    // Graph patches use dynamic panels from param map; legacy uses fixed panels
+    if (state.type === 'wasm_graph' && slot.adapter?.paramMap) {
+      slot.panels = this._renderGraphPanels(slot, rack);
+    } else {
+      slot.panels = this._renderPanels(slot, rack);
+    }
 
     // XY pad area
     const xyArea = document.createElement('div');
     xyArea.className = 'sle-xy-area';
     xyArea.style.cssText = 'display:none;padding:.6rem 1rem;';
+    const xyProfiles = state.type === 'wasm_graph'
+      ? this._buildGraphXYProfiles(slot)
+      : [
+          { name: 'FILTER SWEEP',
+            x: { label:'CUTOFF', min:20, max:18000, scale:'log',
+                 get: ()  => slot.adapter?.bridge.get('modules.vcf.cutoff'),
+                 set: val => { slot.adapter?.bridge.set('modules.vcf.cutoff', val); slot.adapter?.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
+            y: { label:'RESO',   min:0.01, max:20, scale:'log',
+                 get: ()  => slot.adapter?.bridge.get('modules.vcf.resonance'),
+                 set: val => { slot.adapter?.bridge.set('modules.vcf.resonance', val); slot.adapter?.voices.forEach(v => v.setVcfParam('resonance', val)); } } },
+          { name: 'TIMBRE',
+            x: { label:'CUTOFF', min:20, max:18000, scale:'log',
+                 get: ()  => slot.adapter?.bridge.get('modules.vcf.cutoff'),
+                 set: val => { slot.adapter?.bridge.set('modules.vcf.cutoff', val); slot.adapter?.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
+            y: { label:'LFO AMT', min:1, max:2000, scale:'log',
+                 get: ()  => slot.adapter?.bridge.get('modules.lfo.amount'),
+                 set: val => { slot.adapter?.bridge.set('modules.lfo.amount', val); slot.adapter?.voices.forEach(v => v.setLfoParam('amount', val)); } } },
+          { name: 'ENVELOPE',
+            x: { label:'ATTACK',  min:0.001, max:4, scale:'log',
+                 get: ()  => slot.adapter?.bridge.get('modules.adsr_amp.attack'),
+                 set: val => { slot.adapter?.bridge.set('modules.adsr_amp.attack', val); slot.adapter?.voices.forEach(v => v.setAmpParam('attack', val)); } },
+            y: { label:'RELEASE', min:0.01, max:8, scale:'log',
+                 get: ()  => slot.adapter?.bridge.get('modules.adsr_amp.release'),
+                 set: val => { slot.adapter?.bridge.set('modules.adsr_amp.release', val); slot.adapter?.voices.forEach(v => v.setAmpParam('release', val)); } } },
+        ];
     const synthXY = new XYPad({
       accentColor: '#2a9d8f',
-      profiles: [
-        { name: 'FILTER SWEEP',
-          x: { label:'CUTOFF', min:20, max:18000, scale:'log',
-               get: ()  => slot.adapter?.bridge.get('modules.vcf.cutoff'),
-               set: val => { slot.adapter?.bridge.set('modules.vcf.cutoff', val); slot.adapter?.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
-          y: { label:'RESO',   min:0.01, max:20, scale:'log',
-               get: ()  => slot.adapter?.bridge.get('modules.vcf.resonance'),
-               set: val => { slot.adapter?.bridge.set('modules.vcf.resonance', val); slot.adapter?.voices.forEach(v => v.setVcfParam('resonance', val)); } } },
-        { name: 'TIMBRE',
-          x: { label:'CUTOFF', min:20, max:18000, scale:'log',
-               get: ()  => slot.adapter?.bridge.get('modules.vcf.cutoff'),
-               set: val => { slot.adapter?.bridge.set('modules.vcf.cutoff', val); slot.adapter?.voices.forEach(v => v.setVcfParam('cutoff', val)); } },
-          y: { label:'LFO AMT', min:1, max:2000, scale:'log',
-               get: ()  => slot.adapter?.bridge.get('modules.lfo.amount'),
-               set: val => { slot.adapter?.bridge.set('modules.lfo.amount', val); slot.adapter?.voices.forEach(v => v.setLfoParam('amount', val)); } } },
-        { name: 'ENVELOPE',
-          x: { label:'ATTACK',  min:0.001, max:4, scale:'log',
-               get: ()  => slot.adapter?.bridge.get('modules.adsr_amp.attack'),
-               set: val => { slot.adapter?.bridge.set('modules.adsr_amp.attack', val); slot.adapter?.voices.forEach(v => v.setAmpParam('attack', val)); } },
-          y: { label:'RELEASE', min:0.01, max:8, scale:'log',
-               get: ()  => slot.adapter?.bridge.get('modules.adsr_amp.release'),
-               set: val => { slot.adapter?.bridge.set('modules.adsr_amp.release', val); slot.adapter?.voices.forEach(v => v.setAmpParam('release', val)); } } },
-      ],
+      profiles: xyProfiles,
     });
     xyArea.appendChild(synthXY.render());
     ed.appendChild(xyArea);
@@ -559,6 +592,178 @@ export class SynthLab {
     _renderEffectPanels(state.modules.effects || [], rackEl, panels, bridge, v);
 
     return panels;
+  }
+
+  // ── Graph-patch dynamic panels ────────────────────────────────────────────
+
+  /**
+   * Build editor panels dynamically from a WasmGraphAdapter's paramMap.
+   * Groups params by node ID, one ModulePanel per node.
+   */
+  _renderGraphPanels(slot, rackEl) {
+    const panels  = [];
+    const adapter = slot.adapter;
+    const pMap    = adapter.paramMap; // array of { index, node, param, min, max, default }
+    if (!pMap || pMap.length === 0) return panels;
+
+    // Group params by node id, preserving param order
+    const nodeGroups = new Map();
+    for (const p of pMap) {
+      if (!nodeGroups.has(p.node)) nodeGroups.set(p.node, []);
+      nodeGroups.get(p.node).push(p);
+    }
+
+    // Lightweight bridge shim: stores current values, routes set() to adapter
+    const values = {};
+    for (const p of pMap) {
+      values[`${p.node}.${p.param}`] = p.default;
+    }
+    const graphBridge = {
+      get(path) { return values[path] ?? 0; },
+      set(path, v) {
+        values[path] = v;
+        const [nodeId, paramName] = path.split('.');
+        adapter.setGraphParam(nodeId, paramName, v);
+      },
+    };
+
+    for (const [nodeId, params] of nodeGroups) {
+      // Skip output node — it usually just has a gain knob, but include it
+      const nodeType = _guessNodeType(params);
+      const color    = GRAPH_NODE_COLORS[nodeType] || '#555';
+      const title    = `${nodeType.toUpperCase()} — ${nodeId}`;
+
+      const knobs = params.map(p => {
+        const key = `${p.node}.${p.param}`;
+        return {
+          label:    p.param.toUpperCase().replace(/_/g, ' '),
+          path:     key,
+          min:      p.min,
+          max:      p.max,
+          value:    p.default,
+          step:     _graphParamStep(p),
+          decimals: _graphParamDecimals(p),
+          unit:     _graphParamUnit(p),
+          scale:    _graphParamScale(p),
+          onAudio:  v => adapter.setGraphParam(p.node, p.param, v),
+        };
+      });
+
+      // Skip nodes with no tweakable params (e.g. Noise)
+      if (knobs.length === 0) continue;
+
+      const panel = new ModulePanel({ title, color, bridge: graphBridge, knobs });
+      const el = panel.render();
+
+      // Add waveform selector for oscillator nodes
+      if (nodeType === 'oscillator') {
+        const wfParam = params.find(p => p.param === 'waveform');
+        if (wfParam) {
+          const wfIdx = Math.round(wfParam.default);
+          const wfNames = ['Sine', 'Saw', 'Square', 'Triangle', 'Pulse'];
+          el.appendChild(_makeSelect('WAVE', wfNames.map((_, i) => String(i)), String(wfIdx),
+            x => {
+              const v = Number(x);
+              graphBridge.set(`${nodeId}.waveform`, v);
+            }));
+          // Override the select option labels
+          const sel = el.querySelector('.module-select:last-of-type');
+          if (sel) {
+            Array.from(sel.options).forEach((opt, i) => { opt.textContent = wfNames[i] || opt.value; });
+          }
+        }
+      }
+
+      rackEl.appendChild(el);
+      panels.push(panel);
+    }
+
+    return panels;
+  }
+
+  /**
+   * Build XY pad profiles from a graph adapter's paramMap.
+   * Auto-detects filter (cutoff/resonance), envelope (attack/release),
+   * and creates up to 3 profiles.
+   */
+  _buildGraphXYProfiles(slot) {
+    const adapter  = slot.adapter;
+    const pLookup  = adapter.paramLookup; // "node.param" → { index, min, max, default }
+    const profiles = [];
+
+    // Helper: make a get/set pair for a graph param
+    const _axis = (key, label, min, max, scale = 'linear') => {
+      let current = pLookup[key]?.default ?? min;
+      return {
+        label, min, max, scale,
+        get: () => current,
+        set: v => { current = v; const [nid, pn] = key.split('.'); adapter.setGraphParam(nid, pn, v); },
+      };
+    };
+
+    // Find filter nodes (cutoff + resonance)
+    for (const [key, desc] of Object.entries(pLookup)) {
+      if (desc.param === 'cutoff') {
+        const nodeId  = desc.node;
+        const resoKey = `${nodeId}.resonance`;
+        if (pLookup[resoKey]) {
+          profiles.push({
+            name: `FILTER (${nodeId})`,
+            x: _axis(key, 'CUTOFF', desc.min, desc.max, 'log'),
+            y: _axis(resoKey, 'RESO', pLookup[resoKey].min, pLookup[resoKey].max, 'linear'),
+          });
+          break; // one filter profile is enough
+        }
+      }
+    }
+
+    // Find envelope nodes (attack + release)
+    for (const [key, desc] of Object.entries(pLookup)) {
+      if (desc.param === 'attack') {
+        const nodeId = desc.node;
+        const relKey = `${nodeId}.release`;
+        if (pLookup[relKey]) {
+          profiles.push({
+            name: `ENVELOPE (${nodeId})`,
+            x: _axis(key, 'ATTACK', desc.min, desc.max, 'log'),
+            y: _axis(relKey, 'RELEASE', pLookup[relKey].min, pLookup[relKey].max, 'log'),
+          });
+          break;
+        }
+      }
+    }
+
+    // Find delay/reverb (time/size + mix)
+    for (const [key, desc] of Object.entries(pLookup)) {
+      if (desc.param === 'time' || desc.param === 'room_size') {
+        const nodeId = desc.node;
+        const mixKey = `${nodeId}.mix`;
+        if (pLookup[mixKey]) {
+          profiles.push({
+            name: `FX (${nodeId})`,
+            x: _axis(key, desc.param.toUpperCase().replace(/_/g, ' '), desc.min, desc.max, 'log'),
+            y: _axis(mixKey, 'MIX', pLookup[mixKey].min, pLookup[mixKey].max, 'linear'),
+          });
+          break;
+        }
+      }
+    }
+
+    // Fallback: at least one generic profile using the first two params
+    if (profiles.length === 0) {
+      const allParams = Object.entries(pLookup);
+      if (allParams.length >= 2) {
+        const [k1, d1] = allParams[0];
+        const [k2, d2] = allParams[1];
+        profiles.push({
+          name: 'PARAM',
+          x: _axis(k1, d1.param.toUpperCase(), d1.min, d1.max),
+          y: _axis(k2, d2.param.toUpperCase(), d2.min, d2.max),
+        });
+      }
+    }
+
+    return profiles;
   }
 
   _openWizardForSlot(slotIndex) {
@@ -856,6 +1061,65 @@ function _patchStateToRole(patchState, legacyT) {
     case 3:  return 'keys';
     default: return 'lead';
   }
+}
+
+// ── Graph-panel helpers ──────────────────────────────────────────────────────
+
+/** Accent colors per graph node type (matches the Rust NodeType enum names). */
+const GRAPH_NODE_COLORS = {
+  oscillator: '#ff006e',
+  envelope:   '#e9c46a',
+  tpt_ladder: '#2a9d8f',
+  filter:     '#2a9d8f',
+  noise:      '#adb5bd',
+  delay:      '#1d3557',
+  reverb:     '#457b9d',
+  gain:       '#f4a261',
+  mixer:      '#6c757d',
+  output:     '#264653',
+};
+
+/** Infer the node type from its param names for coloring & special controls. */
+function _guessNodeType(params) {
+  const names = new Set(params.map(p => p.param));
+  if (names.has('waveform') || names.has('fm_depth')) return 'oscillator';
+  if (names.has('attack') && names.has('sustain'))    return 'envelope';
+  if (names.has('cutoff'))                            return 'tpt_ladder';
+  if (names.has('room_size'))                         return 'reverb';
+  if (names.has('feedback') && names.has('time'))     return 'delay';
+  if (params.length === 1 && params[0].param === 'gain') return 'output';
+  if (params.length === 1 && params[0].param === 'level') return 'gain';
+  return 'mixer';
+}
+
+/** Smart step for a graph parameter. */
+function _graphParamStep(p) {
+  if (p.param === 'waveform' || p.param === 'octave') return 1;
+  return undefined; // let Knob auto-determine
+}
+
+/** Smart decimal count for a graph parameter. */
+function _graphParamDecimals(p) {
+  if (p.param === 'waveform' || p.param === 'octave') return 0;
+  if (p.param === 'cutoff') return 0;
+  if (p.param === 'detune') return 1;
+  return 2;
+}
+
+/** Unit suffix for a graph parameter. */
+function _graphParamUnit(p) {
+  if (p.param === 'cutoff') return 'Hz';
+  if (p.param === 'detune') return 'c';
+  if (p.param === 'attack' || p.param === 'decay' || p.param === 'release' || p.param === 'time') return 's';
+  if (p.param === 'fm_depth') return 'Hz';
+  return '';
+}
+
+/** Scale hint for a graph parameter. */
+function _graphParamScale(p) {
+  if (p.param === 'cutoff' || p.param === 'fm_depth') return 'log';
+  if (p.param === 'attack' || p.param === 'decay' || p.param === 'release' || p.param === 'time') return 'log';
+  return 'linear';
 }
 
 function _makeSelect(label, options, current, onChange) {

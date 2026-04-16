@@ -180,6 +180,50 @@ export class ClankersRhodes {
 }
 
 /**
+ * Graph-based modular synth — LLM designs the signal chain, WASM executes it.
+ *
+ * The LLM outputs a JSON graph describing nodes (oscillators, filters, envelopes,
+ * effects) and connections between them. This engine instantiates the graph as
+ * a polyphonic instrument with per-sample processing.
+ *
+ * Streaming API:
+ *   set_param(param_index, value)          — update a parameter live
+ *   trigger(midi_note, vel, hold_samples)  — trigger a voice
+ *   process_stereo(n_samples)              — render → interleaved stereo Float32Array
+ *   param_info()                           — JSON array of param descriptors
+ *   param_count()                          — number of tweakable params
+ */
+export class ClankersSynthGraph {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Construct from graph JSON + number of polyphonic voices (1-16).
+     */
+    constructor(graph_json: string, num_voices: number);
+    /**
+     * Number of tweakable parameters.
+     */
+    param_count(): number;
+    /**
+     * Returns JSON array of param descriptors:
+     * [{"index":0,"node":"osc1","param":"waveform","min":0,"max":4,"default":0}, ...]
+     */
+    param_info(): string;
+    /**
+     * Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+     */
+    process_stereo(n_samples: number): Float32Array;
+    /**
+     * Update a parameter by flat index (see param_info for the mapping).
+     */
+    set_param(param_index: number, value: number): void;
+    /**
+     * Trigger a note. hold_samples: note-on duration in samples (0 = use envelope only).
+     */
+    trigger(midi_note: number, velocity: number, hold_samples: number): void;
+}
+
+/**
  * Parallel-formant Voder — 4-voice polyphonic formant synthesizer.
  *
  * Inspired by the 1939 Bell Laboratories Voder.  Glottal pulse + aspiration
@@ -261,6 +305,7 @@ export interface InitOutput {
     readonly __wbg_clankersdrums_free: (a: number, b: number) => void;
     readonly __wbg_clankerspads_free: (a: number, b: number) => void;
     readonly __wbg_clankersrhodes_free: (a: number, b: number) => void;
+    readonly __wbg_clankerssynthgraph_free: (a: number, b: number) => void;
     readonly __wbg_clankersvoder_free: (a: number, b: number) => void;
     readonly clankersbass_new: (a: number) => number;
     readonly clankersbass_render: (a: number, b: number) => any;
@@ -289,6 +334,12 @@ export interface InitOutput {
     readonly clankersrhodes_set_params: (a: number, b: number, c: number) => void;
     readonly clankersrhodes_trigger: (a: number, b: number, c: number, d: number) => void;
     readonly clankersrhodes_trigger_render: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
+    readonly clankerssynthgraph_new: (a: number, b: number, c: number) => [number, number, number];
+    readonly clankerssynthgraph_param_count: (a: number) => number;
+    readonly clankerssynthgraph_param_info: (a: number) => [number, number];
+    readonly clankerssynthgraph_process_stereo: (a: number, b: number) => any;
+    readonly clankerssynthgraph_set_param: (a: number, b: number, c: number) => void;
+    readonly clankerssynthgraph_trigger: (a: number, b: number, c: number, d: number) => void;
     readonly clankersvoder_new: (a: number) => number;
     readonly clankersvoder_phoneme_count: () => number;
     readonly clankersvoder_process: (a: number, b: number) => any;
@@ -301,6 +352,8 @@ export interface InitOutput {
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

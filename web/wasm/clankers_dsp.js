@@ -379,6 +379,101 @@ export class ClankersRhodes {
 if (Symbol.dispose) ClankersRhodes.prototype[Symbol.dispose] = ClankersRhodes.prototype.free;
 
 /**
+ * Graph-based modular synth — LLM designs the signal chain, WASM executes it.
+ *
+ * The LLM outputs a JSON graph describing nodes (oscillators, filters, envelopes,
+ * effects) and connections between them. This engine instantiates the graph as
+ * a polyphonic instrument with per-sample processing.
+ *
+ * Streaming API:
+ *   set_param(param_index, value)          — update a parameter live
+ *   trigger(midi_note, vel, hold_samples)  — trigger a voice
+ *   process_stereo(n_samples)              — render → interleaved stereo Float32Array
+ *   param_info()                           — JSON array of param descriptors
+ *   param_count()                          — number of tweakable params
+ */
+export class ClankersSynthGraph {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ClankersSynthGraphFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_clankerssynthgraph_free(ptr, 0);
+    }
+    /**
+     * Construct from graph JSON + number of polyphonic voices (1-16).
+     * @param {string} graph_json
+     * @param {number} num_voices
+     */
+    constructor(graph_json, num_voices) {
+        const ptr0 = passStringToWasm0(graph_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.clankerssynthgraph_new(ptr0, len0, num_voices);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        ClankersSynthGraphFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Number of tweakable parameters.
+     * @returns {number}
+     */
+    param_count() {
+        const ret = wasm.clankerssynthgraph_param_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Returns JSON array of param descriptors:
+     * [{"index":0,"node":"osc1","param":"waveform","min":0,"max":4,"default":0}, ...]
+     * @returns {string}
+     */
+    param_info() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.clankerssynthgraph_param_info(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Render n_samples. Returns interleaved stereo Float32Array [L0,R0,L1,R1,...].
+     * @param {number} n_samples
+     * @returns {Float32Array}
+     */
+    process_stereo(n_samples) {
+        const ret = wasm.clankerssynthgraph_process_stereo(this.__wbg_ptr, n_samples);
+        return ret;
+    }
+    /**
+     * Update a parameter by flat index (see param_info for the mapping).
+     * @param {number} param_index
+     * @param {number} value
+     */
+    set_param(param_index, value) {
+        wasm.clankerssynthgraph_set_param(this.__wbg_ptr, param_index, value);
+    }
+    /**
+     * Trigger a note. hold_samples: note-on duration in samples (0 = use envelope only).
+     * @param {number} midi_note
+     * @param {number} velocity
+     * @param {number} hold_samples
+     */
+    trigger(midi_note, velocity, hold_samples) {
+        wasm.clankerssynthgraph_trigger(this.__wbg_ptr, midi_note, velocity, hold_samples);
+    }
+}
+if (Symbol.dispose) ClankersSynthGraph.prototype[Symbol.dispose] = ClankersSynthGraph.prototype.free;
+
+/**
  * Parallel-formant Voder — 4-voice polyphonic formant synthesizer.
  *
  * Inspired by the 1939 Bell Laboratories Voder.  Glottal pulse + aspiration
@@ -507,6 +602,10 @@ if (Symbol.dispose) ClankersVoder.prototype[Symbol.dispose] = ClankersVoder.prot
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg_Error_960c155d3d49e4c2: function(arg0, arg1) {
+            const ret = Error(getStringFromWasm0(arg0, arg1));
+            return ret;
+        },
         __wbg___wbindgen_throw_6b64449b9b9ed33c: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
@@ -545,6 +644,9 @@ const ClankersPadsFinalization = (typeof FinalizationRegistry === 'undefined')
 const ClankersRhodesFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_clankersrhodes_free(ptr >>> 0, 1));
+const ClankersSynthGraphFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_clankerssynthgraph_free(ptr >>> 0, 1));
 const ClankersVoderFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_clankersvoder_free(ptr >>> 0, 1));
@@ -610,6 +712,49 @@ function passStringToWasm0(arg, malloc, realloc) {
 
     WASM_VECTOR_LEN = offset;
     return ptr;
+}
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_externrefs.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
+
+// ── AudioWorkletGlobalScope polyfills ─────────────────────────────────────────
+if (typeof TextDecoder === 'undefined') {
+    globalThis.TextDecoder = class TextDecoder {
+        constructor(_e, _o) {}
+        decode(buf) {
+            if (!buf || buf.byteLength === 0) return '';
+            const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf.buffer ?? buf);
+            let s = '', i = 0;
+            while (i < b.length) {
+                const c = b[i++];
+                if (c < 0x80) { s += String.fromCharCode(c); }
+                else if ((c & 0xE0) === 0xC0) { s += String.fromCharCode(((c&0x1F)<<6)|(b[i++]&0x3F)); }
+                else if ((c & 0xF0) === 0xE0) { s += String.fromCharCode(((c&0x0F)<<12)|((b[i++]&0x3F)<<6)|(b[i++]&0x3F)); }
+                else { const p=((c&7)<<18)|((b[i++]&0x3F)<<12)|((b[i++]&0x3F)<<6)|(b[i++]&0x3F); const u=p-0x10000; s+=String.fromCharCode(0xD800+(u>>10),0xDC00+(u&0x3FF)); }
+            }
+            return s;
+        }
+    };
+}
+if (typeof TextEncoder === 'undefined') {
+    globalThis.TextEncoder = class TextEncoder {
+        encode(s) {
+            const o=[];
+            for (let i=0;i<s.length;i++) {
+                let c=s.charCodeAt(i);
+                if(c>=0xD800&&c<=0xDBFF) c=0x10000+((c-0xD800)<<10)+(s.charCodeAt(++i)-0xDC00);
+                if(c<0x80) o.push(c);
+                else if(c<0x800) o.push(0xC0|(c>>6),0x80|(c&0x3F));
+                else if(c<0x10000) o.push(0xE0|(c>>12),0x80|((c>>6)&0x3F),0x80|(c&0x3F));
+                else o.push(0xF0|(c>>18),0x80|((c>>12)&0x3F),0x80|((c>>6)&0x3F),0x80|(c&0x3F));
+            }
+            return new Uint8Array(o);
+        }
+        encodeInto(s,v){const b=this.encode(s);v.set(b);return{read:s.length,written:b.length};}
+    };
 }
 
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
