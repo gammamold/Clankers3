@@ -853,6 +853,26 @@
       user-select: none;
     }
 
+    body.on-main,
+    body.on-main * { cursor: none !important; }
+
+    #fake-cursor {
+      position: fixed;
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid #00d4ff;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 99999;
+      transform: translate(-50%, -50%);
+      transition: opacity .8s ease;
+      opacity: 0;
+      display: none;
+      box-shadow: 0 0 6px #00d4ff88;
+    }
+
+    body.on-main #fake-cursor { display: block; }
+
     .face-label {
       font-family: monospace;
       font-size: .65rem;
@@ -3952,6 +3972,7 @@
   <div id="screen-main" class="screen">
     <div id="faces-row"></div>
   </div>
+  <div id="fake-cursor"></div>
   <button id="btn-song-screen">SONG BUILDER →</button>
   <button id="btn-synth-lab">SYNTH LAB →</button>
 
@@ -8118,7 +8139,7 @@ if (typeof TextEncoder === 'undefined') {
         clearTimeout(_faceGlowTimers[id]);
       }
       if (document.body.classList.contains('on-main')) {
-        _faceIdleTimer = setTimeout(() => { _faceGlowIdle = true; }, _FACE_IDLE_MS);
+        _faceIdleTimer = setTimeout(() => { _faceGlowIdle = true; _hideFakeCursor(); }, _FACE_IDLE_MS);
       }
     }
 
@@ -8141,6 +8162,18 @@ if (typeof TextEncoder === 'undefined') {
         }, 180);
       });
     }
+
+    // ── Fake cursor (fades out when idle on main screen) ──────────────────────
+    const _fakeCursor = document.getElementById('fake-cursor');
+    document.addEventListener('mousemove', e => {
+      _fakeCursor.style.left = e.clientX + 'px';
+      _fakeCursor.style.top  = e.clientY + 'px';
+      if (document.body.classList.contains('on-main')) {
+        _fakeCursor.style.opacity = '1';
+      }
+    }, { passive: true });
+
+    function _hideFakeCursor() { _fakeCursor.style.opacity = '0'; }
 
     // Idle detection — reset on any interaction on the main screen
     ['mousemove', 'keydown', 'pointerdown'].forEach(evt => {
