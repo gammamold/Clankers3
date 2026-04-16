@@ -6,6 +6,10 @@
 use crate::oscillator::{Oscillator, Waveform};
 use crate::envelope::Envelope;
 use crate::tpt_ladder::TptLadder;
+use crate::moog_ladder::MoogLadder;
+use crate::biquad::Biquad;
+use crate::chorus::Chorus;
+use crate::wavefolder::Wavefolder;
 use crate::rng::Rng;
 use crate::delay::DelayLine;
 use crate::reverb::Reverb;
@@ -35,9 +39,14 @@ pub enum NodeType {
     Oscillator,
     Envelope,
     TptLadder,
+    MoogLadder,
+    Biquad,
     Noise,
     Delay,
     Reverb,
+    Chorus,
+    Wavefolder,
+    Multiply,
     Gain,
     Mixer,
     Output,
@@ -76,6 +85,16 @@ pub fn param_descs(nt: NodeType) -> &'static [ParamDesc] {
             ParamDesc { name: "resonance", min: 0.0, max: 1.0, default: 0.0 },
             ParamDesc { name: "drive",     min: 1.0, max: 10.0, default: 1.0 },
         ],
+        NodeType::MoogLadder => &[
+            ParamDesc { name: "cutoff",    min: 20.0, max: 20000.0, default: 2000.0 },
+            ParamDesc { name: "resonance", min: 0.0, max: 1.0, default: 0.0 },
+            ParamDesc { name: "drive",     min: 1.0, max: 10.0, default: 1.0 },
+        ],
+        NodeType::Biquad => &[
+            ParamDesc { name: "freq",      min: 20.0, max: 20000.0, default: 1000.0 },
+            ParamDesc { name: "bandwidth", min: 10.0, max: 8000.0, default: 400.0 },
+            ParamDesc { name: "mode",      min: 0.0, max: 1.0, default: 0.0 }, // 0=BPF, 1=LPF
+        ],
         NodeType::Noise => &[], // no params — just outputs white noise
         NodeType::Delay => &[
             ParamDesc { name: "time",     min: 0.01, max: 2.0, default: 0.3 },
@@ -87,6 +106,15 @@ pub fn param_descs(nt: NodeType) -> &'static [ParamDesc] {
             ParamDesc { name: "damp",      min: 0.0, max: 1.0, default: 0.5 },
             ParamDesc { name: "mix",       min: 0.0, max: 1.0, default: 0.3 },
         ],
+        NodeType::Chorus => &[
+            ParamDesc { name: "rate",  min: 0.1, max: 8.0, default: 1.0 },
+            ParamDesc { name: "depth", min: 0.0, max: 1.0, default: 0.5 },
+            ParamDesc { name: "mix",   min: 0.0, max: 1.0, default: 0.5 },
+        ],
+        NodeType::Wavefolder => &[
+            ParamDesc { name: "amount", min: 0.0, max: 1.0, default: 0.5 },
+        ],
+        NodeType::Multiply => &[], // no params — multiplies input 0 × input 1
         NodeType::Gain => &[
             ParamDesc { name: "level", min: 0.0, max: 4.0, default: 1.0 },
         ],
@@ -105,9 +133,14 @@ pub enum DspNode {
     Oscillator(Oscillator),
     Envelope(Envelope),
     TptLadder(TptLadder),
+    MoogLadder(MoogLadder),
+    Biquad(Biquad),
     Noise(Rng),
     Delay(DelayLine),
     Reverb(Reverb),
+    Chorus(Chorus),
+    Wavefolder,
+    Multiply,
     Gain,
     Mixer,
     Output,
@@ -117,15 +150,20 @@ impl DspNode {
     /// Create a new node of the given type.
     pub fn new(nt: NodeType) -> Self {
         match nt {
-            NodeType::Oscillator => DspNode::Oscillator(Oscillator::new(SR)),
-            NodeType::Envelope   => DspNode::Envelope(Envelope::new(SR)),
-            NodeType::TptLadder  => DspNode::TptLadder(TptLadder::new(SR)),
-            NodeType::Noise      => DspNode::Noise(Rng::new(0xbeef_cafe)),
-            NodeType::Delay      => DspNode::Delay(DelayLine::new(SR)),
-            NodeType::Reverb     => DspNode::Reverb(Reverb::new(SR)),
-            NodeType::Gain       => DspNode::Gain,
-            NodeType::Mixer      => DspNode::Mixer,
-            NodeType::Output     => DspNode::Output,
+            NodeType::Oscillator  => DspNode::Oscillator(Oscillator::new(SR)),
+            NodeType::Envelope    => DspNode::Envelope(Envelope::new(SR)),
+            NodeType::TptLadder   => DspNode::TptLadder(TptLadder::new(SR)),
+            NodeType::MoogLadder  => DspNode::MoogLadder(MoogLadder::new(SR)),
+            NodeType::Biquad      => DspNode::Biquad(Biquad::new()),
+            NodeType::Noise       => DspNode::Noise(Rng::new(0xbeef_cafe)),
+            NodeType::Delay       => DspNode::Delay(DelayLine::new(SR)),
+            NodeType::Reverb      => DspNode::Reverb(Reverb::new(SR)),
+            NodeType::Chorus      => DspNode::Chorus(Chorus::new(SR)),
+            NodeType::Wavefolder  => DspNode::Wavefolder,
+            NodeType::Multiply    => DspNode::Multiply,
+            NodeType::Gain        => DspNode::Gain,
+            NodeType::Mixer       => DspNode::Mixer,
+            NodeType::Output      => DspNode::Output,
         }
     }
 
@@ -135,9 +173,14 @@ impl DspNode {
             DspNode::Oscillator(o)  => o.reset(),
             DspNode::Envelope(e)    => { *e = Envelope::new(SR); }
             DspNode::TptLadder(f)   => f.reset(),
+            DspNode::MoogLadder(f)  => f.reset(),
+            DspNode::Biquad(f)      => f.reset(),
             DspNode::Noise(_)       => {}
             DspNode::Delay(d)       => d.reset(),
             DspNode::Reverb(_)      => { /* reverb keeps tail across notes */ }
+            DspNode::Chorus(_)      => { /* chorus keeps modulation state */ }
+            DspNode::Wavefolder     => {}
+            DspNode::Multiply       => {}
             DspNode::Gain           => {}
             DspNode::Mixer          => {}
             DspNode::Output         => {}
@@ -198,6 +241,31 @@ impl DspNode {
                 out[0] = filt.process(inputs[0], mod_cutoff, resonance, drive);
             }
 
+            DspNode::MoogLadder(filt) => {
+                let cutoff    = params.get(0).copied().unwrap_or(2000.0);
+                let resonance = params.get(1).copied().unwrap_or(0.0);
+                let drive     = params.get(2).copied().unwrap_or(1.0);
+
+                let mod_cutoff = (cutoff + inputs[1]).clamp(20.0, 20000.0);
+                out[0] = filt.process(inputs[0], mod_cutoff, resonance, drive);
+            }
+
+            DspNode::Biquad(filt) => {
+                let freq      = params.get(0).copied().unwrap_or(1000.0);
+                let bandwidth = params.get(1).copied().unwrap_or(400.0);
+                let mode      = params.get(2).copied().unwrap_or(0.0);
+
+                // Cutoff modulation via input slot 1
+                let mod_freq = (freq + inputs[1]).clamp(20.0, 20000.0);
+
+                if mode < 0.5 {
+                    filt.set_bpf(mod_freq, bandwidth, SR);
+                } else {
+                    filt.set_lpf1(mod_freq, SR);
+                }
+                out[0] = filt.process(inputs[0]);
+            }
+
             DspNode::Noise(rng) => {
                 out[0] = rng.next_f32();
             }
@@ -215,6 +283,28 @@ impl DspNode {
                 let mix  = params.get(2).copied().unwrap_or(0.3);
                 let wet = rev.process_mono(inputs[0], room, damp);
                 out[0] = inputs[0] * (1.0 - mix) + wet * mix;
+            }
+
+            DspNode::Chorus(ch) => {
+                let rate  = params.get(0).copied().unwrap_or(1.0);
+                let depth = params.get(1).copied().unwrap_or(0.5);
+                let mix   = params.get(2).copied().unwrap_or(0.5);
+                // Input slot 0: mono or L channel, slot 1: R channel (or same as L)
+                let in_l = inputs[0];
+                let in_r = if inputs[1] != 0.0 { inputs[1] } else { inputs[0] };
+                let (l, r) = ch.process(in_l, in_r, rate, depth, mix);
+                out[0] = l;
+                out[1] = r;
+            }
+
+            DspNode::Wavefolder => {
+                let amount = params.get(0).copied().unwrap_or(0.5);
+                out[0] = Wavefolder::process(inputs[0], amount);
+            }
+
+            DspNode::Multiply => {
+                // Ring modulator: input 0 × input 1
+                out[0] = inputs[0] * inputs[1];
             }
 
             DspNode::Gain => {
@@ -248,15 +338,20 @@ impl DspNode {
 
     pub fn node_type(&self) -> NodeType {
         match self {
-            DspNode::Oscillator(_) => NodeType::Oscillator,
-            DspNode::Envelope(_)   => NodeType::Envelope,
-            DspNode::TptLadder(_)  => NodeType::TptLadder,
-            DspNode::Noise(_)      => NodeType::Noise,
-            DspNode::Delay(_)      => NodeType::Delay,
-            DspNode::Reverb(_)     => NodeType::Reverb,
-            DspNode::Gain          => NodeType::Gain,
-            DspNode::Mixer         => NodeType::Mixer,
-            DspNode::Output        => NodeType::Output,
+            DspNode::Oscillator(_)  => NodeType::Oscillator,
+            DspNode::Envelope(_)    => NodeType::Envelope,
+            DspNode::TptLadder(_)   => NodeType::TptLadder,
+            DspNode::MoogLadder(_)  => NodeType::MoogLadder,
+            DspNode::Biquad(_)      => NodeType::Biquad,
+            DspNode::Noise(_)       => NodeType::Noise,
+            DspNode::Delay(_)       => NodeType::Delay,
+            DspNode::Reverb(_)      => NodeType::Reverb,
+            DspNode::Chorus(_)      => NodeType::Chorus,
+            DspNode::Wavefolder     => NodeType::Wavefolder,
+            DspNode::Multiply       => NodeType::Multiply,
+            DspNode::Gain           => NodeType::Gain,
+            DspNode::Mixer          => NodeType::Mixer,
+            DspNode::Output         => NodeType::Output,
         }
     }
 }

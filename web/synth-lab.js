@@ -1067,26 +1067,36 @@ function _patchStateToRole(patchState, legacyT) {
 
 /** Accent colors per graph node type (matches the Rust NodeType enum names). */
 const GRAPH_NODE_COLORS = {
-  oscillator: '#ff006e',
-  envelope:   '#e9c46a',
-  tpt_ladder: '#2a9d8f',
-  filter:     '#2a9d8f',
-  noise:      '#adb5bd',
-  delay:      '#1d3557',
-  reverb:     '#457b9d',
-  gain:       '#f4a261',
-  mixer:      '#6c757d',
-  output:     '#264653',
+  oscillator:  '#ff006e',
+  envelope:    '#e9c46a',
+  tpt_ladder:  '#2a9d8f',
+  moog_ladder: '#1b7a6e',
+  biquad:      '#3d9d8f',
+  filter:      '#2a9d8f',
+  noise:       '#adb5bd',
+  delay:       '#1d3557',
+  reverb:      '#457b9d',
+  chorus:      '#2d6a4f',
+  wavefolder:  '#b5451b',
+  multiply:    '#7b2d8b',
+  gain:        '#f4a261',
+  mixer:       '#6c757d',
+  output:      '#264653',
 };
 
 /** Infer the node type from its param names for coloring & special controls. */
 function _guessNodeType(params) {
   const names = new Set(params.map(p => p.param));
-  if (names.has('waveform') || names.has('fm_depth')) return 'oscillator';
-  if (names.has('attack') && names.has('sustain'))    return 'envelope';
-  if (names.has('cutoff'))                            return 'tpt_ladder';
-  if (names.has('room_size'))                         return 'reverb';
-  if (names.has('feedback') && names.has('time'))     return 'delay';
+  if (names.has('waveform') || names.has('fm_depth'))   return 'oscillator';
+  if (names.has('attack') && names.has('sustain'))      return 'envelope';
+  if (names.has('cutoff') && names.has('drive'))        return 'tpt_ladder'; // both tpt & moog
+  if (names.has('cutoff'))                              return 'tpt_ladder';
+  if (names.has('freq') && names.has('bandwidth'))      return 'biquad';
+  if (names.has('room_size'))                           return 'reverb';
+  if (names.has('feedback') && names.has('time'))       return 'delay';
+  if (names.has('rate') && names.has('depth'))          return 'chorus';
+  if (names.has('amount') && params.length === 1)       return 'wavefolder';
+  if (params.length === 0)                              return 'multiply';
   if (params.length === 1 && params[0].param === 'gain') return 'output';
   if (params.length === 1 && params[0].param === 'level') return 'gain';
   return 'mixer';
@@ -1094,31 +1104,34 @@ function _guessNodeType(params) {
 
 /** Smart step for a graph parameter. */
 function _graphParamStep(p) {
-  if (p.param === 'waveform' || p.param === 'octave') return 1;
+  if (p.param === 'waveform' || p.param === 'octave' || p.param === 'mode') return 1;
   return undefined; // let Knob auto-determine
 }
 
 /** Smart decimal count for a graph parameter. */
 function _graphParamDecimals(p) {
-  if (p.param === 'waveform' || p.param === 'octave') return 0;
-  if (p.param === 'cutoff') return 0;
+  if (p.param === 'waveform' || p.param === 'octave' || p.param === 'mode') return 0;
+  if (p.param === 'cutoff' || p.param === 'freq' || p.param === 'bandwidth') return 0;
   if (p.param === 'detune') return 1;
+  if (p.param === 'rate') return 2;
   return 2;
 }
 
 /** Unit suffix for a graph parameter. */
 function _graphParamUnit(p) {
-  if (p.param === 'cutoff') return 'Hz';
+  if (p.param === 'cutoff' || p.param === 'freq' || p.param === 'bandwidth') return 'Hz';
   if (p.param === 'detune') return 'c';
   if (p.param === 'attack' || p.param === 'decay' || p.param === 'release' || p.param === 'time') return 's';
   if (p.param === 'fm_depth') return 'Hz';
+  if (p.param === 'rate') return 'Hz';
   return '';
 }
 
 /** Scale hint for a graph parameter. */
 function _graphParamScale(p) {
-  if (p.param === 'cutoff' || p.param === 'fm_depth') return 'log';
+  if (p.param === 'cutoff' || p.param === 'freq' || p.param === 'fm_depth' || p.param === 'bandwidth') return 'log';
   if (p.param === 'attack' || p.param === 'decay' || p.param === 'release' || p.param === 'time') return 'log';
+  if (p.param === 'rate') return 'log';
   return 'linear';
 }
 

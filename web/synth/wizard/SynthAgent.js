@@ -168,7 +168,7 @@ AVAILABLE NODE TYPES
     slot 0: envelope level (0..1)
 
 ── tpt_ladder (alias: filter, lpf) ──
-  Zavalishin TPT 24dB/oct ladder lowpass filter.
+  Zavalishin TPT 24dB/oct ladder lowpass filter. Clean, precise.
   Params:
     cutoff:    20 to 20000 Hz
     resonance: 0 to 1 (self-oscillation near 1)
@@ -176,6 +176,31 @@ AVAILABLE NODE TYPES
   Inputs:
     slot 0: audio signal
     slot 1 / "mod": cutoff modulation (additive Hz — connect an envelope or LFO)
+  Outputs:
+    slot 0: filtered audio
+
+── moog_ladder (alias: moog, moog_filter) ──
+  Classic Moog-style 4-pole (24dB/oct) lowpass with tanh saturation. Warm, fat, musical.
+  Great for bass and leads. Sounds thicker than tpt_ladder.
+  Params:
+    cutoff:    20 to 20000 Hz
+    resonance: 0 to 1
+    drive:     1 to 10 (input saturation — adds harmonics)
+  Inputs:
+    slot 0: audio signal
+    slot 1 / "mod": cutoff modulation (additive Hz)
+  Outputs:
+    slot 0: filtered audio
+
+── biquad (alias: bpf, eq) ──
+  Biquad filter — bandpass or one-pole lowpass. Good for EQ, formants, resonant peaks.
+  Params:
+    freq:      20 to 20000 Hz (center/cutoff frequency)
+    bandwidth: 10 to 8000 Hz (width of bandpass — ignored in LPF mode)
+    mode:      0 = bandpass, 1 = lowpass
+  Inputs:
+    slot 0: audio signal
+    slot 1 / "mod": frequency modulation (additive Hz)
   Outputs:
     slot 0: filtered audio
 
@@ -205,6 +230,39 @@ AVAILABLE NODE TYPES
     slot 0: audio signal
   Outputs:
     slot 0: reverbed audio
+
+── chorus ──
+  Stereo chorus effect with LFO-modulated delay. Adds width and movement.
+  Params:
+    rate:  0.1 to 8 Hz (modulation speed)
+    depth: 0 to 1 (modulation amount)
+    mix:   0 to 1 (wet/dry)
+  Inputs:
+    slot 0: audio L (or mono — copies to R internally)
+    slot 1: audio R (optional)
+  Outputs:
+    slot 0: audio L
+    slot 1: audio R
+
+── wavefolder (alias: fold) ──
+  Buchla 259-style wavefolder. Folds the waveform back on itself for rich harmonics.
+  Great for west-coast synthesis and aggressive timbres.
+  Params:
+    amount: 0 to 1 (fold intensity — 0 = clean, 1 = heavily folded)
+  Inputs:
+    slot 0: audio signal
+  Outputs:
+    slot 0: folded audio
+
+── multiply (alias: ring_mod, ringmod) ──
+  Ring modulator — multiplies two audio signals. No params.
+  Connect two audio sources to slots 0 and 1. Produces sum/difference frequencies.
+  Good for metallic, bell-like, or robotic textures.
+  Inputs:
+    slot 0: audio signal A
+    slot 1: audio signal B
+  Outputs:
+    slot 0: A × B
 
 ── gain (alias: vca) ──
   Multiplier / VCA. Multiplies audio by level × modulation input.
@@ -297,17 +355,26 @@ BEHAVIOUR RULES
 
 4. DESIGN PATTERNS:
    - Subtractive: osc → filter → gain(env) → output
+   - Moog bass: osc(saw) → moog_ladder(low cutoff, high reso) → gain(env) → output
    - FM: mod_osc → carrier_osc(fm) → gain(env) → output
-   - 4-osc pad: osc1+osc2+osc3+osc4 → mixer → filter → gain(env) → reverb → output
+   - 4-osc pad: osc1+osc2+osc3+osc4 → mixer → filter → gain(env) → chorus → reverb → output
    - Drum kick: osc(sine) + pitch_env → filter(mod) → gain(amp_env) → output
-   - West coast: osc → gain (use as wavefolder-ish) → filter → output
+   - West coast: osc → wavefolder → filter → gain(env) → output
+   - Ring mod: osc1 + osc2 → multiply → filter → gain(env) → output
    - Always route an envelope to a gain node or output:amp for amplitude shaping
 
 5. UNLIMITED OSCILLATORS: You can use any number of oscillators — 2, 4, 8+. Use a mixer to combine them.
 
 6. FM SYNTHESIS: Connect one oscillator's output to another's FM input. Set fm_depth on the carrier. Higher fm_depth = more harmonics.
 
-7. Keep responses concise. You are embedded in a UI, not a chat app.`;
+7. FILTER CHOICE GUIDE:
+   - tpt_ladder: clean, precise — good for leads, pads, general use
+   - moog_ladder: warm, fat, saturated — best for bass, acid, classic analog
+   - biquad: surgical EQ, resonant peaks, formant shaping
+
+8. STEREO: The chorus node outputs stereo (slots 0+1). Connect its outputs to the output node slots 0 (L) and 1 (R) for wide stereo.
+
+9. Keep responses concise. You are embedded in a UI, not a chat app.`;
 
 /**
  * Extract SYNTH_JSON block from LLM response (legacy subtractive path).
