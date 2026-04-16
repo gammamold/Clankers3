@@ -3133,6 +3133,17 @@
       color: #99f;
       box-shadow: 0 0 6px #22f6;
     }
+    #btn-ai-rec.ai-rec-on {
+      background: #2a0a0a;
+      border-color: #f44;
+      color: #f99;
+      box-shadow: 0 0 6px #f226;
+      animation: airec-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes airec-pulse {
+      0%, 100% { box-shadow: 0 0 6px #f226; }
+      50%      { box-shadow: 0 0 14px #f448; }
+    }
 
     .sle-piano-container {
       display: flex;
@@ -4584,6 +4595,11 @@
           style="background:#0a0a1a;border:1px solid #1e1e4e;color:#44f;font-family:monospace;font-size:.7rem;padding:.3rem .6rem;cursor:pointer;letter-spacing:.06em;">
           ◈ AI AUTO
         </button>
+        <button id="btn-ai-rec"
+          title="Record AI AUTO modulations into the current pattern's automation"
+          style="background:#1a0a0a;border:1px solid #4e1e1e;color:#f44;font-family:monospace;font-size:.7rem;padding:.3rem .6rem;cursor:pointer;letter-spacing:.06em;margin-left:.3rem;">
+          ● REC
+        </button>
         <span id="ai-auto-indicator"
           style="display:none;font-family:monospace;font-size:.65rem;color:#66f;align-self:center;margin-left:.4rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">
         </span>
@@ -5494,9 +5510,39 @@ if (typeof TextEncoder === 'undefined') {
     let seq = null;
 
     // ── AI AUTO CC override layer ─────────────────────────────────────────────
+    // _llmSrc = values at the last poll (where we're ramping from)
+    // _llmDst = values from the most recent poll (target)
+    // _llmUpdatedAt = performance.now() of last poll; we lerp over _autoBarMs()
     let _llmCC = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
+    let _llmSrc = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
+    let _llmDst = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
+    let _llmUpdatedAt = 0;
     let _autoEnabled = false;
+    let _autoRecording = false;
     let _autoTimeout = null;
+
+    function _interpLlmCC() {
+      const windowMs = _autoBarMs();
+      const now = performance.now();
+      const t = windowMs > 0 ? Math.min(1, Math.max(0, (now - _llmUpdatedAt) / windowMs)) : 1;
+      for (const instr of ['bass', 'buchla', 'pads', 'rhodes', 'voder']) {
+        const src = _llmSrc[instr] || {};
+        const dst = _llmDst[instr] || {};
+        const out = {};
+        const keys = new Set([...Object.keys(src), ...Object.keys(dst)]);
+        for (const k of keys) {
+          const a = src[k];
+          const b = dst[k];
+          if (a === undefined) out[k] = Math.round(b);
+          else if (b === undefined) out[k] = Math.round(a);
+          else out[k] = Math.round(a + (b - a) * t);
+        }
+        _llmCC[instr] = out;
+      }
+    }
+
+    // Per-instrument track IDs (matching sheet t: values) for automation writes
+    const _INSTR_T = { bass: 2, buchla: 1, pads: 6, rhodes: 3, voder: 5 };
 
     function getSeq() {
       if (!seq) {
@@ -5505,11 +5551,11 @@ if (typeof TextEncoder === 'undefined') {
           buchla: buchlaNode, pads: padsNode, rhodes: rhodesNode, voder: voderNode
         });
         seq.liveCC = {
-          bass:   () => Object.assign({}, bassCC(),   _llmCC.bass   ?? {}),
-          buchla: () => Object.assign({}, buchlaCC(), _llmCC.buchla ?? {}),
-          pads:   () => Object.assign({}, padsCC(),   _llmCC.pads   ?? {}),
-          rhodes: () => Object.assign({}, rhodesCC(), _llmCC.rhodes ?? {}),
-          voder:  () => Object.assign({}, voderCC(),  _llmCC.voder  ?? {}),
+          bass:   () => { _interpLlmCC(); return Object.assign({}, bassCC(),   _llmCC.bass   ?? {}); },
+          buchla: () => { _interpLlmCC(); return Object.assign({}, buchlaCC(), _llmCC.buchla ?? {}); },
+          pads:   () => { _interpLlmCC(); return Object.assign({}, padsCC(),   _llmCC.pads   ?? {}); },
+          rhodes: () => { _interpLlmCC(); return Object.assign({}, rhodesCC(), _llmCC.rhodes ?? {}); },
+          voder:  () => { _interpLlmCC(); return Object.assign({}, voderCC(),  _llmCC.voder  ?? {}); },
         };
         seq.onTrigger = _pulseFace;
         seq.setVoderLpf(vk['vod-lpf'].val);
@@ -6516,12 +6562,19 @@ if (typeof TextEncoder === 'undefined') {
         if (res.ok) {
           const data = await res.json();
           if (data.cc && typeof data.cc === 'object') {
+            // Rotate: previous dst becomes new src (where we're ramping from)
+            _interpLlmCC();  // crystallise current in-flight value as the new source
             for (const instr of ['bass', 'buchla', 'pads', 'rhodes', 'voder']) {
-              if (data.cc[instr]) _llmCC[instr] = data.cc[instr];
+              _llmSrc[instr] = { ..._llmCC[instr] };
+              if (data.cc[instr]) _llmDst[instr] = data.cc[instr];
             }
+            _llmUpdatedAt = performance.now();
+
+            if (_autoRecording) _recordAutoPoint(data.cc);
+
             const active = Object.keys(data.cc).filter(k => Object.keys(data.cc[k] ?? {}).length);
             const ind = document.getElementById('ai-auto-indicator');
-            if (ind) ind.textContent = `AI: ${active.join(' · ')}${data.note ? ' · ' + data.note : ''}`;
+            if (ind) ind.textContent = `${_autoRecording ? '● REC ' : 'AI: '}${active.join(' · ')}${data.note ? ' · ' + data.note : ''}`;
           }
         }
       } catch (_) { /* hold existing values */ }
@@ -6542,12 +6595,73 @@ if (typeof TextEncoder === 'undefined') {
       clearTimeout(_autoTimeout);
       _autoTimeout = null;
       _llmCC = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
+      _llmSrc = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
+      _llmDst = { bass: {}, buchla: {}, pads: {}, rhodes: {}, voder: {} };
       document.getElementById('btn-ai-auto').classList.remove('ai-auto-on');
       document.getElementById('ai-auto-indicator').style.display = 'none';
+      if (_autoRecording) _toggleAutoRecord();  // also stop recording
     }
 
     document.getElementById('btn-ai-auto').addEventListener('click', () => {
       if (_autoEnabled) _autoDisable(); else _autoEnable();
+    });
+
+    // ── AI AUTO recording: bake LLM improvisation into pattern automation ─────
+    function _activePatternForBeat(beat) {
+      if (songMode && songArrangement.length > 0 && arrBeatOffsets.length) {
+        let idx = arrBeatOffsets.length - 1;
+        for (let i = 0; i < arrBeatOffsets.length - 1; i++) {
+          if (beat < arrBeatOffsets[i + 1]) { idx = i; break; }
+        }
+        const slot = songArrangement[idx];
+        return { slot, localBeat: beat - arrBeatOffsets[idx] };
+      }
+      return { slot: activeSlot, localBeat: beat };
+    }
+
+    function _recordAutoPoint(cc) {
+      if (!seq?.isPlaying) return;
+      const beatNow = seq.getCurrentBeat();
+      if (beatNow < 0) return;
+      const { slot, localBeat } = _activePatternForBeat(beatNow);
+      const pat = patternBank[slot];
+      if (!pat?.sheet) return;
+      pat.sheet.automation = pat.sheet.automation || [];
+
+      for (const instr of Object.keys(cc)) {
+        const t = _INSTR_T[instr];
+        if (t === undefined) continue;
+        const values = cc[instr];
+        for (const [ccNum, val] of Object.entries(values)) {
+          let entry = pat.sheet.automation.find(a => a.t === t && String(a.cc) === String(ccNum));
+          if (!entry) {
+            entry = { t, cc: Number(ccNum), beats: [] };
+            pat.sheet.automation.push(entry);
+          }
+          // replace point within ±0.05 beats, otherwise append + resort
+          const existingIdx = entry.beats.findIndex(p => Math.abs(p[0] - localBeat) < 0.05);
+          if (existingIdx >= 0) entry.beats[existingIdx] = [localBeat, Number(val)];
+          else {
+            entry.beats.push([localBeat, Number(val)]);
+            entry.beats.sort((a, b) => a[0] - b[0]);
+          }
+        }
+      }
+      // If the active slot's sheet was just updated, refresh the textarea too
+      if (slot === activeSlot) {
+        document.getElementById('sheet-json').value = JSON.stringify(pat.sheet, null, 2);
+      }
+    }
+
+    function _toggleAutoRecord() {
+      _autoRecording = !_autoRecording;
+      document.getElementById('btn-ai-rec').classList.toggle('ai-rec-on', _autoRecording);
+      log(_autoRecording ? '● recording AI AUTO into pattern automation' : '■ stopped recording AI AUTO');
+    }
+
+    document.getElementById('btn-ai-rec').addEventListener('click', () => {
+      if (!_autoEnabled) { log('Enable AI AUTO first to record'); return; }
+      _toggleAutoRecord();
     });
 
     // ── EVOLVE: ask the band to mutate for the next section ──────────────────
