@@ -22,7 +22,7 @@ mod wavefolder;
 use bass::{BassEngine, BassParams};
 use buchla::{BuchlaEngine, BuchlaParams};
 use drums::DrumsEngine;
-use graph::engine::SynthGraph;
+use graph::engine::{SynthGraph, GraphFx};
 use pads::{PadsEngine, PadsParams};
 use rhodes::{RhodesEngine, RhodesParams};
 use js_sys::Float32Array;
@@ -645,6 +645,54 @@ impl ClankersSynthGraph {
     }
 
     /// Number of tweakable parameters.
+    pub fn param_count(&self) -> u32 {
+        self.engine.param_count() as u32
+    }
+}
+
+// ── GraphFx ──────────────────────────────────────────────────────────────────
+
+/// Graph-based FX processor — continuous audio processing (no voices/MIDI).
+///
+/// The LLM designs an FX chain using the same node types as SynthGraph, but with
+/// an "input" node that receives external audio and an "output" node that emits it.
+/// Instruments route audio to this FX via send buses (parallel aux sends).
+///
+/// Streaming API:
+///   set_param(param_index, value)                    — update a parameter live
+///   process_stereo(input_buf, n_samples)             — process input → output
+///   param_info()                                     — JSON array of param descriptors
+///   param_count()                                    — number of tweakable params
+#[wasm_bindgen]
+pub struct ClankersGraphFx {
+    engine: GraphFx,
+}
+
+#[wasm_bindgen]
+impl ClankersGraphFx {
+    /// Construct from FX graph JSON. Must contain "input" and "output" nodes.
+    #[wasm_bindgen(constructor)]
+    pub fn new(graph_json: &str) -> Result<ClankersGraphFx, JsError> {
+        GraphFx::new(graph_json)
+            .map(|engine| ClankersGraphFx { engine })
+            .map_err(|e| JsError::new(&e))
+    }
+
+    pub fn set_param(&mut self, param_index: u32, value: f32) {
+        self.engine.set_param(param_index as usize, value);
+    }
+
+    /// Process interleaved stereo input → interleaved stereo output.
+    /// input_buf: [L0,R0,L1,R1,...] — n_samples * 2 floats.
+    pub fn process_stereo(&mut self, input_buf: &[f32], n_samples: u32) -> Float32Array {
+        let buf = self.engine.process_stereo(input_buf, n_samples as usize);
+        Float32Array::from(buf.as_slice())
+    }
+
+    pub fn param_info(&self) -> String {
+        self.engine.param_info_json()
+    }
+
     pub fn param_count(&self) -> u32 {
         self.engine.param_count() as u32
     }

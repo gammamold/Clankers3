@@ -49,6 +49,7 @@ pub enum NodeType {
     Multiply,
     Gain,
     Mixer,
+    Input,   // FX mode: receives external audio
     Output,
 }
 
@@ -115,6 +116,9 @@ pub fn param_descs(nt: NodeType) -> &'static [ParamDesc] {
             ParamDesc { name: "amount", min: 0.0, max: 1.0, default: 0.5 },
         ],
         NodeType::Multiply => &[], // no params — multiplies input 0 × input 1
+        NodeType::Input => &[
+            ParamDesc { name: "gain", min: 0.0, max: 4.0, default: 1.0 },
+        ],
         NodeType::Gain => &[
             ParamDesc { name: "level", min: 0.0, max: 4.0, default: 1.0 },
         ],
@@ -141,6 +145,7 @@ pub enum DspNode {
     Chorus(Chorus),
     Wavefolder,
     Multiply,
+    Input,  // FX mode: external audio passthrough
     Gain,
     Mixer,
     Output,
@@ -161,6 +166,7 @@ impl DspNode {
             NodeType::Chorus      => DspNode::Chorus(Chorus::new(SR)),
             NodeType::Wavefolder  => DspNode::Wavefolder,
             NodeType::Multiply    => DspNode::Multiply,
+            NodeType::Input       => DspNode::Input,
             NodeType::Gain        => DspNode::Gain,
             NodeType::Mixer       => DspNode::Mixer,
             NodeType::Output      => DspNode::Output,
@@ -181,6 +187,7 @@ impl DspNode {
             DspNode::Chorus(_)      => { /* chorus keeps modulation state */ }
             DspNode::Wavefolder     => {}
             DspNode::Multiply       => {}
+            DspNode::Input          => {}
             DspNode::Gain           => {}
             DspNode::Mixer          => {}
             DspNode::Output         => {}
@@ -307,6 +314,14 @@ impl DspNode {
                 out[0] = inputs[0] * inputs[1];
             }
 
+            DspNode::Input => {
+                // FX mode: external audio is pre-written to signal buffer.
+                // Input node just applies gain and passes slots 0 (L) and 1 (R).
+                let gain = params.get(0).copied().unwrap_or(1.0);
+                out[0] = inputs[0] * gain;
+                out[1] = inputs[1] * gain;
+            }
+
             DspNode::Gain => {
                 let level = params.get(0).copied().unwrap_or(1.0);
                 // Input slot 0: audio signal
@@ -349,6 +364,7 @@ impl DspNode {
             DspNode::Chorus(_)      => NodeType::Chorus,
             DspNode::Wavefolder     => NodeType::Wavefolder,
             DspNode::Multiply       => NodeType::Multiply,
+            DspNode::Input          => NodeType::Input,
             DspNode::Gain           => NodeType::Gain,
             DspNode::Mixer          => NodeType::Mixer,
             DspNode::Output         => NodeType::Output,

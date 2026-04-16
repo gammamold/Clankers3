@@ -374,7 +374,40 @@ BEHAVIOUR RULES
 
 8. STEREO: The chorus node outputs stereo (slots 0+1). Connect its outputs to the output node slots 0 (L) and 1 (R) for wide stereo.
 
-9. Keep responses concise. You are embedded in a UI, not a chat app.`;
+9. FX CHAIN MODE: You can also build standalone effect processors. These use an "input" node
+   instead of oscillators — audio from any instrument is routed through the FX chain via sends.
+
+   The "input" node (type: "input") receives external audio on slots 0 (L) and 1 (R).
+   Params: gain (0-4, default 1.0).
+
+   When the user asks for an effect (reverb, delay chain, distortion, etc.) rather than
+   an instrument, use this format:
+
+<SYNTH_GRAPH>
+{
+  "name": "Tape Echo",
+  "type": "graph_fx",
+  "nodes": [
+    { "id": "in", "type": "input", "params": { "gain": 1.0 } },
+    { "id": "dly", "type": "delay", "params": { "time": 0.375, "feedback": 0.5, "mix": 0.7 } },
+    { "id": "filt", "type": "moog_ladder", "params": { "cutoff": 3000, "resonance": 0.2, "drive": 1.5 } },
+    { "id": "out", "type": "output", "params": { "gain": 0.8 } }
+  ],
+  "connections": [
+    { "from": "in:0", "to": "dly:0" },
+    { "from": "dly:0", "to": "filt:0" },
+    { "from": "filt:0", "to": "out:0" }
+  ]
+}
+</SYNTH_GRAPH>
+
+   FX DESIGN PATTERNS:
+   - Tape echo: input → delay(long feedback) → moog_ladder(darken) → output
+   - Shimmer reverb: input → reverb(big room) → chorus(slow, wide) → output
+   - Distortion: input → wavefolder → moog_ladder(tone shape) → output
+   - Multi-tap: input → mixer(delay1 + delay2 + delay3) → reverb → output
+
+10. Keep responses concise. You are embedded in a UI, not a chat app.`;
 
 /**
  * Extract SYNTH_JSON block from LLM response (legacy subtractive path).
@@ -415,11 +448,19 @@ export function extractSynthGraphJSON(text) {
   try {
     const raw = JSON.parse(match[1].trim());
     raw.id   = 'graph_' + Date.now();
-    raw.type = 'wasm_graph';
-    raw.num_voices = raw.num_voices || 4;
-    raw.replaces   = raw.replaces || 'poly_fm';
     raw.nodes       = raw.nodes || [];
     raw.connections = raw.connections || [];
+
+    // Detect FX graphs: explicit type or presence of an "input" node
+    const hasInputNode = raw.nodes.some(n =>
+      n.type === 'input' || n.type === 'in' || n.type === 'audio_in');
+    if (raw.type === 'graph_fx' || hasInputNode) {
+      raw.type = 'graph_fx';
+    } else {
+      raw.type = 'wasm_graph';
+      raw.num_voices = raw.num_voices || 4;
+      raw.replaces   = raw.replaces || 'poly_fm';
+    }
     return raw;
   } catch (e) {
     console.error('[SynthAgent] Graph JSON parse error:', e, match[1]);

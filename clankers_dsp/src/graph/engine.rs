@@ -212,6 +212,190 @@ impl SynthGraph {
     }
 }
 
+// ── GraphFx — continuous audio FX processor ──────────────────────────────────
+
+/// A graph-based FX processor. Unlike SynthGraph, this has no voices — it
+/// processes audio continuously through a single copy of the node graph.
+/// External audio enters via an "input" node and exits via the "output" node.
+pub struct GraphFx {
+    nodes: Vec<super::node::DspNode>,
+    signals: Vec<f32>,          // node_i * MAX_SLOTS + slot_j
+    exec_order: Vec<usize>,
+    connections: Vec<Connection>,
+    param_offsets: Vec<usize>,
+    param_info: Vec<ParamInfo>,
+    params: Vec<f32>,
+    input_node: Option<usize>,  // index of the Input node
+    output_node: usize,         // index of the Output node
+}
+
+impl GraphFx {
+    /// Construct from the same JSON format as SynthGraph.
+    /// The graph MUST contain exactly one "input" node and one "output" node.
+    pub fn new(graph_json: &str) -> Result<Self, String> {
+        let parsed = parse_graph_json(graph_json)?;
+
+        let n = parsed.nodes.len();
+        let mut node_types = Vec::with_capacity(n);
+        let mut node_ids = Vec::with_capacity(n);
+
+        for pn in &parsed.nodes {
+            node_types.push(pn.node_type);
+            node_ids.push(pn.id.clone());
+        }
+
+        // Validate: exactly one Output, exactly one Input
+        let output_idx = node_types.iter().position(|t| *t == NodeType::Output)
+            .ok_or("FX graph must have an 'output' node")?;
+        if node_types.iter().filter(|t| **t == NodeType::Output).count() > 1 {
+            return Err("FX graph must have exactly one 'output' node".into());
+        }
+        let input_idx = node_types.iter().position(|t| *t == NodeType::Input);
+
+        let id_to_idx = |id: &str| -> Result<usize, String> {
+            node_ids.iter().position(|x| x == id)
+                .ok_or_else(|| format!("Unknown node id: '{}'", id))
+        };
+
+        // Resolve connections
+        let mut connections = Vec::new();
+        for pc in &parsed.connections {
+            let src = id_to_idx(&pc.from_id)?;
+            let dst = id_to_idx(&pc.to_id)?;
+            connections.push(Connection {
+                src_node: src, src_slot: pc.from_slot,
+                dst_node: dst, dst_slot: pc.to_slot,
+            });
+        }
+
+        let exec_order = topo_sort(n, &connections)?;
+
+        // Build parameter layout
+        let mut param_offsets = Vec::with_capacity(n);
+        let mut params = Vec::new();
+        let mut param_info = Vec::new();
+        for (i, nt) in node_types.iter().enumerate() {
+            param_offsets.push(params.len());
+            for pd in param_descs(*nt) {
+                let idx = params.len();
+                param_info.push(ParamInfo {
+                    index: idx,
+                    node_id: node_ids[i].clone(),
+                    name: pd.name.to_string(),
+                    min: pd.min, max: pd.max, default: pd.default,
+                });
+                params.push(pd.default);
+            }
+        }
+
+        // Apply initial params from JSON
+        for pn in &parsed.nodes {
+            let ni = id_to_idx(&pn.id)?;
+            let off = param_offsets[ni];
+            let descs = param_descs(pn.node_type);
+            for (pname, pval) in &pn.params {
+                if let Some(pi) = descs.iter().position(|d| d.name == pname) {
+                    params[off + pi] = *pval;
+                }
+            }
+        }
+
+        let nodes = node_types.iter().map(|nt| super::node::DspNode::new(*nt)).collect();
+        let signals = vec![0.0; n * super::node::MAX_SLOTS];
+
+        Ok(GraphFx {
+            nodes, signals, exec_order, connections,
+            param_offsets, param_info, params,
+            input_node: input_idx,
+            output_node: output_idx,
+        })
+    }
+
+    pub fn set_param(&mut self, param_index: usize, value: f32) {
+        if param_index < self.params.len() {
+            self.params[param_index] = value;
+        }
+    }
+
+    /// Process interleaved stereo input → interleaved stereo output.
+    /// `input`: [L0, R0, L1, R1, ...] — `n_samples * 2` floats.
+    /// Returns same-size interleaved stereo output.
+    pub fn process_stereo(&mut self, input: &[f32], n_samples: usize) -> Vec<f32> {
+        let max_slots = super::node::MAX_SLOTS;
+        let mut out = vec![0.0f32; n_samples * 2];
+
+        for i in 0..n_samples {
+            let in_l = input.get(i * 2).copied().unwrap_or(0.0);
+            let in_r = input.get(i * 2 + 1).copied().unwrap_or(0.0);
+
+            // Clear signal buffer
+            self.signals.fill(0.0);
+
+            // Inject external audio into the Input node's signal buffer
+            if let Some(inp_idx) = self.input_node {
+                self.signals[inp_idx * max_slots]     = in_l;
+                self.signals[inp_idx * max_slots + 1] = in_r;
+            }
+
+            // Process nodes in topological order
+            for &ni in &self.exec_order {
+                let mut inputs = [0.0f32; super::node::MAX_SLOTS];
+                for conn in &self.connections {
+                    if conn.dst_node == ni {
+                        inputs[conn.dst_slot] += self.signals[conn.src_node * max_slots + conn.src_slot];
+                    }
+                }
+
+                // For the Input node, also merge the external audio into inputs
+                // (it was written to signals above, connections will carry it)
+                if Some(ni) == self.input_node {
+                    // External audio is already in signals[inp*MAX_SLOTS+0/1].
+                    // The Input node tick reads from inputs[], so inject there.
+                    inputs[0] += in_l;
+                    inputs[1] += in_r;
+                }
+
+                let p_off = self.param_offsets[ni];
+                let p_end = if ni + 1 < self.param_offsets.len() {
+                    self.param_offsets[ni + 1]
+                } else {
+                    self.params.len()
+                };
+
+                let outputs = self.nodes[ni].tick(&inputs, &self.params[p_off..p_end], 440.0, 1.0);
+
+                for s in 0..max_slots {
+                    self.signals[ni * max_slots + s] = outputs[s];
+                }
+            }
+
+            // Read output from the Output node
+            let oi = self.output_node;
+            out[i * 2]     = self.signals[oi * max_slots];
+            out[i * 2 + 1] = self.signals[oi * max_slots + 1];
+        }
+
+        out
+    }
+
+    pub fn param_info_json(&self) -> String {
+        let mut s = String::from("[");
+        for (i, pi) in self.param_info.iter().enumerate() {
+            if i > 0 { s.push(','); }
+            s.push_str(&format!(
+                r#"{{"index":{},"node":"{}","param":"{}","min":{},"max":{},"default":{}}}"#,
+                pi.index, pi.node_id, pi.name, pi.min, pi.max, pi.default
+            ));
+        }
+        s.push(']');
+        s
+    }
+
+    pub fn param_count(&self) -> usize {
+        self.params.len()
+    }
+}
+
 // ── Topological sort (Kahn's algorithm) ─────────────────────────────────────
 
 fn topo_sort(n: usize, connections: &[Connection]) -> Result<Vec<usize>, String> {

@@ -117,6 +117,36 @@ export class ClankersDrums {
 }
 
 /**
+ * Graph-based FX processor — continuous audio processing (no voices/MIDI).
+ *
+ * The LLM designs an FX chain using the same node types as SynthGraph, but with
+ * an "input" node that receives external audio and an "output" node that emits it.
+ * Instruments route audio to this FX via send buses (parallel aux sends).
+ *
+ * Streaming API:
+ *   set_param(param_index, value)                    — update a parameter live
+ *   process_stereo(input_buf, n_samples)             — process input → output
+ *   param_info()                                     — JSON array of param descriptors
+ *   param_count()                                    — number of tweakable params
+ */
+export class ClankersGraphFx {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Construct from FX graph JSON. Must contain "input" and "output" nodes.
+     */
+    constructor(graph_json: string);
+    param_count(): number;
+    param_info(): string;
+    /**
+     * Process interleaved stereo input → interleaved stereo output.
+     * input_buf: [L0,R0,L1,R1,...] — n_samples * 2 floats.
+     */
+    process_stereo(input_buf: Float32Array, n_samples: number): Float32Array;
+    set_param(param_index: number, value: number): void;
+}
+
+/**
  * HybridSynth pads — Moog ladder + ADSR + chorus + reverb (8 polyphonic voices).
  *
  * Streaming API:
@@ -303,6 +333,7 @@ export interface InitOutput {
     readonly __wbg_clankersbass_free: (a: number, b: number) => void;
     readonly __wbg_clankersbuchla_free: (a: number, b: number) => void;
     readonly __wbg_clankersdrums_free: (a: number, b: number) => void;
+    readonly __wbg_clankersgraphfx_free: (a: number, b: number) => void;
     readonly __wbg_clankerspads_free: (a: number, b: number) => void;
     readonly __wbg_clankersrhodes_free: (a: number, b: number) => void;
     readonly __wbg_clankerssynthgraph_free: (a: number, b: number) => void;
@@ -324,6 +355,11 @@ export interface InitOutput {
     readonly clankersdrums_set_pitch: (a: number, b: number) => void;
     readonly clankersdrums_set_profile: (a: number, b: number) => void;
     readonly clankersdrums_trigger: (a: number, b: number, c: number) => void;
+    readonly clankersgraphfx_new: (a: number, b: number) => [number, number, number];
+    readonly clankersgraphfx_param_count: (a: number) => number;
+    readonly clankersgraphfx_param_info: (a: number) => [number, number];
+    readonly clankersgraphfx_process_stereo: (a: number, b: number, c: number, d: number) => any;
+    readonly clankersgraphfx_set_param: (a: number, b: number, c: number) => void;
     readonly clankerspads_new: () => number;
     readonly clankerspads_process_stereo: (a: number, b: number) => any;
     readonly clankerspads_set_params: (a: number, b: number, c: number) => void;

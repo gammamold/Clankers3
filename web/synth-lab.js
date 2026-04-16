@@ -16,6 +16,7 @@
 import { buildClankersMeta }       from './synth/core/ClankersBridge.js';
 import { WebAudioInstrumentAdapter } from './synth/core/InstrumentAdapter.js';
 import { WasmGraphAdapter }          from './synth/core/WasmGraphAdapter.js';
+import { GraphFxAdapter }            from './synth/core/GraphFxAdapter.js';
 import { registry }                  from './synth/core/InstrumentRegistry.js';
 import { ModulePanel }               from './synth/ui/ModulePanel.js';
 import { PianoKeys }                 from './synth/ui/PianoKeys.js';
@@ -44,6 +45,7 @@ export class SynthLab {
     this._editingSlot = null;
     this._uiBuilt     = false;
     this._seq         = null;  // set externally: synthLab._seq = seq
+    this._fx          = null;  // set externally: synthLab._fx = rack (MasterFx)
 
     /** Slot index → legacy track type it currently replaces (null = no replacement) */
     this._slotLegacyT = { 0: 2, 1: 1, 2: 6, 3: 3, 4: null };
@@ -56,6 +58,9 @@ export class SynthLab {
       volume:  1.0,
       panels:  [],
     }));
+
+    /** Graph FX units added via the wizard. Each: { adapter, name, sendSlot, state } */
+    this._graphFxSlots = [];
 
     this._restoreAssignments();
   }
@@ -202,6 +207,53 @@ export class SynthLab {
     this._saveSession();
   }
 
+  // ── Graph FX management ─────────────────────────────────────────────────────
+
+  /**
+   * Add a graph-based FX unit from wizard output.
+   * Creates a GraphFxAdapter, inits it, and registers with MasterFx.
+   */
+  async _addGraphFx(state) {
+    if (!this._ctx || !this._fx) {
+      console.warn('[SynthLab] Cannot add graph FX — no audio context or MasterFx');
+      return;
+    }
+    const graphJson = typeof state.graphJson === 'string'
+      ? state.graphJson : JSON.stringify(state);
+    const adapter = new GraphFxAdapter(this._ctx, graphJson, {
+      id: state.id || 'gfx_' + Date.now(),
+    });
+
+    try {
+      await adapter.init(window._wasmModule);
+    } catch (e) {
+      console.error('[SynthLab] Graph FX init failed:', e);
+      return;
+    }
+
+    const sendSlot = this._fx.addGraphFx(adapter, state.name || 'Graph FX');
+    const entry = { adapter, name: state.name || 'Graph FX', sendSlot, state };
+    this._graphFxSlots.push(entry);
+    this._refreshFxPanel();
+    console.log(`[SynthLab] Graph FX "${entry.name}" added as send slot ${sendSlot}`);
+  }
+
+  /**
+   * Remove a graph FX by index in _graphFxSlots.
+   */
+  removeGraphFx(gfxIndex) {
+    if (gfxIndex < 0 || gfxIndex >= this._graphFxSlots.length) return;
+    const entry = this._graphFxSlots[gfxIndex];
+    this._fx?.removeGraphFx(gfxIndex);
+    this._graphFxSlots.splice(gfxIndex, 1);
+    // Re-index sendSlot values
+    for (let i = 0; i < this._graphFxSlots.length; i++) {
+      this._graphFxSlots[i].sendSlot = 2 + i;
+    }
+    this._refreshFxPanel();
+    console.log(`[SynthLab] Graph FX "${entry.name}" removed`);
+  }
+
   /**
    * Schedule a noteOn + noteOff for the given slot.
    * Delegates to the slot's WebAudioInstrumentAdapter.
@@ -291,6 +343,7 @@ export class SynthLab {
     if (this._uiBuilt) return;
     this._uiBuilt = true;
     this._refreshSlotCards();
+    this._refreshFxPanel();
     this._clearEditor();
   }
 
@@ -359,6 +412,155 @@ export class SynthLab {
 
       row.appendChild(card);
     });
+  }
+
+  /** Render the Send FX sidebar panel showing active graph FX units. */
+  _refreshFxPanel() {
+    const row = document.getElementById('synth-fx-row');
+    if (!row) return;
+    row.innerHTML = '';
+
+    for (let i = 0; i < this._graphFxSlots.length; i++) {
+      const entry = this._graphFxSlots[i];
+      const card = document.createElement('div');
+      card.className = 'sfx-card';
+
+      const nodeCount = entry.state?.nodes?.length || '?';
+      card.innerHTML = `
+        <div class="sfx-name">${entry.name}</div>
+        <div class="sfx-info">send slot ${entry.sendSlot} · ${nodeCount} nodes</div>
+        <div class="sfx-btns">
+          <button class="sfx-edit" title="Edit FX parameters">EDIT</button>
+          <button class="sfx-rm" title="Remove this FX unit">✕</button>
+        </div>`;
+
+      card.querySelector('.sfx-edit').addEventListener('click', () => {
+        this._editGraphFx(i);
+      });
+
+      card.querySelector('.sfx-rm').addEventListener('click', () => {
+        if (confirm(`Remove FX "${entry.name}"?`)) this.removeGraphFx(i);
+      });
+
+      row.appendChild(card);
+    }
+
+    // Add button — opens wizard in FX mode
+    const addBtn = document.createElement('button');
+    addBtn.className = 'sfx-add-btn';
+    addBtn.textContent = '+ NEW SEND FX';
+    addBtn.addEventListener('click', () => this._openWizardForFx());
+    row.appendChild(addBtn);
+  }
+
+  /** Open the wizard overlay in FX creation mode. */
+  _openWizardForFx() {
+    if (!this._ctx) {
+      alert('Start playback first to activate the audio context, then add FX.');
+      return;
+    }
+    if (!this._fx) {
+      alert('MasterFx not connected — start the sequencer first.');
+      return;
+    }
+    const overlay = document.getElementById('synth-wizard-overlay');
+    const body    = document.getElementById('synth-wizard-body');
+    if (!overlay || !body) return;
+    overlay.classList.add('open');
+    body.innerHTML = '';
+
+    const wizard = new LLMWizard(state => {
+      overlay.classList.remove('open');
+      if (state.type === 'graph_fx') {
+        this._addGraphFx(state);
+      } else {
+        // If the LLM returned a synth instead of FX, load into first empty slot
+        const emptySlot = this._slots.findIndex(s => !s.adapter);
+        const target = emptySlot >= 0 ? emptySlot : 0;
+        this.loadPatch(target, state);
+        this._openEditor(target);
+      }
+    }, 'I want to design a send effect (like a delay, reverb, or creative FX chain). Build it as an FX graph with an input node.');
+    wizard.render(body);
+  }
+
+  /** Open the editor for a graph FX unit (shows param knobs in main editor area). */
+  _editGraphFx(gfxIndex) {
+    const entry = this._graphFxSlots[gfxIndex];
+    if (!entry) return;
+
+    this._editingSlot = null; // deselect any synth slot
+    this._refreshSlotCards();
+
+    const ed = document.getElementById('synth-lab-editor');
+    if (!ed) return;
+    ed.innerHTML = '';
+
+    // Header
+    const hdr = document.createElement('div');
+    hdr.className = 'sle-header';
+    hdr.innerHTML = `
+      <span class="sle-name">${entry.name}</span>
+      <span class="sle-badge" style="background:#0a1a2a;color:#4ea8de;border-color:#1a3a5a;">SEND FX</span>
+      <span class="sle-track" style="color:#4ea8de;" title="Send slot ${entry.sendSlot}">
+        [send:${entry.sendSlot} ●]
+      </span>`;
+    ed.appendChild(hdr);
+
+    // Rack with graph param panels
+    const rackArea = document.createElement('div');
+    rackArea.className = 'sle-rack-area';
+    const rack = document.createElement('div');
+    rack.className = 'sle-rack';
+    rackArea.appendChild(rack);
+    ed.appendChild(rackArea);
+
+    this._renderGraphFxPanels(entry, rack);
+  }
+
+  /** Render knob panels for a graph FX unit's parameters. */
+  _renderGraphFxPanels(entry, rack) {
+    const adapter = entry.adapter;
+    const paramMap = adapter.paramMap;
+    if (!paramMap?.length) {
+      rack.innerHTML = '<div style="color:#555;font-family:monospace;font-size:.7rem;padding:1rem;">No parameters available</div>';
+      return;
+    }
+
+    // Group params by node ID
+    const groups = {};
+    for (const p of paramMap) {
+      (groups[p.node] = groups[p.node] || []).push(p);
+    }
+
+    // Track live param values
+    const vals = {};
+    for (const p of paramMap) vals[`${p.node}.${p.param}`] = p.default ?? 0;
+
+    for (const [nodeId, params] of Object.entries(groups)) {
+      const nodeType = params[0]?.nodeType || _guessNodeType(params);
+      const color    = GRAPH_NODE_COLORS[nodeType] || '#555';
+
+      const knobs = params.map(p => {
+        const key  = `${p.node}.${p.param}`;
+        const step = _graphParamStep(p);
+        const dec  = _graphParamDecimals(p);
+        const unit = _graphParamUnit(p);
+        return {
+          label: p.param.toUpperCase(),
+          min: p.min, max: p.max, step,
+          decimals: dec, unit,
+          get: () => vals[key],
+          set: (v) => {
+            vals[key] = v;
+            adapter.setParam(p.node, p.param, v);
+          },
+        };
+      });
+
+      const panel = new ModulePanel({ title: nodeId, color, knobs });
+      rack.appendChild(panel.el);
+    }
   }
 
   _openEditor(slotIndex) {
@@ -779,7 +981,14 @@ export class SynthLab {
 
     const wizard = new LLMWizard(state => {
       overlay.classList.remove('open');
-      // Route to whichever slot owns the target legacy track type (or default to this slot)
+
+      if (state.type === 'graph_fx') {
+        // FX graph → add as a send FX via MasterFx
+        this._addGraphFx(state);
+        return;
+      }
+
+      // Synth patch → route to whichever slot owns the target legacy track type
       const targetT  = REPLACES_KEY_TO_T[state.replaces];
       const targetSlot = (targetT !== undefined ? this._legacyTToSlot[targetT] : undefined) ?? slotIndex;
       this.loadPatch(targetSlot, state);
