@@ -183,7 +183,7 @@ const TUT_CSS = `
 `;
 
 // ────────────────────────────────────────────────────────────────────────────
-// STEPS — Phase A has steps 1–6. More added in later phases.
+// STEPS — 31-step guided tour covering all current features.
 // ────────────────────────────────────────────────────────────────────────────
 const STEPS = [
   // 1
@@ -285,7 +285,8 @@ const STEPS = [
     body: 'Start the sequencer and hear your drums. Press PLAY to continue the tour.',
     screen: null,
     target: '#room-play',
-    nextOn: 'action:#room-play',
+    nextOn: 'action-or-button:#room-play',
+    hint: '← press PLAY (or hit NEXT)',
   },
 
   // ── BASS ───────────────────────────────────────────────────────────
@@ -394,8 +395,20 @@ const STEPS = [
     hint: '← turn reverb size all the way up',
   },
 
-  // ── SONG BUILDER ───────────────────────────────────────────────────
+  // ── SYNTH LAB ──────────────────────────────────────────────────────
   // 21
+  {
+    chapter: 'SYNTH LAB',
+    title: 'SYNTH LAB',
+    body: 'Synth Lab is an advanced modular workbench. Build custom WASM-powered synth voices from scratch using a graph-based node editor, then design AI-generated send FX chains and route them into your session.',
+    screen: 'main',
+    target: '#btn-synth-lab',
+    nextOn: 'button',
+    hint: '← open Synth Lab to explore the modular engine',
+  },
+
+  // ── SONG BUILDER ───────────────────────────────────────────────────
+  // 22
   {
     chapter: 'SONG BUILDER',
     title: 'THE SONG BUILDER',
@@ -404,17 +417,17 @@ const STEPS = [
     target: null,
     nextOn: 'button',
   },
-  // 22
+  // 23
   {
     chapter: null,
     title: 'PATTERN BANK',
-    body: 'Each slot (P1–P8) stores a full song pattern. Click a slot to select it. As the band EVOLVES your song through sections, new patterns fill out the bank.',
+    body: 'Each slot (P1–P8) stores a full song pattern. Click a slot to select it. As the band EVOLVES your song through sections, new patterns fill out the bank. Use +/– SLOTS to resize the bank.',
     screen: null,
     target: '#song-pat-bank',
     nextOn: 'button',
     hint: '← click a pattern slot to activate it',
   },
-  // 23
+  // 24
   {
     chapter: null,
     title: 'ARRANGEMENT GRID',
@@ -422,24 +435,44 @@ const STEPS = [
     screen: null,
     target: '#song-arr-grid',
     demo: () => {
-      // Make sure the arrangement grid is visible — click SONG mode if needed
       const btnSong = document.getElementById('song-btn-song');
       if (btnSong && !btnSong.classList.contains('mode-active')) btnSong.click();
     },
     nextOn: 'button',
   },
-  // 24
+  // 25
+  {
+    chapter: null,
+    title: 'CARDS',
+    body: 'Cards are AI-powered pattern transformation tools. Pick MIRROR, RETROGRADE, FRACTURE, or BLOOM — the AI reshapes the active pattern using that rule. Preview the result live, then keep it or discard.',
+    screen: null,
+    target: '#song-cards-panel',
+    nextOn: 'button',
+    hint: '← try a card transformation',
+  },
+  // 26
+  {
+    chapter: null,
+    title: 'MIXER',
+    body: 'The Mixer gives you per-instrument volume, mute, and solo controls. Open it from this screen or from inside any instrument room. Fader positions are saved with the project.',
+    screen: 'song',
+    target: '#song-mixer-btn',
+    nextOn: 'button',
+    hint: '← click MIXER to open it',
+  },
+  // 27
   {
     chapter: null,
     title: 'PLAY YOUR SONG',
-    body: 'Hit play in SONG mode to hear your arrangement from start to finish. The grid will light up as each pattern plays. Click PLAY to continue.',
+    body: 'Hit play in SONG mode to hear your arrangement from start to finish. The grid will light up as each pattern plays.',
     screen: null,
     target: '#song-play-btn',
-    nextOn: 'action:#song-play-btn',
+    nextOn: 'action-or-button:#song-play-btn',
+    hint: '← press PLAY (or hit NEXT)',
   },
 
   // ── EVOLVE ─────────────────────────────────────────────────────────
-  // 25
+  // 28
   {
     chapter: 'EVOLVE',
     title: 'EVOLVE YOUR SONG',
@@ -451,7 +484,7 @@ const STEPS = [
     },
     nextOn: 'button',
   },
-  // 26
+  // 29
   {
     chapter: null,
     title: 'TRIGGER AN EVOLUTION',
@@ -466,11 +499,11 @@ const STEPS = [
   },
 
   // ── AI AUTO ────────────────────────────────────────────────────────
-  // 27
+  // 30
   {
     chapter: 'AI AUTO',
     title: 'AI AUTO MODE',
-    body: 'AI AUTO enables live parameter automation. The AI continuously adjusts knob values in response to the music playing — breathing movement into the arrangement. Click ◈ AI AUTO to activate it.',
+    body: 'AI AUTO drives live parameter automation. Activate it to let the AI continuously move knobs in response to the music, or hit REC to capture a performance as fixed automation curves that play back every loop.',
     screen: null,
     target: '#btn-ai-auto',
     demo: (bridge) => {
@@ -481,11 +514,11 @@ const STEPS = [
   },
 
   // ── DONE ───────────────────────────────────────────────────────────
-  // 28
+  // 31
   {
     chapter: 'DONE',
     title: 'YOUR SONG IS READY',
-    body: 'You\'ve walked through every part of Clankers 3. To export your final mix, open any instrument room and click ⬇ WAV — this renders an offline mix file directly to your downloads. Now go make something weird.',
+    body: 'You\'ve walked through every part of Clankers 3. Save your session via SAVE PROJECT in the menu (exports a .clank file you can reload anytime). To bounce audio, open any instrument room and click ⬇ WAV. Now go make something weird.',
     screen: null,
     target: null,
     nextOn: 'button',
@@ -544,6 +577,7 @@ const STEPS_ES = {
   10: {
     title: 'DALE A PLAY',
     body: 'Inicia el secuenciador y escucha tu batería. Pulsa PLAY para continuar el tour.',
+    hint: '← pulsa PLAY (o haz clic en SIGUIENTE)',
   },
   11: {
     chapter: 'BAJO',
@@ -594,43 +628,60 @@ const STEPS_ES = {
     hint: '← sube el tamaño del reverb al máximo',
   },
   21: {
+    chapter: 'SYNTH LAB',
+    title: 'SYNTH LAB',
+    body: 'Synth Lab es un taller modular avanzado. Construye voces sintetizadoras WASM personalizadas con un editor de nodos, diseña cadenas de efectos send generadas por IA y enrútalas en tu sesión.',
+    hint: '← abre Synth Lab para explorar el motor modular',
+  },
+  22: {
     chapter: 'CONSTRUCTOR',
     title: 'EL CONSTRUCTOR DE CANCIÓN',
     body: 'Los patrones pueden encadenarse en un arreglo completo. El Song Builder es donde compones la estructura — intro, verso, coro, puente, outro — usando el banco de patrones y la cuadrícula de arreglo.',
   },
-  22: {
+  23: {
     title: 'BANCO DE PATRONES',
-    body: 'Cada slot (P1–P8) guarda un patrón completo. Haz clic en un slot para seleccionarlo. A medida que la banda EVOLUCIONA tu canción por secciones, nuevos patrones llenan el banco.',
+    body: 'Cada slot (P1–P8) guarda un patrón completo. Haz clic en un slot para seleccionarlo. A medida que la banda evoluciona tu canción, nuevos patrones llenan el banco. Usa +/– SLOTS para cambiar el tamaño.',
     hint: '← haz clic en un slot de patrón para activarlo',
   },
-  23: {
+  24: {
     title: 'CUADRÍCULA DE ARREGLO',
     body: 'Haz clic en los slots de arreglo para construir una secuencia de patrones. Arrastra patrones en cualquier orden para definir la estructura completa de la canción.',
   },
-  24: {
-    title: 'REPRODUCE TU CANCIÓN',
-    body: 'Dale a play en modo SONG para escuchar tu arreglo de principio a fin. La cuadrícula se iluminará mientras cada patrón se reproduce. Haz clic en PLAY para continuar.',
-  },
   25: {
+    title: 'CARDS',
+    body: 'Las Cards son herramientas de transformación de patrones con IA. Elige MIRROR, RETROGRADE, FRACTURE o BLOOM — la IA reorganiza el patrón activo según esa regla. Previsualiza el resultado y luego acéptalo o descártalo.',
+    hint: '← prueba una transformación con una card',
+  },
+  26: {
+    title: 'MEZCLADOR',
+    body: 'El Mezclador te da control de volumen, silencio y solo por instrumento. Ábrelo desde esta pantalla o desde cualquier sala de instrumento. Las posiciones de los faders se guardan con el proyecto.',
+    hint: '← haz clic en MIXER para abrirlo',
+  },
+  27: {
+    title: 'REPRODUCE TU CANCIÓN',
+    body: 'Dale a play en modo SONG para escuchar tu arreglo de principio a fin. La cuadrícula se iluminará mientras cada patrón se reproduce.',
+    hint: '← pulsa PLAY (o haz clic en SIGUIENTE)',
+  },
+  28: {
     chapter: 'EVOLUCIONAR',
     title: 'EVOLUCIONA TU CANCIÓN',
     body: 'EVOLVE envía el patrón actual a la banda con una nueva directiva estructural — lo mutan en una nueva sección (verso 2, puente, outro) y lo guardan en el siguiente slot. Si no ves EVOLVE abajo, vuelve y envía un mensaje de chat primero — se desbloquea cuando existe una sesión.',
   },
-  26: {
+  29: {
     title: 'DISPARA UNA EVOLUCIÓN',
     body: 'Elige una sección del menú (verso 2, puente, outro…) y haz clic en EVOLVE. La banda generará una variación y la guardará en el siguiente slot — una nueva pieza de tu canción.',
     hint: '← selecciona una sección y haz clic en EVOLVE →',
   },
-  27: {
+  30: {
     chapter: 'AI AUTO',
     title: 'MODO AI AUTO',
-    body: 'AI AUTO activa la automatización en vivo de parámetros. La IA ajusta continuamente los valores de las perillas según la música que suena — dando movimiento al arreglo. Haz clic en ◈ AI AUTO para activarlo.',
+    body: 'AI AUTO impulsa la automatización de parámetros en vivo. Actívalo para que la IA mueva perillas en respuesta a la música, o pulsa REC para capturar una actuación como curvas de automatización fijas que se reproducen en cada loop.',
     hint: '← haz clic en ◈ AI AUTO para encenderlo',
   },
-  28: {
+  31: {
     chapter: 'LISTO',
     title: 'TU CANCIÓN ESTÁ LISTA',
-    body: 'Has recorrido cada parte de Clankers 3. Para exportar tu mezcla final, abre cualquier sala de instrumento y haz clic en ⬇ WAV — esto renderiza un archivo de mezcla offline directo a tus descargas. Ahora ve y haz algo raro.',
+    body: 'Has recorrido cada parte de Clankers 3. Guarda tu sesión con SAVE PROJECT en el menú (exporta un archivo .clank que puedes recargar). Para exportar audio, abre cualquier sala de instrumento y haz clic en ⬇ WAV. Ahora ve y haz algo raro.',
   },
 };
 
@@ -961,20 +1012,23 @@ class Tutorial {
       this._panel.position(rect);
     }, 60);
 
-    // 4. Action listener for auto-advance
-    if (typeof step.nextOn === 'string' && step.nextOn.startsWith('action:')) {
-      const selector = step.nextOn.slice(7);
+    // 4. Action listener for auto-advance.
+    // 'action:selector'            — grays out NEXT, requires clicking the target.
+    // 'action-or-button:selector'  — auto-advances on click but NEXT stays enabled (mobile-safe).
+    const isAction = typeof step.nextOn === 'string' && step.nextOn.startsWith('action:');
+    const isActionOrBtn = typeof step.nextOn === 'string' && step.nextOn.startsWith('action-or-button:');
+    if (isAction || isActionOrBtn) {
+      const selector = step.nextOn.slice(isActionOrBtn ? 17 : 7);
       const ac = new AbortController();
       document.addEventListener('click', (e) => {
         if (e.target && e.target.closest(selector)) {
-          // Advance after the user's click finishes processing
           setTimeout(() => {
             if (this._active) this.next();
           }, 80);
         }
       }, { capture: true, signal: ac.signal });
       this._actionCleanup = () => ac.abort();
-      this._panel.setNextWaiting(true);
+      this._panel.setNextWaiting(isAction);
     } else {
       this._panel.setNextWaiting(false);
     }
