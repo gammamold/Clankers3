@@ -8723,7 +8723,13 @@ if (typeof TextEncoder === 'undefined') {
           if (p.band) {
              sessionId = p.band.sessionId;
              chatHistory = p.band.chatHistory || [];
-             if (sessionId) document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
+             if (sessionId) {
+               document.getElementById('session-badge').textContent = `[${sessionId.slice(0,8)}]`;
+               chatInput.disabled = false;
+               chatSend.disabled = false;
+               document.getElementById('evolve-row').style.display = '';
+               document.getElementById('ai-auto-row').style.display = '';
+             }
           }
           if (p.sheet) {
              document.getElementById('sheet-json').value = JSON.stringify(p.sheet, null, 2);
