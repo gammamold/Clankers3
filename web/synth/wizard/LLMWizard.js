@@ -341,25 +341,34 @@ export class LLMWizard {
     const el = document.createElement('div');
     el.className = 'chat-build-card';
 
+    const isFx    = state.type === 'graph_fx';
     const isGraph = state.type === 'wasm_graph';
-    const voices  = isGraph ? (state.num_voices || 4) : (state.voice?.polyphony || 1);
-    const typeLabel = isGraph ? 'WASM graph' : state.type;
-    const nodeCount = isGraph ? `${state.nodes?.length || 0} nodes` : '';
-    const info   = `${typeLabel} · ${voices} voice${voices > 1 ? 's' : ''}${nodeCount ? ' · ' + nodeCount : ''}`;
+    let info;
+    if (isFx) {
+      info = `Graph FX · ${state.nodes?.length || 0} nodes`;
+    } else if (isGraph) {
+      const voices = state.num_voices || 4;
+      info = `WASM graph · ${voices} voice${voices > 1 ? 's' : ''} · ${state.nodes?.length || 0} nodes`;
+    } else {
+      const voices = state.voice?.polyphony || 1;
+      info = `${state.type} · ${voices} voice${voices > 1 ? 's' : ''}`;
+    }
+
+    const loadLabel = isFx ? '▶ ADD AS SEND FX' : '▶ LOAD INTO SLOT';
 
     el.innerHTML = `
-      <div class="build-card-icon">⬡</div>
+      <div class="build-card-icon">${isFx ? '◈' : '⬡'}</div>
       <div class="build-card-text">
         <strong class="build-card-name">${state.name}</strong><br>
         <span class="build-card-info">${info}</span>
       </div>
       <div class="build-card-actions">
-        <button class="build-load-btn">▶ LOAD INTO SLOT</button>
+        <button class="build-load-btn">${loadLabel}</button>
         <button class="build-forge-btn">↓ DOWNLOAD JSON</button>
       </div>
     `;
 
-    // LOAD → fires onComplete to put the synth into the slot and open the editor
+    // LOAD → fires onComplete to put the synth/fx into the slot
     el.querySelector('.build-load-btn').addEventListener('click', () => {
       el.querySelector('.build-card-actions').innerHTML = '<span style="color:#ffe000;font-size:10px;font-family:monospace;">Loading…</span>';
       this.onComplete(state);

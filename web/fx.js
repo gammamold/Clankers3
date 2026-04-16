@@ -392,15 +392,71 @@ export class MasterFx {
     this._delaySends = {};
     this._shaperSends = {};
 
+    // Graph FX slots (dynamic, added via Synth Lab)
+    // Each entry: { adapter: GraphFxAdapter, name: string, sends: {} }
+    this._graphFx = [];
+    this._graphSends = []; // per-graphFx: { drum: GainNode, bass: GainNode, ... }
+
     // Send values persist across seq.start() reconnects
+    // Slots: 0=delay, 1=shaper, 2+=graphFx[n-2]
     this._sendVals = [
       { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0, voder: 0 },
       { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0, voder: 0 },
     ];
+
+    // Cache for re-attachment
+    this._lastInstrGains = null;
+    this._lastDestination = null;
   }
 
   delay() { return this._delay; }
   shaper() { return this._shape; }
+
+  /** Get graph FX slots array. */
+  get graphFxSlots() { return this._graphFx; }
+
+  /**
+   * Add a graph-based FX to the send bus.
+   * @param {GraphFxAdapter} adapter — already init()'d
+   * @param {string} name — display name
+   * @returns {number} slot index (for setSend)
+   */
+  addGraphFx(adapter, name = 'Graph FX') {
+    const slotIdx = 2 + this._graphFx.length;
+    this._graphFx.push({ adapter, name });
+    this._graphSends.push({});
+    // Init send values for this slot
+    this._sendVals[slotIdx] = { drum: 0, bass: 0, buchla: 0, pads: 0, rhodes: 0, voder: 0 };
+    // If already attached, wire the new FX into the graph
+    if (this._lastInstrGains && this._lastDestination) {
+      this._wireGraphFx(this._graphFx.length - 1, this._lastInstrGains, this._lastDestination);
+    }
+    return slotIdx;
+  }
+
+  /**
+   * Remove a graph FX by index (within graphFx array, not send slot).
+   * @param {number} gfxIndex — index in _graphFx array
+   */
+  removeGraphFx(gfxIndex) {
+    if (gfxIndex < 0 || gfxIndex >= this._graphFx.length) return;
+    const { adapter } = this._graphFx[gfxIndex];
+    // Disconnect sends
+    const sends = this._graphSends[gfxIndex];
+    for (const s of Object.values(sends)) {
+      try { s.disconnect(); } catch (_) {}
+    }
+    adapter.disconnect();
+    this._graphFx.splice(gfxIndex, 1);
+    this._graphSends.splice(gfxIndex, 1);
+    // Shift sendVals: remove slot (2 + gfxIndex), reindex the rest
+    this._sendVals.splice(2 + gfxIndex, 1);
+  }
+
+  /** Get a graph FX adapter by slot index. */
+  getGraphFx(gfxIndex) {
+    return this._graphFx[gfxIndex]?.adapter ?? null;
+  }
 
   /**
    * Wire per-instrument sends to FX units. Call after seq.start() each time,
@@ -408,6 +464,9 @@ export class MasterFx {
    */
   attach(instrGains, destination) {
     const INSTRS = ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder'];
+
+    this._lastInstrGains = instrGains;
+    this._lastDestination = destination;
 
     // Tear down old send nodes
     for (const instr of INSTRS) {
@@ -436,22 +495,72 @@ export class MasterFx {
     try { this._shape.output.disconnect(); } catch (_) { }
     this._delay.output.connect(destination);
     this._shape.output.connect(destination);
+
+    // Wire graph FX sends
+    for (let gi = 0; gi < this._graphFx.length; gi++) {
+      this._wireGraphFx(gi, instrGains, destination);
+    }
   }
 
-  /** Set send amount for one instrument to one FX slot (0=delay, 1=shaper). */
+  /** Wire a single graph FX slot into the send bus. */
+  _wireGraphFx(gfxIndex, instrGains, destination) {
+    const INSTRS = ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder'];
+    const { adapter } = this._graphFx[gfxIndex];
+    const slotIdx = 2 + gfxIndex;
+
+    // Tear down old sends for this slot
+    const oldSends = this._graphSends[gfxIndex] || {};
+    for (const s of Object.values(oldSends)) {
+      try { s.disconnect(); } catch (_) {}
+    }
+    this._graphSends[gfxIndex] = {};
+
+    // Create per-instrument send gain → adapter.input
+    for (const instr of INSTRS) {
+      const gs = this.ctx.createGain();
+      gs.gain.value = this._sendVals[slotIdx]?.[instr] ?? 0;
+      this._graphSends[gfxIndex][instr] = gs;
+
+      const ig = instrGains[instr];
+      if (ig) ig.connect(gs);
+      gs.connect(adapter.input);
+    }
+
+    // FX return → destination
+    try { adapter.output.disconnect(); } catch (_) {}
+    adapter.output.connect(destination);
+  }
+
+  /** Set send amount for one instrument to one FX slot (0=delay, 1=shaper, 2+=graphFx). */
   setSend(slot, instr, val) {
+    if (!this._sendVals[slot]) this._sendVals[slot] = {};
     this._sendVals[slot][instr] = val;
-    const sends = slot === 0 ? this._delaySends : this._shaperSends;
-    if (sends[instr]) {
-      sends[instr].gain.setTargetAtTime(val, this.ctx.currentTime, 0.01);
+
+    let sendNode;
+    if (slot === 0) sendNode = this._delaySends[instr];
+    else if (slot === 1) sendNode = this._shaperSends[instr];
+    else {
+      const gi = slot - 2;
+      sendNode = this._graphSends[gi]?.[instr];
+    }
+
+    if (sendNode) {
+      sendNode.gain.setTargetAtTime(val, this.ctx.currentTime, 0.01);
     }
   }
 
   getParams() {
-    return {
+    const params = {
       delay: this._delay.getParams(),
       waveshaper: this._shape.getParams(),
     };
+    if (this._graphFx.length > 0) {
+      params.graphFx = this._graphFx.map(gf => ({
+        name: gf.name,
+        params: gf.adapter.getParams(),
+      }));
+    }
+    return params;
   }
 
   setParams(json, bpm = 120) {

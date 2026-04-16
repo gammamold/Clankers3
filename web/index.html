@@ -1908,6 +1908,85 @@
       overflow-y: auto;
     }
 
+    #synth-fx-hdr {
+      font-family: monospace;
+      font-size: .65rem;
+      color: #4ea8de;
+      letter-spacing: .12em;
+      padding: .6rem 1rem .3rem;
+      border-top: 1px solid #1a1a1a;
+    }
+
+    #synth-fx-row {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+      padding: 0 .5rem .5rem;
+    }
+
+    .sfx-card {
+      background: #0a0e14;
+      border: 1px solid #1a2a3a;
+      border-radius: 4px;
+      padding: .45rem .55rem;
+      font-family: monospace;
+    }
+
+    .sfx-card:hover { border-color: #2a4a6a; }
+
+    .sfx-name {
+      font-size: .7rem;
+      color: #4ea8de;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: .15rem;
+    }
+
+    .sfx-info {
+      font-size: .55rem;
+      color: #555;
+    }
+
+    .sfx-btns {
+      display: flex;
+      gap: .3rem;
+      margin-top: .3rem;
+    }
+
+    .sfx-btns button {
+      flex: 1;
+      font-family: monospace;
+      font-size: .55rem;
+      padding: .2rem .35rem;
+      border: 1px solid #1a2a3a;
+      border-radius: 3px;
+      background: #0a0e14;
+      color: #4ea8de;
+      cursor: pointer;
+    }
+
+    .sfx-btns button:hover { background: #0f1a2a; border-color: #4ea8de; }
+
+    .sfx-btns button.sfx-rm { color: #e63946; border-color: #3a1a1a; }
+    .sfx-btns button.sfx-rm:hover { background: #1a0a0a; border-color: #e63946; }
+
+    .sfx-add-btn {
+      display: block;
+      width: 100%;
+      font-family: monospace;
+      font-size: .6rem;
+      padding: .35rem;
+      border: 1px dashed #1a2a3a;
+      border-radius: 4px;
+      background: transparent;
+      color: #4ea8de;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .sfx-add-btn:hover { border-color: #4ea8de; background: #0a0e14; }
+
     .synth-slot-card {
       background: #111;
       border: 1px solid #1e1e1e;
@@ -3756,6 +3835,8 @@
     <div id="synth-slots-sidebar">
       <div id="synth-slots-hdr">— SYNTH LAB —</div>
       <div id="synth-slots-row"></div>
+      <div id="synth-fx-hdr">— SEND FX —</div>
+      <div id="synth-fx-row"></div>
       <button id="btn-synth-lab-back">← BACK</button>
     </div>
 
@@ -4663,7 +4744,8 @@ if (typeof TextEncoder === 'undefined') {
             + `globalThis.ClankersPads = ClankersPads;\n`
             + `globalThis.ClankersRhodes = ClankersRhodes;\n`
             + `globalThis.ClankersVoder = ClankersVoder;\n`
-            + `globalThis.ClankersSynthGraph = ClankersSynthGraph;\n`;
+            + `globalThis.ClankersSynthGraph = ClankersSynthGraph;\n`
+            + `globalThis.ClankersGraphFx = ClankersGraphFx;\n`;
       const glueBlob = new Blob([glue], { type: 'application/javascript' });
       await ctx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
 
@@ -4674,6 +4756,7 @@ if (typeof TextEncoder === 'undefined') {
       await ctx.audioWorklet.addModule('/worklets/rhodes-worklet.js');
       await ctx.audioWorklet.addModule('/worklets/voder-worklet.js');
       await ctx.audioWorklet.addModule('/worklets/synth-graph-worklet.js');
+      await ctx.audioWorklet.addModule('/worklets/graph-fx-worklet.js');
 
       const seed = (Math.random() * 0xffffffff) >>> 0;
       drumsNode = new AudioWorkletNode(ctx, 'drums-worklet', { processorOptions: { wasmModule, seed }, outputChannelCount: [1] });
@@ -5325,6 +5408,7 @@ if (typeof TextEncoder === 'undefined') {
         modularSync.connect(ctx.destination);
         seq.modularSync = modularSync;
         synthLab._seq = seq;      // let SynthLab register note-routing overrides
+        synthLab._fx  = rack;     // let SynthLab add graph FX to the send bus
         synthLab._reapplyOverrides(); // re-register any patches loaded before sequencer existed
       }
       return seq;

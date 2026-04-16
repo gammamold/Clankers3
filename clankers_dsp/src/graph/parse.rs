@@ -88,6 +88,7 @@ fn parse_node_type(s: &str) -> Result<NodeType, String> {
         "chorus" => Ok(NodeType::Chorus),
         "wavefolder" | "fold" => Ok(NodeType::Wavefolder),
         "multiply" | "ring_mod" | "ringmod" => Ok(NodeType::Multiply),
+        "input" | "in" | "audio_in" => Ok(NodeType::Input),
         "gain" | "vca" => Ok(NodeType::Gain),
         "mixer" | "mix" => Ok(NodeType::Mixer),
         "output" | "out" => Ok(NodeType::Output),

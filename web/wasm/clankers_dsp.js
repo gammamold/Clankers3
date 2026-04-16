@@ -236,6 +236,90 @@ export class ClankersDrums {
 if (Symbol.dispose) ClankersDrums.prototype[Symbol.dispose] = ClankersDrums.prototype.free;
 
 /**
+ * Graph-based FX processor — continuous audio processing (no voices/MIDI).
+ *
+ * The LLM designs an FX chain using the same node types as SynthGraph, but with
+ * an "input" node that receives external audio and an "output" node that emits it.
+ * Instruments route audio to this FX via send buses (parallel aux sends).
+ *
+ * Streaming API:
+ *   set_param(param_index, value)                    — update a parameter live
+ *   process_stereo(input_buf, n_samples)             — process input → output
+ *   param_info()                                     — JSON array of param descriptors
+ *   param_count()                                    — number of tweakable params
+ */
+export class ClankersGraphFx {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ClankersGraphFxFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_clankersgraphfx_free(ptr, 0);
+    }
+    /**
+     * Construct from FX graph JSON. Must contain "input" and "output" nodes.
+     * @param {string} graph_json
+     */
+    constructor(graph_json) {
+        const ptr0 = passStringToWasm0(graph_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.clankersgraphfx_new(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        ClankersGraphFxFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {number}
+     */
+    param_count() {
+        const ret = wasm.clankersgraphfx_param_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {string}
+     */
+    param_info() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.clankersgraphfx_param_info(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Process interleaved stereo input → interleaved stereo output.
+     * input_buf: [L0,R0,L1,R1,...] — n_samples * 2 floats.
+     * @param {Float32Array} input_buf
+     * @param {number} n_samples
+     * @returns {Float32Array}
+     */
+    process_stereo(input_buf, n_samples) {
+        const ptr0 = passArrayF32ToWasm0(input_buf, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.clankersgraphfx_process_stereo(this.__wbg_ptr, ptr0, len0, n_samples);
+        return ret;
+    }
+    /**
+     * @param {number} param_index
+     * @param {number} value
+     */
+    set_param(param_index, value) {
+        wasm.clankersgraphfx_set_param(this.__wbg_ptr, param_index, value);
+    }
+}
+if (Symbol.dispose) ClankersGraphFx.prototype[Symbol.dispose] = ClankersGraphFx.prototype.free;
+
+/**
  * HybridSynth pads — Moog ladder + ADSR + chorus + reverb (8 polyphonic voices).
  *
  * Streaming API:
@@ -638,6 +722,9 @@ const ClankersBuchlaFinalization = (typeof FinalizationRegistry === 'undefined')
 const ClankersDrumsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_clankersdrums_free(ptr >>> 0, 1));
+const ClankersGraphFxFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_clankersgraphfx_free(ptr >>> 0, 1));
 const ClankersPadsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_clankerspads_free(ptr >>> 0, 1));
@@ -675,6 +762,13 @@ function getUint8ArrayMemory0() {
         cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
     }
     return cachedUint8ArrayMemory0;
+}
+
+function passArrayF32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getFloat32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {
