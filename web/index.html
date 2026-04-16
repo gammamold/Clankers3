@@ -1895,7 +1895,7 @@
       font-size: .7rem;
       color: #555;
       letter-spacing: .12em;
-      padding: .8rem 1rem .5rem;
+      padding: 2.5rem 1rem .5rem;
       border-bottom: 1px solid #1a1a1a;
     }
 
@@ -2050,6 +2050,7 @@
 
     .ssc-btns {
       display: flex;
+      flex-wrap: wrap;
       gap: .3rem;
       margin-top: .35rem;
     }
@@ -8366,7 +8367,7 @@ if (typeof TextEncoder === 'undefined') {
       }
     })();
     // ─── Save / Load Project ──────────────────────────────────────────────────
-    document.getElementById('menu-item-save-project').addEventListener('click', () => {
+    document.getElementById('menu-item-save-project').addEventListener('click', async () => {
       document.getElementById('panel-menu').classList.remove('open');
       document.getElementById('btn-menu').classList.remove('active');
       const p = {
@@ -8399,7 +8400,7 @@ if (typeof TextEncoder === 'undefined') {
         songSequence: { patternBank, arrangement: songArrangement, activeSlot, songMode, songRepeat },
         band: { sessionId, chatHistory }
       };
-      
+
       for (const type of INSTR_TYPES) {
         if (_sendKnobs[type]) {
           p.sends[type] = {
@@ -8411,7 +8412,26 @@ if (typeof TextEncoder === 'undefined') {
 
       try { p.sheet = JSON.parse(document.getElementById('sheet-json').value); } catch(e){}
 
-      const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
+      const content = JSON.stringify(p, null, 2);
+
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'clankers_project.clank',
+            types: [{ description: 'Clankers Project', accept: { 'application/json': ['.clank', '.json'] } }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(content);
+          await writable.close();
+          log('💾 Project saved');
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return;   // user cancelled
+        }
+      }
+
+      // Fallback for browsers without File System Access API
+      const blob = new Blob([content], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = Object.assign(document.createElement('a'), { href: url, download: 'clankers_project.clank' });
       a.click();
