@@ -1924,6 +1924,80 @@
       padding: 0 .5rem .5rem;
     }
 
+    #synth-fx-matrix {
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+      padding: 0 .5rem .5rem;
+    }
+    .sfx-mat-card {
+      background: #0a0e14;
+      border: 1px solid #1a2a3a;
+      border-radius: 4px;
+      padding: .35rem .5rem .5rem;
+      font-family: monospace;
+    }
+    .sfx-mat-title {
+      font-size: .65rem;
+      color: #4ea8de;
+      letter-spacing: .08em;
+      margin-bottom: .3rem;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sfx-mat-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 2.2rem;
+      align-items: center;
+      gap: .3rem;
+      font-size: .6rem;
+      padding: .1rem 0;
+    }
+    .sfx-mat-label {
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sfx-mat-row input[type="range"] {
+      width: 100%;
+      height: 4px;
+      appearance: none;
+      -webkit-appearance: none;
+      background: #1a2a3a;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .sfx-mat-row input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      background: #4ea8de;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .sfx-mat-row input[type="range"]::-moz-range-thumb {
+      width: 10px; height: 10px;
+      background: #4ea8de;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+    .sfx-mat-val {
+      color: #4ea8de;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .sfx-mat-empty {
+      color: #555;
+      font-size: .6rem;
+      text-align: center;
+      padding: .4rem 0;
+    }
+
     .sfx-card {
       background: #0a0e14;
       border: 1px solid #1a2a3a;
@@ -3871,6 +3945,7 @@
       <div id="synth-slots-row"></div>
       <div id="synth-fx-hdr">— SEND FX —</div>
       <div id="synth-fx-row"></div>
+      <div id="synth-fx-matrix"></div>
       <button id="btn-synth-lab-back">← BACK</button>
     </div>
 
@@ -3906,6 +3981,8 @@
         <button id="song-preview-btn"
           style="font-family:monospace;font-size:.75rem;padding:.35rem .8rem;border:1px solid #2e2e5e;border-radius:3px;cursor:pointer;background:#0e0e1a;color:#88a;"
           title="Preview selected pattern">▶ PREVIEW</button>
+        <button id="song-mixer-btn"
+          style="margin-left:auto;background:#00121a;border:1px solid #004060;color:#00d4ff;font-family:monospace;font-size:.75rem;padding:.35rem .8rem;cursor:pointer;border-radius:3px;">MIXER</button>
       </div>
       <!-- Pattern bank — moved from legacy -->
       <div style="font-family:monospace;font-size:.72rem;color:#555;letter-spacing:.1em;margin-bottom:.4rem;">PATTERNS
@@ -3913,6 +3990,8 @@
       <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem;">
         <span id="song-pat-label" style="font-family:monospace;font-size:.72rem;color:#00d4ff;">P1</span>
         <button id="song-btn-store" class="mode-btn"> STORE</button>
+        <button id="song-btn-add" class="mode-btn" title="Store current sheet and append to arrangement">＋ ADD TO SONG</button>
+        <button id="song-btn-add-slots" class="mode-btn" title="Add two more pattern slots (max 48)">+2 SLOTS (8/48)</button>
         <button id="song-btn-loop" class="mode-btn mode-active">1 PTN</button>
         <button id="song-btn-song" class="mode-btn">SONG</button>
       </div>
@@ -5480,8 +5559,8 @@ if (typeof TextEncoder === 'undefined') {
         }
         document.getElementById('btn-play').disabled = true;
         document.getElementById('btn-stop').disabled = false;
-        if (rack) rack.attach(s._instrGains, ctx.destination);
         synthLab.connectToMaster(s._masterGain); // route synth slots through seq master gain
+        if (rack) rack.attach(s._instrGains, ctx.destination, synthLab.getSynthGains());
         startViz();
       } catch (e) {
         log('Seq error: ' + e);
@@ -5650,9 +5729,10 @@ if (typeof TextEncoder === 'undefined') {
     });
 
     // ─── Pattern Bank + Song Mode ──────────────────────────────────────────────
-    const PAT_COUNT = 8;
+    const PAT_MAX = 48;
+    let   PAT_COUNT = 8;
     const ARR_COUNT = 16;
-    const patternBank = new Array(PAT_COUNT).fill(null); // { sheet, label }
+    const patternBank = []; // { sheet, label }
     let activeSlot = 0;
     let songArrangement = [];   // ordered list of bank indices
     let songMode = false;
@@ -5663,7 +5743,11 @@ if (typeof TextEncoder === 'undefined') {
     // Build pattern slot buttons
     const patBankEl = document.getElementById('pat-bank');
     const patBtns = [];
-    for (let i = 0; i < PAT_COUNT; i++) {
+
+    function addPatternSlot() {
+      const i = patBtns.length;
+      if (i >= PAT_MAX) return false;
+      patternBank.push(null);
       const btn = document.createElement('button');
       btn.className = 'pat-btn';
       btn.dataset.slot = i;
@@ -5671,7 +5755,29 @@ if (typeof TextEncoder === 'undefined') {
       btn.addEventListener('click', () => selectSlot(i));
       patBankEl.appendChild(btn);
       patBtns.push(btn);
+      return true;
     }
+
+    /** Add two more pattern slots (up to PAT_MAX). Returns number of slots actually added. */
+    function addTwoPatternSlots() {
+      let added = 0;
+      for (let k = 0; k < 2; k++) {
+        if (addPatternSlot()) added++;
+      }
+      PAT_COUNT = patBtns.length;
+      if (added > 0) log(`+${added} pattern slot${added > 1 ? 's' : ''} (${PAT_COUNT}/${PAT_MAX})`);
+      _updateAddSlotsBtn();
+      return added;
+    }
+
+    function _updateAddSlotsBtn() {
+      const b = document.getElementById('song-btn-add-slots');
+      if (!b) return;
+      b.disabled = patBtns.length >= PAT_MAX;
+      b.textContent = `+2 SLOTS (${patBtns.length}/${PAT_MAX})`;
+    }
+
+    for (let i = 0; i < PAT_COUNT; i++) addPatternSlot();
 
     // selectSlot(0) called later, after arrSlots is initialised
 
@@ -6179,14 +6285,9 @@ if (typeof TextEncoder === 'undefined') {
           log(`Band → P${activeSlot + 1} "${label}"`);
 
           // Auto-append to arrangement if in song mode
-          if (songMode) {
-            const firstEmpty = arrSlots.findIndex(s => !s.dataset.pat);
-            if (firstEmpty !== -1) {
-              arrSlots[firstEmpty].dataset.pat = activeSlot;
-              arrSlots[firstEmpty].textContent = `P${activeSlot + 1}`;
-              arrSlots[firstEmpty].classList.add('has-pat');
-              updateArrGrid();
-            }
+          if (songMode && songArrangement.length < ARR_COUNT) {
+            songArrangement.push(activeSlot);
+            updateArrGrid();
           }
 
           // Advance to next free slot for the next section
@@ -7916,6 +8017,7 @@ if (typeof TextEncoder === 'undefined') {
       if (e.target === document.getElementById('mixer-overlay')) closeMixer();
     });
     document.getElementById('room-mixer-btn').addEventListener('click', openMixer);
+    document.getElementById('song-mixer-btn').addEventListener('click', openMixer);
 
     // ── Room transport proxies: BAKE / REC / WAV ─────────────────────────────────
     document.getElementById('room-bake-btn').addEventListener('click', () =>
@@ -7972,6 +8074,18 @@ if (typeof TextEncoder === 'undefined') {
     // Proxy STORE / LOOP / SONG / ARR-CLEAR / ARR-REPEAT buttons
     document.getElementById('song-btn-store').addEventListener('click', () =>
       document.getElementById('btn-pat-store').click());
+    document.getElementById('song-btn-add-slots').addEventListener('click', addTwoPatternSlots);
+    _updateAddSlotsBtn();
+    document.getElementById('song-btn-add').addEventListener('click', () => {
+      document.getElementById('btn-pat-store').click();
+      if (patternBank[activeSlot] && songArrangement.length < ARR_COUNT) {
+        songArrangement.push(activeSlot);
+        updateArrGrid();
+        if (!songMode) document.getElementById('song-btn-song').click();
+        const nextFree = patternBank.findIndex((p, i) => i > activeSlot && !p);
+        if (nextFree !== -1) selectSlot(nextFree);
+      }
+    });
     document.getElementById('song-btn-loop').addEventListener('click', () => {
       document.getElementById('btn-mode-loop').click();
       document.getElementById('song-btn-loop').classList.add('mode-active');
@@ -8396,6 +8510,14 @@ if (typeof TextEncoder === 'undefined') {
         },
         fx: rack ? rack.getParams() : null,
         sends: {},
+        mixer: {
+          volumes: Object.fromEntries(MIXER_INST.map(inst => {
+            const s = document.querySelector(`.vol-slider[data-type="${inst.type}"]`);
+            return [inst.type, s ? +s.value : 100];
+          })),
+          mute: seq ? seq.getMuteState() : {},
+          solo: seq ? seq.getSoloState() : {},
+        },
         synthLabSession: { assignments: { ...synthLab._slotLegacyT }, patches: synthLab._slots.map(s => s.adapter ? s.adapter.getState() : null) },
         songSequence: { patternBank, arrangement: songArrangement, activeSlot, songMode, songRepeat },
         band: { sessionId, chatHistory }
@@ -8518,6 +8640,25 @@ if (typeof TextEncoder === 'undefined') {
                 }
              }
           }
+          if (p.mixer) {
+            for (const [type, vol] of Object.entries(p.mixer.volumes || {})) {
+              const slider = document.querySelector(`.vol-slider[data-type="${type}"]`);
+              if (slider) { slider.value = vol; slider.dispatchEvent(new Event('input')); }
+            }
+            if (seq) {
+              const mState = seq.getMuteState();
+              for (const [type, on] of Object.entries(p.mixer.mute || {}))
+                if (!!mState[type] !== !!on) seq.toggleMute(type);
+              const sState = seq.getSoloState();
+              for (const [type, on] of Object.entries(p.mixer.solo || {}))
+                if (!!sState[type] !== !!on) seq.toggleSolo(type);
+              const mFinal = seq.getMuteState(), sFinal = seq.getSoloState();
+              document.querySelectorAll('.ms-btn').forEach(b => {
+                if (b.dataset.ms === 'm') b.classList.toggle('active-m', !!mFinal[b.dataset.type]);
+                else b.classList.toggle('active-s', !!sFinal[b.dataset.type]);
+              });
+            }
+          }
           if (p.synthLabSession) {
              for (const k in p.synthLabSession.assignments) synthLab._slotLegacyT[k] = p.synthLabSession.assignments[k];
              p.synthLabSession.patches.forEach((state, i) => {
@@ -8528,7 +8669,12 @@ if (typeof TextEncoder === 'undefined') {
           }
           if (p.songSequence) {
              songArrangement = p.songSequence.arrangement || [];
-             patternBank.splice(0, patternBank.length, ...(p.songSequence.patternBank || []));
+             const savedBank = p.songSequence.patternBank || [];
+             while (patBtns.length < savedBank.length && patBtns.length < PAT_MAX) addPatternSlot();
+             PAT_COUNT = patBtns.length;
+             _updateAddSlotsBtn();
+             patternBank.splice(0, patternBank.length, ...savedBank);
+             while (patternBank.length < patBtns.length) patternBank.push(null);
              patternBank.forEach((pat, i) => {
                if (pat) {
                  patBtns[i].textContent = `P${i + 1} ${pat.label}`.slice(0, 11);

@@ -461,17 +461,23 @@ export class MasterFx {
   /**
    * Wire per-instrument sends to FX units. Call after seq.start() each time,
    * passing the sequencer's _instrGains object and the audio destination.
+   * @param {Object} instrGains — { drum: GainNode, bass: GainNode, ... }
+   * @param {AudioNode} destination
+   * @param {Object} [synthGains] — optional { synth0: GainNode, ... } from SynthLab
    */
-  attach(instrGains, destination) {
-    const INSTRS = ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder'];
+  attach(instrGains, destination, synthGains) {
+    const allGains = synthGains ? { ...instrGains, ...synthGains } : instrGains;
+    const INSTRS = Object.keys(allGains);
 
-    this._lastInstrGains = instrGains;
+    this._lastInstrGains = allGains;
     this._lastDestination = destination;
 
     // Tear down old send nodes
-    for (const instr of INSTRS) {
-      if (this._delaySends[instr]) { try { this._delaySends[instr].disconnect(); } catch (_) { } }
-      if (this._shaperSends[instr]) { try { this._shaperSends[instr].disconnect(); } catch (_) { } }
+    for (const instr of Object.keys(this._delaySends)) {
+      try { this._delaySends[instr].disconnect(); } catch (_) { }
+    }
+    for (const instr of Object.keys(this._shaperSends)) {
+      try { this._shaperSends[instr].disconnect(); } catch (_) { }
     }
     this._delaySends = {};
     this._shaperSends = {};
@@ -484,7 +490,7 @@ export class MasterFx {
       ds.gain.value = this._sendVals[0][instr] ?? 0;
       ss.gain.value = this._sendVals[1][instr] ?? 0;
 
-      const ig = instrGains[instr];
+      const ig = allGains[instr];
       if (ig) { ig.connect(ds); ig.connect(ss); }
       ds.connect(this._delay.input);
       ss.connect(this._shape.input);
@@ -498,13 +504,13 @@ export class MasterFx {
 
     // Wire graph FX sends
     for (let gi = 0; gi < this._graphFx.length; gi++) {
-      this._wireGraphFx(gi, instrGains, destination);
+      this._wireGraphFx(gi, allGains, destination);
     }
   }
 
   /** Wire a single graph FX slot into the send bus. */
   _wireGraphFx(gfxIndex, instrGains, destination) {
-    const INSTRS = ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder'];
+    const INSTRS = Object.keys(instrGains);
     const { adapter } = this._graphFx[gfxIndex];
     const slotIdx = 2 + gfxIndex;
 

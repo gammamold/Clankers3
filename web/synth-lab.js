@@ -157,6 +157,15 @@ export class SynthLab {
     }
   }
 
+  /** Return a map of { synth0: GainNode, synth1: GainNode, ... } for FX send wiring. */
+  getSynthGains() {
+    const out = {};
+    for (let i = 0; i < this._slots.length; i++) {
+      if (this._slots[i].gain) out[`synth${i}`] = this._slots[i].gain;
+    }
+    return out;
+  }
+
   /**
    * Load (or reload) a patch JSON into a slot.
    * Registers the patch in the instrument library and routes the legacy
@@ -412,6 +421,8 @@ export class SynthLab {
 
       row.appendChild(card);
     });
+
+    this._renderRoutingMatrix();
   }
 
   /** Render the Send FX sidebar panel showing active graph FX units. */
@@ -451,6 +462,90 @@ export class SynthLab {
     addBtn.textContent = '+ NEW SEND FX';
     addBtn.addEventListener('click', () => this._openWizardForFx());
     row.appendChild(addBtn);
+
+    this._renderRoutingMatrix();
+  }
+
+  /** Render a routing matrix: one card per FX with sliders for each loaded synth slot. */
+  _renderRoutingMatrix() {
+    const mat = document.getElementById('synth-fx-matrix');
+    if (!mat) return;
+    mat.innerHTML = '';
+    if (!this._fx) return;
+
+    // Collect FX units: built-in delay (0), shaper (1), then graph FX (2+)
+    const fxUnits = [
+      { name: 'Delay', slot: 0 },
+      { name: 'Shaper', slot: 1 },
+    ];
+    for (let i = 0; i < this._graphFxSlots.length; i++) {
+      fxUnits.push({ name: this._graphFxSlots[i].name || `GFX${i}`, slot: 2 + i });
+    }
+
+    // Collect loaded synth slots
+    const loadedSynths = [];
+    for (let i = 0; i < this._slots.length; i++) {
+      const slot = this._slots[i];
+      if (slot.adapter) {
+        const name = slot.adapter.getState()?.name || `SYNTH ${i}`;
+        loadedSynths.push({ index: i, name });
+      }
+    }
+
+    for (const fx of fxUnits) {
+      const card = document.createElement('div');
+      card.className = 'sfx-mat-card';
+
+      const title = document.createElement('div');
+      title.className = 'sfx-mat-title';
+      title.textContent = `→ ${fx.name}`;
+      title.title = fx.name;
+      card.appendChild(title);
+
+      if (loadedSynths.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'sfx-mat-empty';
+        empty.textContent = 'load a synth to route';
+        card.appendChild(empty);
+      } else {
+        for (const s of loadedSynths) {
+          const instrKey = `synth${s.index}`;
+          const current  = this._fx._sendVals[fx.slot]?.[instrKey] ?? 0;
+
+          const row = document.createElement('div');
+          row.className = 'sfx-mat-row';
+
+          const label = document.createElement('div');
+          label.className = 'sfx-mat-label';
+          label.textContent = s.name;
+          label.title = s.name;
+
+          const slider = document.createElement('input');
+          slider.type = 'range';
+          slider.min = '0';
+          slider.max = '1';
+          slider.step = '0.01';
+          slider.value = String(current);
+
+          const valEl = document.createElement('div');
+          valEl.className = 'sfx-mat-val';
+          valEl.textContent = current.toFixed(2);
+
+          slider.addEventListener('input', () => {
+            const v = Number(slider.value);
+            valEl.textContent = v.toFixed(2);
+            this._fx.setSend(fx.slot, instrKey, v);
+          });
+
+          row.appendChild(label);
+          row.appendChild(slider);
+          row.appendChild(valEl);
+          card.appendChild(row);
+        }
+      }
+
+      mat.appendChild(card);
+    }
   }
 
   /** Open the wizard overlay in FX creation mode. */
@@ -533,9 +628,17 @@ export class SynthLab {
       (groups[p.node] = groups[p.node] || []).push(p);
     }
 
-    // Track live param values
-    const vals = {};
-    for (const p of paramMap) vals[`${p.node}.${p.param}`] = p.default ?? 0;
+    // Lightweight bridge shim: stores current values, routes set() to adapter
+    const values = {};
+    for (const p of paramMap) values[`${p.node}.${p.param}`] = p.default ?? 0;
+    const graphBridge = {
+      get(path) { return values[path] ?? 0; },
+      set(path, v) {
+        values[path] = v;
+        const [nodeId, paramName] = path.split('.');
+        adapter.setParam(nodeId, paramName, v);
+      },
+    };
 
     for (const [nodeId, params] of Object.entries(groups)) {
       const nodeType = params[0]?.nodeType || _guessNodeType(params);
@@ -543,24 +646,72 @@ export class SynthLab {
 
       const knobs = params.map(p => {
         const key  = `${p.node}.${p.param}`;
-        const step = _graphParamStep(p);
-        const dec  = _graphParamDecimals(p);
-        const unit = _graphParamUnit(p);
         return {
           label: p.param.toUpperCase(),
-          min: p.min, max: p.max, step,
-          decimals: dec, unit,
-          get: () => vals[key],
-          set: (v) => {
-            vals[key] = v;
-            adapter.setParam(p.node, p.param, v);
-          },
+          path:  key,
+          min: p.min, max: p.max,
+          value: p.default ?? 0,
+          step:     _graphParamStep(p),
+          decimals: _graphParamDecimals(p),
+          unit:     _graphParamUnit(p),
+          onAudio:  v => adapter.setParam(p.node, p.param, v),
         };
       });
 
-      const panel = new ModulePanel({ title: nodeId, color, knobs });
-      rack.appendChild(panel.el);
+      const panel = new ModulePanel({ title: nodeId, color, bridge: graphBridge, knobs });
+      rack.appendChild(panel.render());
     }
+  }
+
+  /** Render FX send knobs for a synth slot so the user can route it to effects. */
+  _renderSendKnobs(slotIndex, container) {
+    if (!this._fx) return;
+    const instrKey = `synth${slotIndex}`;
+    const fx = this._fx;
+
+    // Collect available FX slots: delay (0), shaper (1), plus graph FX (2+)
+    const sends = [
+      { label: '→DLY', slot: 0 },
+      { label: '→SHP', slot: 1 },
+    ];
+    for (let i = 0; i < this._graphFxSlots.length; i++) {
+      const name = this._graphFxSlots[i].name || `GFX${i}`;
+      // Truncate long names for knob labels
+      const short = name.length > 6 ? name.slice(0, 5) + '…' : name;
+      sends.push({ label: `→${short.toUpperCase()}`, slot: 2 + i });
+    }
+    if (sends.length === 0) return;
+
+    const sendValues = {};
+    const knobs = sends.map(s => {
+      const path = `send.${s.slot}`;
+      sendValues[path] = fx._sendVals[s.slot]?.[instrKey] ?? 0;
+      return {
+        label: s.label,
+        path,
+        min: 0, max: 1,
+        value: sendValues[path],
+        step: 0.01,
+        decimals: 2,
+      };
+    });
+
+    const bridge = {
+      get(path) { return sendValues[path] ?? 0; },
+      set(path, v) {
+        sendValues[path] = v;
+        const fxSlot = Number(path.split('.')[1]);
+        fx.setSend(fxSlot, instrKey, v);
+      },
+    };
+
+    const panel = new ModulePanel({
+      title: 'FX SENDS',
+      color: '#4ea8de',
+      bridge,
+      knobs,
+    });
+    container.appendChild(panel.render());
   }
 
   _openEditor(slotIndex) {
@@ -617,6 +768,9 @@ export class SynthLab {
     } else {
       slot.panels = this._renderPanels(slot, rack);
     }
+
+    // FX Send knobs — route this synth slot into available FX
+    this._renderSendKnobs(slotIndex, rackArea);
 
     // XY pad area
     const xyArea = document.createElement('div');
