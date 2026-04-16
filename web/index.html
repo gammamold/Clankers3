@@ -8987,14 +8987,7 @@ if (typeof TextEncoder === 'undefined') {
       fileLoadInput.click();
     });
 
-    fileLoadInput.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        try {
-          const p = JSON.parse(ev.target.result);
-          
+    function _applyProject(p) {
           if (p.bpm) {
             document.getElementById('seq-bpm').value = p.bpm;
             document.getElementById('bpm-val').textContent = p.bpm;
@@ -9125,12 +9118,24 @@ if (typeof TextEncoder === 'undefined') {
              }
           }
           log('📁 Project loaded');
-        } catch (err) {
-          log('Error loading project: ' + err.message);
-        }
+    }
+
+    fileLoadInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try { _applyProject(JSON.parse(ev.target.result)); }
+        catch (err) { log('Error loading project: ' + err.message); }
       };
       reader.readAsText(file);
     });
+
+    // Auto-load demo song on startup
+    fetch('/clankers_demo.clank')
+      .then(r => r.json())
+      .then(p => { _applyProject(p); if (p.sheet) revealFaces(p.sheet, true); })
+      .catch(() => {});
 
     // ── Global Keyboard Shortcuts ─────────────────────────────────────────────────
     window.addEventListener('keydown', e => {
