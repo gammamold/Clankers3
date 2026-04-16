@@ -4639,6 +4639,7 @@
       const wasmBytes = await fetch('/wasm/clankers_dsp_bg.wasm').then(r => r.arrayBuffer());
       const wasmModule = await WebAssembly.compile(wasmBytes);
       _wasmModule = wasmModule;
+      window._wasmModule = wasmModule; // expose for WasmGraphAdapter
 
       // Load WASM glue into AudioWorkletGlobalScope as a classic script
       // (static `import` in worklets is not supported in all Chromium builds)
@@ -4661,7 +4662,8 @@ if (typeof TextEncoder === 'undefined') {
             + `globalThis.ClankersDrums = ClankersDrums;\n`
             + `globalThis.ClankersPads = ClankersPads;\n`
             + `globalThis.ClankersRhodes = ClankersRhodes;\n`
-            + `globalThis.ClankersVoder = ClankersVoder;\n`;
+            + `globalThis.ClankersVoder = ClankersVoder;\n`
+            + `globalThis.ClankersSynthGraph = ClankersSynthGraph;\n`;
       const glueBlob = new Blob([glue], { type: 'application/javascript' });
       await ctx.audioWorklet.addModule(URL.createObjectURL(glueBlob));
 
@@ -4671,6 +4673,7 @@ if (typeof TextEncoder === 'undefined') {
       await ctx.audioWorklet.addModule('/worklets/pads-worklet.js');
       await ctx.audioWorklet.addModule('/worklets/rhodes-worklet.js');
       await ctx.audioWorklet.addModule('/worklets/voder-worklet.js');
+      await ctx.audioWorklet.addModule('/worklets/synth-graph-worklet.js');
 
       const seed = (Math.random() * 0xffffffff) >>> 0;
       drumsNode = new AudioWorkletNode(ctx, 'drums-worklet', { processorOptions: { wasmModule, seed }, outputChannelCount: [1] });

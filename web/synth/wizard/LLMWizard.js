@@ -3,7 +3,7 @@
  * Shows a conversation interface, calls the LLM, and fires onComplete(state)
  * when the LLM outputs a SYNTH_JSON block.
  */
-import { callLLM, extractSynthJSON, MODELS } from './SynthAgent.js';
+import { callLLM, extractSynthJSON, extractSynthGraphJSON, MODELS } from './SynthAgent.js';
 
 // Per-provider metadata that drives the UI copy, placeholder, key validation,
 // and "get an API key" link. Keep in sync with api/llm.js detectProvider().
@@ -298,11 +298,15 @@ export class LLMWizard {
       const reply = await callLLM(this._apiKey, this._messages, this._model);
       this._messages.push({ role: 'assistant', content: reply });
 
-      // Check if JSON was returned
-      const synthState = extractSynthJSON(reply);
+      // Check if JSON was returned — try graph format first, then legacy
+      const graphState = extractSynthGraphJSON(reply);
+      const synthState = graphState || extractSynthJSON(reply);
 
-      // Show the message (strip the JSON block from display)
-      const displayText = reply.replace(/<SYNTH_JSON>[\s\S]*?<\/SYNTH_JSON>/g, '').trim();
+      // Show the message (strip JSON blocks from display)
+      const displayText = reply
+        .replace(/<SYNTH_GRAPH>[\s\S]*?<\/SYNTH_GRAPH>/g, '')
+        .replace(/<SYNTH_JSON>[\s\S]*?<\/SYNTH_JSON>/g, '')
+        .trim();
       if (displayText) this._addMessage('assistant', displayText);
 
       if (synthState) {
@@ -337,8 +341,11 @@ export class LLMWizard {
     const el = document.createElement('div');
     el.className = 'chat-build-card';
 
-    const voices = state.voice?.polyphony || 1;
-    const info   = `${state.type} · ${voices} voice${voices > 1 ? 's' : ''}`;
+    const isGraph = state.type === 'wasm_graph';
+    const voices  = isGraph ? (state.num_voices || 4) : (state.voice?.polyphony || 1);
+    const typeLabel = isGraph ? 'WASM graph' : state.type;
+    const nodeCount = isGraph ? `${state.nodes?.length || 0} nodes` : '';
+    const info   = `${typeLabel} · ${voices} voice${voices > 1 ? 's' : ''}${nodeCount ? ' · ' + nodeCount : ''}`;
 
     el.innerHTML = `
       <div class="build-card-icon">⬡</div>

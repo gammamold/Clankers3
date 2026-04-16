@@ -7,6 +7,7 @@ pub enum Waveform {
     Square,
     Triangle,
     Pulse,
+    Sine,
 }
 
 pub struct Oscillator {
@@ -48,6 +49,9 @@ impl Oscillator {
                 let pw = self.pulse_width.clamp(0.05, 0.95);
                 let s  = if phase < pw { 1.0f32 } else { -1.0 };
                 s + poly_blep(phase, dt) - poly_blep((phase + (1.0 - pw)) % 1.0, dt)
+            }
+            Waveform::Sine => {
+                (phase * std::f32::consts::TAU).sin()
             }
         };
 
