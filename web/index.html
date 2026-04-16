@@ -9134,7 +9134,12 @@ if (typeof TextEncoder === 'undefined') {
     // Auto-load demo song on startup
     fetch('/clankers_demo.clank')
       .then(r => r.json())
-      .then(p => { _applyProject(p); if (p.sheet) revealFaces(p.sheet, true); })
+      .then(p => {
+        _applyProject(p);
+        // If API key already set, jump straight to playing; otherwise let the
+        // config overlay handle it (skip button will use the populated sheet-json)
+        if (p.sheet && _bandApiKey()) revealFaces(p.sheet, true);
+      })
       .catch(() => {});
 
     // ── Global Keyboard Shortcuts ─────────────────────────────────────────────────
