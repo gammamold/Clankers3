@@ -4403,6 +4403,7 @@
   <button id="btn-settings">⚙ LLM</button>
 
   <button id="btn-menu">≡ MENU</button>
+  <button id="btn-tutorial" title="Interactive tour of Clankers 3">? TOUR</button>
 
   <div id="panel-menu">
     <button class="menu-item" id="menu-item-save-project">💾 SAVE PROJECT</button>
@@ -8461,7 +8462,21 @@ if (typeof TextEncoder === 'undefined') {
       }
     });
 
+    // ── Tutorial bridge — exposes module-scoped nav fns to tutorial.js ──────
+    window._tutorialBridge = {
+      showScreen: (name) => showScreen(name),
+      openRoom: (faceId) => {
+        const face = FACES.find(f => f.id === faceId);
+        if (face) openRoom(face);
+      },
+      openChatOverlay: () => {
+        document.getElementById('chat-overlay').classList.add('open');
+      },
+      getFaces: () => FACES,
+    };
+
   </script>
+  <script type="module" src="./tutorial.js"></script>
 </body>
 
 </html>
