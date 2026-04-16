@@ -3992,6 +3992,7 @@
         <button id="song-btn-store" class="mode-btn"> STORE</button>
         <button id="song-btn-add" class="mode-btn" title="Store current sheet and append to arrangement">＋ ADD TO SONG</button>
         <button id="song-btn-add-slots" class="mode-btn" title="Add two more pattern slots (max 48)">+2 SLOTS (8/48)</button>
+        <button id="song-btn-rem-slots" class="mode-btn" title="Remove last two pattern slots (min 2)">-2 SLOTS</button>
         <button id="song-btn-loop" class="mode-btn mode-active">1 PTN</button>
         <button id="song-btn-song" class="mode-btn">SONG</button>
       </div>
@@ -5770,11 +5771,40 @@ if (typeof TextEncoder === 'undefined') {
       return added;
     }
 
+    const PAT_MIN = 2;
+
+    /** Remove last two pattern slots (min PAT_MIN). Clamps activeSlot if needed. */
+    function removeTwoPatternSlots() {
+      let removed = 0;
+      for (let k = 0; k < 2; k++) {
+        if (patBtns.length <= PAT_MIN) break;
+        const last = patBtns.length - 1;
+        patBankEl.removeChild(patBtns[last]);
+        patBtns.splice(last, 1);
+        patternBank.splice(last, 1);
+        // remove any arrangement references to this slot
+        for (let j = songArrangement.length - 1; j >= 0; j--) {
+          if (songArrangement[j] === last) songArrangement.splice(j, 1);
+        }
+        removed++;
+      }
+      PAT_COUNT = patBtns.length;
+      if (activeSlot >= PAT_COUNT) selectSlot(PAT_COUNT - 1);
+      if (removed > 0) log(`-${removed} pattern slot${removed > 1 ? 's' : ''} (${PAT_COUNT}/${PAT_MAX})`);
+      _updateAddSlotsBtn();
+    }
+
     function _updateAddSlotsBtn() {
       const b = document.getElementById('song-btn-add-slots');
-      if (!b) return;
-      b.disabled = patBtns.length >= PAT_MAX;
-      b.textContent = `+2 SLOTS (${patBtns.length}/${PAT_MAX})`;
+      if (b) {
+        b.disabled = patBtns.length >= PAT_MAX;
+        b.textContent = `+2 SLOTS (${patBtns.length}/${PAT_MAX})`;
+      }
+      const r = document.getElementById('song-btn-rem-slots');
+      if (r) {
+        r.disabled = patBtns.length <= PAT_MIN;
+        r.textContent = `-2 SLOTS (${patBtns.length}/${PAT_MAX})`;
+      }
     }
 
     for (let i = 0; i < PAT_COUNT; i++) addPatternSlot();
@@ -8075,6 +8105,7 @@ if (typeof TextEncoder === 'undefined') {
     document.getElementById('song-btn-store').addEventListener('click', () =>
       document.getElementById('btn-pat-store').click());
     document.getElementById('song-btn-add-slots').addEventListener('click', addTwoPatternSlots);
+    document.getElementById('song-btn-rem-slots').addEventListener('click', removeTwoPatternSlots);
     _updateAddSlotsBtn();
     document.getElementById('song-btn-add').addEventListener('click', () => {
       document.getElementById('btn-pat-store').click();
