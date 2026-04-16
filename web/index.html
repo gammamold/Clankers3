@@ -1147,6 +1147,201 @@
       box-shadow: 0 0 6px #66f44;
     }
 
+    /* ─── Cards Panel ──────────────────────────────────────────────────────── */
+    #song-outer-wrap {
+      display: flex;
+      align-items: flex-start;
+      width: 100%;
+      min-height: 100%;
+    }
+
+    #song-cards-panel {
+      width: 130px;
+      flex-shrink: 0;
+      padding: 3rem .75rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .75rem;
+      border-right: 1px solid #111;
+      position: sticky;
+      top: 0;
+      min-height: 100vh;
+    }
+
+    .cards-label {
+      font-family: monospace;
+      font-size: .62rem;
+      color: #333;
+      letter-spacing: .15em;
+      align-self: flex-start;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .4rem;
+    }
+
+    .card-pad {
+      width: 52px;
+      height: 52px;
+      background: #0a0a0a;
+      border: 1px solid #222;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .15rem;
+      transition: border-color .15s, background .15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-pad:hover:not(.card-disabled):not(.card-loading) {
+      background: #111;
+      border-color: #444;
+    }
+
+    .card-pad .card-symbol {
+      font-size: 1.3rem;
+      line-height: 1;
+      display: inline-block;
+    }
+
+    .card-pad .card-name {
+      font-family: monospace;
+      font-size: .5rem;
+      color: #444;
+      letter-spacing: .05em;
+    }
+
+    .card-pad.card-disabled {
+      opacity: .3;
+      cursor: not-allowed;
+    }
+
+    .card-pad.card-preview {
+      border-color: #00a040;
+      animation: cardPreviewPulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes cardPreviewPulse {
+      0%, 100% { box-shadow: 0 0 6px #00602033; }
+      50%       { box-shadow: 0 0 14px #00a04066; }
+    }
+
+    .card-pad[data-card="mirror"].card-loading .card-symbol {
+      animation: mirrorFlip .7s ease-in-out infinite;
+    }
+    @keyframes mirrorFlip {
+      0%, 100% { transform: scaleY(1); }
+      50%       { transform: scaleY(-1); }
+    }
+
+    .card-pad[data-card="retrograde"].card-loading .card-symbol {
+      animation: retroSpin 1s linear infinite;
+    }
+    @keyframes retroSpin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(-360deg); }
+    }
+
+    .card-pad[data-card="fracture"].card-loading .card-symbol {
+      animation: fractureGlitch .25s steps(3) infinite;
+    }
+    @keyframes fractureGlitch {
+      0%   { transform: translateX(0);   opacity: 1; }
+      33%  { transform: translateX(-3px); opacity: .65; }
+      66%  { transform: translateX(3px);  opacity: .9; }
+      100% { transform: translateX(0);   opacity: 1; }
+    }
+
+    .card-pad[data-card="bloom"].card-loading {
+      animation: bloomExpand .8s ease-out infinite;
+    }
+    @keyframes bloomExpand {
+      0%   { box-shadow: 0 0 0 0   #44228866; }
+      100% { box-shadow: 0 0 0 10px #44228800; }
+    }
+
+    .cards-divider {
+      width: 100%;
+      height: 1px;
+      background: #181818;
+    }
+
+    .cards-actions {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+      width: 100%;
+    }
+
+    .cards-actions.cards-hidden,
+    .cards-toast.cards-hidden { display: none; }
+
+    .card-keep-btn, .card-discard-btn, .card-undo-btn {
+      font-family: monospace;
+      font-size: .6rem;
+      padding: .3rem .4rem;
+      border-radius: 3px;
+      cursor: pointer;
+      width: 100%;
+      letter-spacing: .05em;
+    }
+
+    .card-keep-btn {
+      background: #001a0a;
+      border: 1px solid #00602a;
+      color: #00d060;
+    }
+    .card-keep-btn:hover { background: #002a14; }
+
+    .card-discard-btn {
+      background: #1a0a0a;
+      border: 1px solid #602020;
+      color: #d06060;
+    }
+    .card-discard-btn:hover { background: #2a1414; }
+
+    .cards-toast {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+      width: 100%;
+    }
+
+    .cards-toast-label {
+      font-family: monospace;
+      font-size: .58rem;
+      color: #555;
+      text-align: center;
+    }
+
+    .card-undo-btn {
+      background: #0a0a1a;
+      border: 1px solid #222266;
+      color: #8888ff;
+    }
+    .card-undo-btn:hover { background: #14142a; }
+
+    .cards-countdown {
+      height: 2px;
+      background: #1a1a1a;
+      border-radius: 1px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .cards-countdown-bar {
+      height: 100%;
+      background: #333;
+      width: 100%;
+    }
+
     /* SONG BUILDER — global floating button (matches synth-lab / reach-outside pattern) */
     #btn-song-screen {
       position: fixed;
@@ -3545,9 +3740,15 @@
     @media (max-width: 640px) {
 
       /* Back btn is now in-flow, so content div needs only a small top gap */
-      #screen-song>div {
+      #song-main-content {
         padding: .75rem 1rem 1rem !important;
       }
+      #song-cards-panel {
+        width: 90px;
+        padding: 3rem .4rem 1rem;
+      }
+      .card-pad { width: 36px; height: 36px; }
+      .card-pad .card-symbol { font-size: .95rem; }
 
       #screen-song .arr-slot {
         height: 2.75rem;
@@ -3980,7 +4181,43 @@
   <!-- ─── Screen: Song (pattern bank + arranger) ─────────────────── -->
   <div id="screen-song" class="screen">
     <button id="btn-song-back" class="back-btn">← BACK</button>
-    <div style="padding:3rem 2rem 1rem;max-width:900px;margin:0 auto;width:100%;">
+    <div id="song-outer-wrap">
+
+      <!-- Cards panel -->
+      <div id="song-cards-panel">
+        <span class="cards-label">CARDS</span>
+        <div class="cards-grid">
+          <button class="card-pad card-disabled" data-card="mirror" title="Mirror — invert melodic contour">
+            <span class="card-symbol">↕</span>
+            <span class="card-name">MIRROR</span>
+          </button>
+          <button class="card-pad card-disabled" data-card="retrograde" title="Retrograde — reverse in time">
+            <span class="card-symbol">◁</span>
+            <span class="card-name">RETRO</span>
+          </button>
+          <button class="card-pad card-disabled" data-card="fracture" title="Fracture — fragment and stutter">
+            <span class="card-symbol">⚑</span>
+            <span class="card-name">FRACTURE</span>
+          </button>
+          <button class="card-pad card-disabled" data-card="bloom" title="Bloom — harmonically expand">
+            <span class="card-symbol">✦</span>
+            <span class="card-name">BLOOM</span>
+          </button>
+        </div>
+        <div class="cards-divider"></div>
+        <div class="cards-actions cards-hidden" id="cards-actions">
+          <button class="card-keep-btn" id="card-keep-btn">✓ KEEP</button>
+          <button class="card-discard-btn" id="card-discard-btn">✗ DISCARD</button>
+        </div>
+        <div class="cards-toast cards-hidden" id="cards-toast">
+          <span class="cards-toast-label">DISCARDED</span>
+          <button class="card-undo-btn" id="card-undo-btn">⟲ UNDO</button>
+          <div class="cards-countdown"><div class="cards-countdown-bar" id="cards-countdown-bar"></div></div>
+        </div>
+      </div>
+
+      <!-- Main song builder content -->
+      <div id="song-main-content" style="padding:3rem 2rem 1rem;flex:1;min-width:0;max-width:900px;">
       <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.2rem;">
         <span style="font-family:monospace;font-size:.85rem;color:#555;letter-spacing:.15em;">— SONG BUILDER —</span>
         <button id="song-play-btn" class="play-btn"
@@ -4018,8 +4255,9 @@
         </div>
         <div id="song-arr-grid" class="arr-grid"></div>
       </div>
-    </div>
-  </div>
+    </div><!-- /#song-main-content -->
+  </div><!-- /#song-outer-wrap -->
+  </div><!-- /#screen-song -->
 
   <!-- ─── Legacy UI (hidden — keeps all JS hooks alive) ──────────── -->
   <div id="legacy-ui">
@@ -8898,6 +9136,166 @@ if (typeof TextEncoder === 'undefined') {
         }
       }
     });
+
+    // ─── Cards Panel state machine ────────────────────────────────────────────
+    (function initCardsPanel() {
+      const DIRECTIVES = {
+        mirror:     'Invert the melodic contour of each melodic track around its tonal center. Preserve all rhythmic values exactly. Vary the inversion pivot slightly for a fresh result.',
+        retrograde: 'Reverse the entire step sequence in time. Also reverse the rhythmic duration of each step. Add subtle velocity variation (±10) to give it a human feel.',
+        fracture:   'Find the most repeated pitch or motif and fragment it into stutters, micro-loops, and rhythmic chops. All original pitches must appear somewhere but rhythm is free to be radically rearranged.',
+        bloom:      'Treat the pattern as a seed. Add counterpoint voices, inner notes, and harmonic extensions. Every original note must still be present. You may add new steps or extend existing ones.',
+      };
+
+      let cardState = 'idle'; // idle | loading | preview | undoable
+      let activeCard = null;
+      let pendingSheet = null;
+      let savedSheet = null;
+      let _undoTimerId = null;
+
+      const allPads     = document.querySelectorAll('.card-pad');
+      const actionsEl   = document.getElementById('cards-actions');
+      const toastEl     = document.getElementById('cards-toast');
+      const keepBtn     = document.getElementById('card-keep-btn');
+      const discardBtn  = document.getElementById('card-discard-btn');
+      const undoBtn     = document.getElementById('card-undo-btn');
+      const cdBar       = document.getElementById('cards-countdown-bar');
+
+      function setState(s) {
+        cardState = s;
+        allPads.forEach(p => {
+          p.classList.remove('card-loading', 'card-preview');
+          if (s === 'loading' && p.dataset.card === activeCard) p.classList.add('card-loading');
+          if (s === 'preview' && p.dataset.card === activeCard) p.classList.add('card-preview');
+        });
+        actionsEl.classList.toggle('cards-hidden', s !== 'preview');
+        toastEl.classList.toggle('cards-hidden', s !== 'undoable');
+        syncPadDisabled();
+      }
+
+      function syncPadDisabled() {
+        const canPress = cardState === 'idle' && hasActivePattern();
+        allPads.forEach(p => p.classList.toggle('card-disabled', !canPress));
+      }
+
+      function hasActivePattern() {
+        return typeof activeSlot !== 'undefined' &&
+               typeof patternBank !== 'undefined' &&
+               !!patternBank[activeSlot]?.sheet;
+      }
+
+      function loadSheetSoft(sheet) {
+        document.getElementById('sheet-json').value = JSON.stringify(sheet, null, 2);
+        const bpm = sheet.bpm ?? 120;
+        document.getElementById('seq-bpm').value = bpm;
+        document.getElementById('bpm-val').textContent = bpm;
+      }
+
+      function triggerPreviewPlay() {
+        if (typeof songMode !== 'undefined' && songMode) {
+          document.getElementById('btn-mode-loop')?.click();
+        }
+        document.getElementById('btn-play')?.click();
+      }
+
+      async function runCard(cardKey) {
+        if (cardState !== 'idle') return;
+        if (!hasActivePattern()) return;
+        activeCard  = cardKey;
+        savedSheet  = JSON.parse(JSON.stringify(patternBank[activeSlot].sheet));
+        pendingSheet = null;
+        setState('loading');
+        try {
+          pendingSheet = await callCardLLM(cardKey, savedSheet);
+          loadSheetSoft(pendingSheet);
+          triggerPreviewPlay();
+          setState('preview');
+        } catch (err) {
+          console.error('[Cards]', err);
+          activeCard = null; savedSheet = null;
+          setState('idle');
+          const pad = document.querySelector(`.card-pad[data-card="${cardKey}"]`);
+          if (pad) {
+            pad.style.borderColor = '#802020';
+            setTimeout(() => { pad.style.borderColor = ''; }, 1500);
+          }
+        }
+      }
+
+      async function callCardLLM(cardKey, sheet) {
+        const apiKey = _bandApiKey();
+        if (!apiKey) throw new Error('No API key — set one in ⚙ LLM settings');
+        const res = await fetch('/api/llm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey, model: _bandModel(), provider: _bandProvider(),
+            system: 'You are a music transformation engine for a step-sequencer DAW. You receive a sheet JSON and a directive. Return ONLY valid JSON — the transformed sheet. No markdown, no explanation, no code fences. Preserve the exact same JSON structure as the input.',
+            messages: [{ role: 'user', content: `Directive: ${DIRECTIVES[cardKey]}\n\nInput sheet:\n${JSON.stringify(sheet, null, 2)}\n\nReturn ONLY the transformed sheet JSON.` }],
+            max_tokens: 4096,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const raw = data.content?.[0]?.text ?? '';
+        const m = raw.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('LLM returned no JSON');
+        return JSON.parse(m[0]);
+      }
+
+      function onKeep() {
+        document.getElementById('btn-pat-store')?.click();
+        pendingSheet = null; savedSheet = null; activeCard = null;
+        setState('idle');
+      }
+
+      function onDiscard() {
+        document.getElementById('btn-stop')?.click();
+        loadSheetSoft(savedSheet);
+        setState('undoable');
+        startCountdown();
+      }
+
+      function onUndo() {
+        clearCountdown();
+        loadSheetSoft(pendingSheet);
+        triggerPreviewPlay();
+        setState('preview');
+      }
+
+      function startCountdown() {
+        const DUR = 10000;
+        cdBar.style.transition = 'none';
+        cdBar.style.width = '100%';
+        cdBar.offsetWidth;
+        cdBar.style.transition = `width ${DUR}ms linear`;
+        cdBar.style.width = '0%';
+        _undoTimerId = setTimeout(() => {
+          pendingSheet = null; savedSheet = null; activeCard = null;
+          setState('idle');
+        }, DUR);
+      }
+
+      function clearCountdown() {
+        if (_undoTimerId) { clearTimeout(_undoTimerId); _undoTimerId = null; }
+        cdBar.style.transition = 'none';
+        cdBar.style.width = '100%';
+      }
+
+      allPads.forEach(pad => pad.addEventListener('click', () => {
+        if (!pad.classList.contains('card-disabled')) runCard(pad.dataset.card);
+      }));
+      keepBtn.addEventListener('click', onKeep);
+      discardBtn.addEventListener('click', onDiscard);
+      undoBtn.addEventListener('click', onUndo);
+      document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && cardState === 'undoable') {
+          e.preventDefault(); onUndo();
+        }
+      });
+
+      setInterval(syncPadDisabled, 400);
+    })();
 
     // ── Tutorial bridge — exposes module-scoped nav fns to tutorial.js ──────
     window._tutorialBridge = {
