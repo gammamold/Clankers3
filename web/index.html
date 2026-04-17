@@ -6851,6 +6851,20 @@ if (typeof TextEncoder === 'undefined') {
       return `\n\nACTIVE SYNTH LAB INSTRUMENTS (these replace the default WASM synths — compose for them using the same track IDs):\n${lines.join('\n')}`;
     }
 
+    function _syncCurrentSheetFromRoll() {
+      if (currentSheet) return;
+      try {
+        const parsed = JSON.parse(document.getElementById('sheet-json').value);
+        if (parsed.steps?.some(s => s.tracks?.some(t => t.n?.length))) {
+          currentSheet = parsed;
+          sessionId = sessionId || ('ses_' + Date.now().toString(36));
+          document.getElementById('session-badge').textContent = `[${sessionId.slice(0, 8)}]`;
+          document.getElementById('evolve-row').style.display = '';
+          document.getElementById('ai-auto-row').style.display = '';
+        }
+      } catch (_) {}
+    }
+
     async function sendChat() {
       const msg = chatInput.value.trim();
       if (!msg) return;
@@ -6865,6 +6879,9 @@ if (typeof TextEncoder === 'undefined') {
         chatSend.disabled = false; chatInput.disabled = false; chatInput.focus();
         return;
       }
+
+      // If user drew notes manually, treat them as the current sheet
+      _syncCurrentSheetFromRoll();
 
       if (!sessionId) {
         // Start a brand new session using the prompt natively
@@ -7076,6 +7093,7 @@ if (typeof TextEncoder === 'undefined') {
     });
 
     document.getElementById('btn-evolve').addEventListener('click', async () => {
+      _syncCurrentSheetFromRoll();
       if (!sessionId) return;
       const section = document.getElementById('evolve-section').value;
       const hint = chatInput.value.trim();
@@ -8990,6 +9008,7 @@ if (typeof TextEncoder === 'undefined') {
         status.textContent = '✓ Connected! Ready to compose.';
         status.className = 'cfg-status ok';
         document.getElementById('btn-settings').classList.add('configured');
+        chatInput.disabled = false; chatSend.disabled = false;
         setTimeout(() => document.getElementById('config-overlay').classList.remove('open'), 1500);
       } catch (err) {
         status.textContent = 'Error: ' + err.message;
@@ -9088,6 +9107,7 @@ if (typeof TextEncoder === 'undefined') {
         if (model && [...sel.options].some(o => o.value === model)) sel.value = model;
         const keyInput = document.getElementById('cfg-key');
         if (keyInput) keyInput.value = key;
+        chatInput.disabled = false; chatSend.disabled = false;
       }
       // Stay on splash screen — user picks demo or new project from there
     })();
