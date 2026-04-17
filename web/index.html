@@ -6117,6 +6117,11 @@ if (typeof TextEncoder === 'undefined') {
     // selectSlot(0) called later, after arrSlots is initialised
 
     function selectSlot(i) {
+      if (typeof cardState !== 'undefined' && cardState !== 'idle') {
+        if (typeof clearCountdown === 'function') clearCountdown();
+        pendingSheet = null; savedSheet = null; activeCard = null;
+        if (typeof setState === 'function') setState('idle');
+      }
       activeSlot = i;
       document.getElementById('pat-slot-label').textContent = `P${i + 1}`;
       patBtns.forEach((b, idx) => b.classList.toggle('active-pat', idx === i));
@@ -9289,7 +9294,16 @@ if (typeof TextEncoder === 'undefined') {
       }
 
       function onKeep() {
-        document.getElementById('btn-pat-store')?.click();
+        let sheet;
+        try { sheet = JSON.parse(document.getElementById('sheet-json').value); }
+        catch (e) { log('Keep failed — invalid JSON'); return; }
+        if (rack) sheet.fx = rack.getParams();
+        const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
+        patternBank[activeSlot] = { sheet, label };
+        patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
+        patBtns[activeSlot].classList.add('has-pat');
+        updateArrGrid();
+        log(`Stored → P${activeSlot + 1} "${label}"`);
         pendingSheet = null; savedSheet = null; activeCard = null;
         setState('idle');
       }
