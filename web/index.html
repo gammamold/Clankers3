@@ -780,6 +780,72 @@
       pointer-events: all;
     }
 
+    /* Screen: Splash */
+    #screen-splash {
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 2.5rem;
+    }
+
+    .splash-logo {
+      font-family: monospace;
+      font-size: 2.6rem;
+      letter-spacing: .22em;
+      color: #00d4ff;
+      text-shadow: 0 0 18px #00d4ff55;
+      text-align: center;
+    }
+
+    .splash-subtitle {
+      font-family: monospace;
+      font-size: .55rem;
+      letter-spacing: .25em;
+      color: #333;
+      text-transform: uppercase;
+      margin-top: -.5rem;
+      text-align: center;
+    }
+
+    .splash-actions {
+      display: flex;
+      gap: 1.4rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .splash-btn {
+      padding: .65rem 2rem;
+      font-family: monospace;
+      font-size: .72rem;
+      letter-spacing: .1em;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all .15s;
+    }
+
+    #splash-demo-btn {
+      background: #0a0a0a;
+      border: 1px solid #00d4ff;
+      color: #00d4ff;
+    }
+
+    #splash-demo-btn:hover {
+      background: #001820;
+      box-shadow: 0 0 14px #00d4ff33;
+    }
+
+    #splash-new-btn {
+      background: #0a0a0a;
+      border: 1px solid #333;
+      color: #888;
+    }
+
+    #splash-new-btn:hover {
+      border-color: #888;
+      color: #ccc;
+    }
+
     /* Screen: Chat */
     #screen-chat {
       align-items: center;
@@ -3987,10 +4053,20 @@
   </style>
 </head>
 
-<body class="on-chat">
+<body class="on-splash">
+
+  <!-- ─── Screen: Splash (entry point) ──────────────────────────── -->
+  <div id="screen-splash" class="screen active">
+    <div class="splash-logo">CLANKERS</div>
+    <div class="splash-subtitle">robotic music machine</div>
+    <div class="splash-actions">
+      <button class="splash-btn" id="splash-demo-btn">▶ PLAY DEMO</button>
+      <button class="splash-btn" id="splash-new-btn">+ NEW PROJECT</button>
+    </div>
+  </div>
 
   <!-- ─── Screen: Chat (initial state) ──────────────────────────── -->
-  <div id="screen-chat" class="screen active">
+  <div id="screen-chat" class="screen">
     <div id="chat-logo">CLANKERS</div>
   </div>
 
@@ -4915,6 +4991,7 @@
   <button id="btn-tutorial" title="Interactive tour of Clankers 3">? TOUR</button>
 
   <div id="panel-menu">
+    <button class="menu-item" id="menu-item-new-project">+ NEW PROJECT</button>
     <button class="menu-item" id="menu-item-save-project">💾 SAVE PROJECT</button>
     <button class="menu-item" id="menu-item-load-project">📁 LOAD PROJECT</button>
     <div style="height:1px;background:#222;margin:4px 8px;"></div>
@@ -4950,8 +5027,8 @@
       <div id="cfg-status" class="cfg-status"></div>
       <div style="margin-top:1.2rem;text-align:center;">
         <div style="font-size:.55rem;color:#444;letter-spacing:.08em;margin-bottom:.5rem;">— OR —</div>
-        <button id="cfg-skip-btn" class="cfg-save-btn" style="background:#1a1a2e;color:#00d4ff;border:1px solid #00d4ff;">
-          ▶ SKIP — PLAY DEMO
+        <button id="cfg-skip-btn" class="cfg-save-btn" style="background:#111;color:#555;border:1px solid #333;">
+          ← CLOSE
         </button>
         <div style="font-size:.5rem;color:#333;margin-top:.4rem;">
           Listen to the built-in acid house track. No API key needed.
@@ -8393,6 +8470,10 @@ if (typeof TextEncoder === 'undefined') {
 
     // ── Chat overlay toggle ───────────────────────────────────────────────────────
     document.getElementById('btn-chat-float').addEventListener('click', () => {
+      if (!_bandApiKey()) {
+        document.getElementById('config-overlay').classList.add('open');
+        return;
+      }
       document.getElementById('chat-overlay').classList.toggle('open');
     });
     document.getElementById('btn-chat-close').addEventListener('click', () => {
@@ -8835,7 +8916,7 @@ if (typeof TextEncoder === 'undefined') {
     });
 
     // Initial state
-    showScreen('chat');
+    showScreen('splash');
 
     // ── LLM Config Overlay ────────────────────────────────────────────────────────
 
@@ -8917,37 +8998,46 @@ if (typeof TextEncoder === 'undefined') {
       }
     });
 
-    // Skip LLM — load default sheet and play immediately
+    // Close the LLM config overlay without saving
     document.getElementById('cfg-skip-btn').addEventListener('click', () => {
       document.getElementById('config-overlay').classList.remove('open');
+    });
 
+    // ── Splash screen buttons ─────────────────────────────────────────────────────
+
+    function _loadDemo() {
       let sheet;
       try {
         sheet = JSON.parse(document.getElementById('sheet-json').value);
       } catch (e) {
-        chatAppend('Error parsing default sheet: ' + e.message, 'msg-sys');
         return;
       }
-
       sessionId = 'ses_' + Date.now().toString(36);
       currentSheet = sheet;
       chatHistory = [];
       document.getElementById('session-badge').textContent = `[${sessionId.slice(0, 8)}]`;
-      chatInput.disabled = false;
-      chatSend.disabled = false;
       document.getElementById('evolve-row').style.display = '';
       document.getElementById('ai-auto-row').style.display = '';
-
       sheetToSequencer(sheet, { autoStore: true });
-
       const steps = sheet.steps?.length ?? 0;
       chatAppend(
         `Demo loaded (${steps} steps @ ${sheet.bpm ?? '?'} BPM). Configure ⚙ LLM to chat with the band.`,
         'msg-sys'
       );
+    }
+
+    document.getElementById('splash-demo-btn').addEventListener('click', () => {
+      _loadDemo();
     });
 
-    // On load: restore config from sessionStorage, open settings if no key saved
+    document.getElementById('splash-new-btn').addEventListener('click', () => {
+      buildFaces(null);
+      showScreen('main');
+      const cards = document.querySelectorAll('.face-card');
+      cards.forEach((card, i) => setTimeout(() => card.classList.add('revealed'), i * 200));
+    });
+
+    // On load: restore config from sessionStorage
     (function () {
       const key = sessionStorage.getItem('clankers_api_key');
       const model = sessionStorage.getItem('clankers_model');
@@ -8957,14 +9047,18 @@ if (typeof TextEncoder === 'undefined') {
         if (prov && _PROVIDER_MODELS[prov]) _cfgSetProvider(prov);
         const sel = document.getElementById('cfg-model');
         if (model && [...sel.options].some(o => o.value === model)) sel.value = model;
-        // Pre-populate the key field
         const keyInput = document.getElementById('cfg-key');
         if (keyInput) keyInput.value = key;
-      } else {
-        document.getElementById('config-overlay').classList.add('open');
       }
+      // Stay on splash screen — user picks demo or new project from there
     })();
-    // ─── Save / Load Project ──────────────────────────────────────────────────
+    // ─── New / Save / Load Project ────────────────────────────────────────────
+    document.getElementById('menu-item-new-project').addEventListener('click', () => {
+      document.getElementById('panel-menu').classList.remove('open');
+      document.getElementById('btn-menu').classList.remove('active');
+      showScreen('splash');
+    });
+
     document.getElementById('menu-item-save-project').addEventListener('click', async () => {
       document.getElementById('panel-menu').classList.remove('open');
       document.getElementById('btn-menu').classList.remove('active');
