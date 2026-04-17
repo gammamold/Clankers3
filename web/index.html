@@ -405,6 +405,32 @@
       align-items: flex-start;
     }
 
+    /* ── Voder "Say Text" row ── */
+    .voder-say-row {
+      display: flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .35rem .5rem;
+      border-top: 1px solid #1e1e1e;
+      flex-wrap: wrap;
+    }
+    .voder-say-row input[type=text] {
+      flex: 1; min-width: 160px;
+      background: #0d0d10; color: #cfcfcf;
+      border: 1px solid #2a2a2a; border-radius: 3px;
+      font: inherit; font-size: 11px; padding: 3px 6px;
+    }
+    .voder-say-row input[type=text]:focus { outline: none; border-color: #7c3aed; }
+    .voder-say-row select,
+    .voder-say-row input[type=number] {
+      background: #0d0d10; color: #cfcfcf;
+      border: 1px solid #2a2a2a; border-radius: 3px;
+      font: inherit; font-size: 10px; padding: 2px 4px;
+    }
+    .voder-say-row input[type=number] { width: 48px; }
+    .voder-say-row label { font-size: 10px; color: #71717a; display: inline-flex; align-items: center; gap: .25rem; }
+    .voder-say-row .pad { min-width: 58px; }
+
     .knob-group {
       display: flex;
       gap: .4rem;
@@ -4404,6 +4430,19 @@
           <div class="inst-knobs-panel" id="voder-knobs-panel">
             <div class="knob-row" id="voder-knobs"></div>
           </div>
+          <div class="voder-say-row" id="voder-say-row">
+            <input type="text" id="voder-say-input" placeholder="Type text for the voder to speak…" value="Hello, I am a clanker.">
+            <select id="voder-say-note" title="Base pitch (MIDI note)">
+              <option value="45">A2</option>
+              <option value="48">C3</option>
+              <option value="52">E3</option>
+              <option value="55">G3</option>
+              <option value="57" selected>A3</option>
+              <option value="60">C4</option>
+            </select>
+            <label title="Words per minute">WPM <input type="number" id="voder-say-wpm" min="60" max="400" step="10" value="160"></label>
+            <button class="pad" id="voder-say-btn">SPEAK</button>
+          </div>
           <div class="knob-row" id="voder-sends"></div>
         </div>
       </div>
@@ -4946,6 +4985,7 @@
     import { midiOut } from './midi-output.js';
     import { midiIn } from './midi-input.js';
     import { modularSync } from './modular-sync.js';
+    import { sayText as voderSayText } from './synth/voder-say.js';
 
     // ── Synth Lab singleton ───────────────────────────────────────────────────────
     const synthLab = new SynthLab();
@@ -5746,6 +5786,27 @@ if (typeof TextEncoder === 'undefined') {
       btn.className = 'pad'; btn.textContent = label;
       btn.addEventListener('click', () => triggerVoder(midi));
       voderGrid.appendChild(btn);
+    });
+
+    // ── Voder: Say Text ─────────────────────────────────────────────────────────
+    // Type English, hit SPEAK; G2P + prosody schedule a timed phoneme sequence
+    // onto the most-recent voice (see synth/voder-g2p.js + synth/voder-say.js).
+    const sayBtn   = document.getElementById('voder-say-btn');
+    const sayInput = document.getElementById('voder-say-input');
+    sayBtn?.addEventListener('click', async () => {
+      await ensureReady();
+      const text = sayInput.value;
+      const note = +document.getElementById('voder-say-note').value;
+      const wpm  = +document.getElementById('voder-say-wpm').value;
+      if (!text.trim() || !voderNode) return;
+      voderSayText(voderNode, ctx, text, {
+        midiNote: note,
+        wpm,
+        ccJson:   JSON.stringify(voderCC()),
+      });
+    });
+    sayInput?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); sayBtn.click(); }
     });
 
     function padsCC() {
