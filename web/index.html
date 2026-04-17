@@ -5791,19 +5791,40 @@ if (typeof TextEncoder === 'undefined') {
     // ── Voder: Say Text ─────────────────────────────────────────────────────────
     // Type English, hit SPEAK; G2P + prosody schedule a timed phoneme sequence
     // onto the most-recent voice (see synth/voder-g2p.js + synth/voder-say.js).
+    //
+    // Gotcha: sequencer.stop() disconnects its masterGain, which severs the whole
+    // audio path.  When stopped, we build a tiny direct route (voderNode →
+    // tempGain → destination) for the utterance, then tear it down.
     const sayBtn   = document.getElementById('voder-say-btn');
     const sayInput = document.getElementById('voder-say-input');
     sayBtn?.addEventListener('click', async () => {
       await ensureReady();
       const text = sayInput.value;
+      if (!text.trim() || !voderNode) return;
+
       const note = +document.getElementById('voder-say-note').value;
       const wpm  = +document.getElementById('voder-say-wpm').value;
-      if (!text.trim() || !voderNode) return;
-      voderSayText(voderNode, ctx, text, {
+
+      let tempGain = null;
+      if (!seq?.isPlaying) {
+        tempGain = ctx.createGain();
+        tempGain.gain.value = 0.5;
+        try { voderNode.connect(tempGain); } catch (_) {}
+        tempGain.connect(ctx.destination);
+      }
+
+      const { durationSec } = voderSayText(voderNode, ctx, text, {
         midiNote: note,
         wpm,
         ccJson:   JSON.stringify(voderCC()),
       });
+
+      if (tempGain) {
+        setTimeout(() => {
+          try { voderNode.disconnect(tempGain); } catch (_) {}
+          try { tempGain.disconnect();          } catch (_) {}
+        }, Math.ceil((durationSec + 0.5) * 1000));
+      }
     });
     sayInput?.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); sayBtn.click(); }
