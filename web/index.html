@@ -8779,7 +8779,7 @@ if (typeof TextEncoder === 'undefined') {
     // ── LLM Config Overlay ────────────────────────────────────────────────────────
 
     const _PROVIDER_MODELS = {
-      anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+      anthropic: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
       google: ['gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-pro'],
       openai: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o3-mini'],
       minimax: ['MiniMax-M2.5', 'MiniMax-M2.7'],
@@ -9244,6 +9244,7 @@ if (typeof TextEncoder === 'undefined') {
         if (typeof songMode !== 'undefined' && songMode) {
           document.getElementById('btn-mode-loop')?.click();
         }
+        document.getElementById('btn-stop')?.click();
         document.getElementById('btn-play')?.click();
       }
 
