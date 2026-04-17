@@ -9030,7 +9030,24 @@ if (typeof TextEncoder === 'undefined') {
       _loadDemo();
     });
 
+    function _resetToNewProject() {
+      // Stop playback
+      if (seq?.isPlaying) {
+        const stopBtn = document.getElementById('btn-stop');
+        stopBtn.removeAttribute('disabled');
+        stopBtn.click();
+      }
+      // Clear session state
+      currentSheet = null;
+      chatHistory = [];
+      sessionId = null;
+      document.getElementById('session-badge').textContent = '';
+      // Blank the sheet so PLAY starts fresh
+      document.getElementById('sheet-json').value = JSON.stringify({ bpm: 120, steps: [] }, null, 2);
+    }
+
     document.getElementById('splash-new-btn').addEventListener('click', () => {
+      _resetToNewProject();
       buildFaces(null);
       showScreen('main');
       const cards = document.querySelectorAll('.face-card');
@@ -9056,6 +9073,7 @@ if (typeof TextEncoder === 'undefined') {
     document.getElementById('menu-item-new-project').addEventListener('click', () => {
       document.getElementById('panel-menu').classList.remove('open');
       document.getElementById('btn-menu').classList.remove('active');
+      _resetToNewProject();
       showScreen('splash');
     });
 
