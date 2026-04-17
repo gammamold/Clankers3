@@ -18351,7 +18351,7 @@
       7
     ],
     "activeSlot": 0,
-    "songMode": true,
+    "songMode": false,
     "songRepeat": true
   },
   "band": {
