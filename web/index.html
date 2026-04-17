@@ -9006,12 +9006,9 @@ if (typeof TextEncoder === 'undefined') {
     // ── Splash screen buttons ─────────────────────────────────────────────────────
 
     function _loadDemo() {
-      let sheet;
-      try {
-        sheet = JSON.parse(document.getElementById('sheet-json').value);
-      } catch (e) {
-        return;
-      }
+      if (!_demoProject?.sheet) return;
+      _applyProject(_demoProject);
+      const sheet = _demoProject.sheet;
       sessionId = 'ses_' + Date.now().toString(36);
       currentSheet = sheet;
       chatHistory = [];
@@ -9312,12 +9309,12 @@ if (typeof TextEncoder === 'undefined') {
     });
 
     // Auto-load demo song on startup
+    let _demoProject = null;
     fetch('/clankers_demo.clank')
       .then(r => r.json())
       .then(p => {
+        _demoProject = p;
         _applyProject(p);
-        // If API key already set, jump straight to playing; otherwise let the
-        // config overlay handle it (skip button will use the populated sheet-json)
         if (p.sheet && _bandApiKey()) revealFaces(p.sheet, true);
       })
       .catch(() => {});
