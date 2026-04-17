@@ -221,6 +221,30 @@
   <div id="piano"></div>
 </div>
 
+<!-- Say text -->
+<div class="panel">
+  <h2>Say Text</h2>
+  <div class="row" style="align-items:center;gap:8px">
+    <input id="say-input" type="text" value="Hello world, I am a clanker."
+           placeholder="Type anything — English only"
+           style="background:#2a2a2a;border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;padding:6px 8px;flex:1;min-width:260px">
+    <button class="btn primary" id="say-btn">SPEAK</button>
+    <span style="font-size:11px;color:var(--muted)">note:</span>
+    <select id="say-note-sel" style="background:#2a2a2a;border:1px solid var(--border);color:var(--text);font-family:inherit;padding:4px 6px;border-radius:4px">
+      <option value="45">A2</option>
+      <option value="48">C3</option>
+      <option value="52">E3</option>
+      <option value="55">G3</option>
+      <option value="57" selected>A3</option>
+      <option value="60">C4</option>
+    </select>
+    <span style="font-size:11px;color:var(--muted)">wpm:</span>
+    <input id="say-wpm-input" type="number" value="160" min="60" max="400" step="10"
+           style="width:60px;background:#2a2a2a;border:1px solid var(--border);color:var(--text);font-family:inherit;padding:4px 6px;border-radius:4px">
+  </div>
+  <div id="say-status" style="font-size:10px;color:var(--muted);margin-top:6px"></div>
+</div>
+
 <!-- Phoneme sequence -->
 <div class="panel">
   <h2>Phoneme Sequence</h2>
@@ -244,6 +268,9 @@
 </div>
 
 <script type="module">
+import { sayText, buildUtterance } from './synth/voder-say.js';
+import { textToPhonemes }          from './synth/voder-g2p.js';
+
 // ── Phoneme table (mirrors Rust) ───────────────────────────────────────────
 const PHONEME_NAMES = [
   ['AA','father'],['AE','cat'],  ['AH','but'],  ['AO','caught'],
@@ -253,6 +280,9 @@ const PHONEME_NAMES = [
   ['M','m'],     ['N','n'],
   ['F','f'],     ['S','s'],      ['SH','sh'],   ['TH','th'],
   ['V','v'],     ['Z','z'],      ['ZH','zh'],
+  ['SIL','·'],   ['HH','h'],     ['NG','ng'],
+  ['B','b'],     ['D','d'],      ['G','g'],
+  ['P','p'],     ['T','t'],      ['K','k'],
 ];
 
 // ── Boot ──────────────────────────────────────────────────────────────────
@@ -577,6 +607,26 @@ function buildPiano() {
   container.addEventListener('touchstart', onDown, { passive: false });
   document.addEventListener('touchend', onUp);
 }
+
+// ── Say text ──────────────────────────────────────────────────────────────
+const sayStatus = document.getElementById('say-status');
+document.getElementById('say-btn').addEventListener('click', async () => {
+  await ensureAudio();
+  const text = document.getElementById('say-input').value;
+  const note = Number(document.getElementById('say-note-sel').value);
+  const wpm  = Number(document.getElementById('say-wpm-input').value);
+  if (!text.trim()) return;
+
+  const { durationSec, phonemes } = sayText(voderNode, audioCtx, text, {
+    midiNote: note,
+    wpm,
+    ccJson: ccJson(),
+  });
+
+  const names = PHONEME_NAMES.map(p => p[0]);
+  const readout = phonemes.map(p => names[p] ?? '?').join(' ');
+  sayStatus.textContent = `${phonemes.length} phonemes · ${durationSec.toFixed(2)}s · ${readout}`;
+});
 
 // ── Phoneme sequence ──────────────────────────────────────────────────────
 document.getElementById('seq-play-btn').addEventListener('click', async () => {

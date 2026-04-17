@@ -475,10 +475,11 @@ use voder::{VoderEngine, VoderParams};
 /// noise drive a bank of 5 parallel biquad resonators whose centre frequencies
 /// interpolate smoothly between phoneme targets (coarticulation).
 ///
-/// Phoneme indices (0-24):
+/// Phoneme indices (0-33):
 ///   0 AA   1 AE   2 AH   3 AO   4 EH   5 ER   6 EY   7 IH   8 IY
 ///   9 OW  10 UH  11 UW  12 L   13 R   14 W   15 Y   16 M   17 N
 ///  18 F   19 S   20 SH  21 TH  22 V   23 Z   24 ZH
+///  25 SIL 26 HH  27 NG  28 B   29 D   30 G   31 P   32 T   33 K
 ///
 /// CC map:
 ///   CC74  brightness     0-127 → 0.5-1.5× formant freq scale
@@ -529,6 +530,30 @@ impl ClankersVoder {
         self.engine.set_queue_for_last(&phonemes, hold_samps as usize);
     }
 
+    /// Set a timed phoneme sequence: parallel JSON arrays of phoneme indices,
+    /// per-phoneme durations in samples, per-phoneme pitch multipliers (1.0=base
+    /// note), and per-phoneme amplitude multipliers.  Any shorter array is
+    /// padded with defaults (150ms / 1.0 / 1.0).
+    ///
+    /// Example (say "HI" on A3 with rising pitch):
+    ///   phonemes:  "[26, 0, 8]"                    // HH AA IY
+    ///   durations: "[1800, 6000, 4000]"            // samples @ 44.1k
+    ///   pitches:   "[1.0, 1.06, 1.12]"             // +1 semi, +2 semi
+    ///   amps:      "[0.8, 1.0, 1.0]"
+    pub fn set_phonemes_timed(
+        &mut self,
+        phonemes_json:  &str,
+        durations_json: &str,
+        pitches_json:   &str,
+        amps_json:      &str,
+    ) {
+        let phonemes  = parse_phoneme_array(phonemes_json);
+        let durations = parse_phoneme_array(durations_json);
+        let pitches   = parse_float_array(pitches_json);
+        let amps      = parse_float_array(amps_json);
+        self.engine.set_queue_detailed_for_last(&phonemes, &durations, &pitches, &amps);
+    }
+
     /// Vowel-pad mode: x=F1 axis (0=high/closed..1=low/open),
     /// y=F2 axis (0=back..1=front).  All voices update live.
     pub fn set_xy(&mut self, x: f32, y: f32) {
@@ -555,9 +580,28 @@ impl ClankersVoder {
         Float32Array::from(buf.as_slice())
     }
 
-    /// Number of phonemes in the built-in table (25).
+    /// Number of phonemes in the built-in table (34).
     pub fn phoneme_count() -> u32 {
         voder::N_PHONEMES as u32
+    }
+
+    /// Phoneme name → index map, as a JSON object:
+    /// `{"AA":0,"AE":1,"AH":2,...,"SIL":25,"HH":26,"NG":27,"B":28,...}`
+    pub fn phoneme_map_json() -> String {
+        let names = [
+            "AA","AE","AH","AO","EH","ER","EY","IH","IY","OW","UH","UW",
+            "L","R","W","Y","M","N",
+            "F","S","SH","TH","V","Z","ZH",
+            "SIL","HH","NG","B","D","G","P","T","K",
+        ];
+        let mut s = String::from("{");
+        for (i, n) in names.iter().enumerate() {
+            if i > 0 { s.push(','); }
+            s.push('"'); s.push_str(n); s.push('"'); s.push(':');
+            s.push_str(&i.to_string());
+        }
+        s.push('}');
+        s
     }
 }
 
@@ -588,6 +632,19 @@ fn parse_phoneme_array(s: &str) -> Vec<usize> {
         let tok = tok.trim();
         if let Ok(n) = tok.parse::<usize>() {
             out.push(n);
+        }
+    }
+    out
+}
+
+/// Parse a JSON float array like "[1.0, 1.06, 1.12]" into a Vec<f32>.
+fn parse_float_array(s: &str) -> Vec<f32> {
+    let mut out = Vec::new();
+    let s = s.trim().trim_start_matches('[').trim_end_matches(']');
+    for tok in s.split(',') {
+        let tok = tok.trim();
+        if let Ok(f) = tok.parse::<f32>() {
+            out.push(f);
         }
     }
     out
