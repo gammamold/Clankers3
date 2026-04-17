@@ -142,7 +142,7 @@ export class DelayFx {
 
     // Serialisable param cache
     this._p = {
-      time: '1/8', feedback: 0.45, wet: 0, lfo: 'sine',
+      on: false, time: '1/8', feedback: 0.45, wet: 0, lfo: 'sine',
       lfo_rate: 0.3, lfo_depth: 0.002, hp: 80, lp: 6000,
       ping_pong: false, filter_type: 'off', filter_freq: 2000, filter_q: 0.7
     };
@@ -259,6 +259,8 @@ export class DelayFx {
     this._outFilter.Q.setTargetAtTime(q, this.ctx.currentTime, 0.01);
   }
 
+  setOn(v) { this._p.on = !!v; }
+
   getParams() { return { ...this._p }; }
 
   _applyParams(p, bpm) {
@@ -320,7 +322,7 @@ export class WaveShapeFx {
     this._tone.type = 'lowpass';
     this._tone.frequency.value = 6000;
 
-    this._p = { type: 'soft', drive: 0.3, tone: 6000, wet: 0 };
+    this._p = { on: false, type: 'soft', drive: 0.3, tone: 6000, wet: 0 };
 
     // Wire
     this.input.connect(this._dry);
@@ -347,6 +349,8 @@ export class WaveShapeFx {
   setTone(hz) { this._p.tone = hz; this._tone.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01); }
   setWet(v) { this._p.wet = v; this._wet.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
   setDry(v) { this._dry.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01); }
+
+  setOn(v) { this._p.on = !!v; }
 
   getParams() { return { ...this._p }; }
 
