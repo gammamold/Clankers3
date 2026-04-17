@@ -9034,13 +9034,35 @@ if (typeof TextEncoder === 'undefined') {
         stopBtn.removeAttribute('disabled');
         stopBtn.click();
       }
+
       // Clear session state
       currentSheet = null;
       chatHistory = [];
       sessionId = null;
       document.getElementById('session-badge').textContent = '';
-      // Blank the sheet so PLAY starts fresh
+
+      // Blank the sheet-json
       document.getElementById('sheet-json').value = JSON.stringify({ bpm: 120, steps: [] }, null, 2);
+
+      // Reset BPM
+      document.getElementById('seq-bpm').value = 120;
+      document.getElementById('bpm-val').textContent = '120';
+      if (seq) seq._bpm = 120;
+
+      // Clear all pattern slots (nullify data + reset button labels/classes)
+      patternBank.fill(null);
+      patBtns.forEach((btn, i) => {
+        btn.textContent = `P${i + 1}`;
+        btn.classList.remove('has-pat', 'active-pat');
+      });
+
+      // Clear arrangement
+      songArrangement = [];
+      updateArrGrid();
+
+      // Reset mode to single-pattern loop and reselect slot 0
+      setMode('loop');
+      selectSlot(0);
     }
 
     document.getElementById('splash-new-btn').addEventListener('click', () => {
