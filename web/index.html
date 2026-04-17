@@ -7636,8 +7636,9 @@ if (typeof TextEncoder === 'undefined') {
         this._tType = tType;
         this.notes = this._extract(sheet, tType);
         // Round to 6 decimal places to kill any floating-point accumulation drift
-        this.totalBeats = sheet?.steps
-          ? Math.round(sheet.steps.reduce((s, st) => s + (st.d ?? 0.25), 0) * 1e6) / 1e6 : 16;
+        const _computed = sheet?.steps?.length
+          ? Math.round(sheet.steps.reduce((s, st) => s + (st.d ?? 0.25), 0) * 1e6) / 1e6 : 0;
+        this.totalBeats = _computed || 16;
 
         if (!this.isDrum) {
           const pitches = this.notes.map(n => n.pitch);
@@ -9041,8 +9042,10 @@ if (typeof TextEncoder === 'undefined') {
       sessionId = null;
       document.getElementById('session-badge').textContent = '';
 
-      // Blank the sheet-json
-      document.getElementById('sheet-json').value = JSON.stringify({ bpm: 120, steps: [] }, null, 2);
+      // Blank the sheet-json — 64 empty 16th-note slots (16 beats) so the piano roll renders
+      const _blankSteps = [];
+      for (let i = 0; i < 64; i++) _blankSteps.push({ d: 0.25, tracks: [] });
+      document.getElementById('sheet-json').value = JSON.stringify({ bpm: 120, steps: _blankSteps }, null, 2);
 
       // Reset BPM
       document.getElementById('seq-bpm').value = 120;
