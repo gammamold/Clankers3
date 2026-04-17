@@ -7660,8 +7660,10 @@ if (typeof TextEncoder === 'undefined') {
 
         if (!this.isDrum) {
           const pitches = this.notes.map(n => n.pitch);
-          this.pitchMin = pitches.length ? Math.max(0, Math.min(...pitches) - 4) : 48;
-          this.pitchMax = pitches.length ? Math.min(127, Math.max(...pitches) + 4) : 72;
+          const _defaults = { bass: [28, 52], voder: [48, 72] };
+          const [defMin, defMax] = _defaults[instId] ?? [48, 72];
+          this.pitchMin = pitches.length ? Math.max(0, Math.min(...pitches) - 4) : defMin;
+          this.pitchMax = pitches.length ? Math.min(127, Math.max(...pitches) + 4) : defMax;
         }
 
         this._resize();
