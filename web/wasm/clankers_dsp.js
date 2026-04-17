@@ -564,10 +564,11 @@ if (Symbol.dispose) ClankersSynthGraph.prototype[Symbol.dispose] = ClankersSynth
  * noise drive a bank of 5 parallel biquad resonators whose centre frequencies
  * interpolate smoothly between phoneme targets (coarticulation).
  *
- * Phoneme indices (0-24):
+ * Phoneme indices (0-33):
  *   0 AA   1 AE   2 AH   3 AO   4 EH   5 ER   6 EY   7 IH   8 IY
  *   9 OW  10 UH  11 UW  12 L   13 R   14 W   15 Y   16 M   17 N
  *  18 F   19 S   20 SH  21 TH  22 V   23 Z   24 ZH
+ *  25 SIL 26 HH  27 NG  28 B   29 D   30 G   31 P   32 T   33 K
  *
  * CC map:
  *   CC74  brightness     0-127 → 0.5-1.5× formant freq scale
@@ -610,12 +611,29 @@ export class ClankersVoder {
         return this;
     }
     /**
-     * Number of phonemes in the built-in table (25).
+     * Number of phonemes in the built-in table (34).
      * @returns {number}
      */
     static phoneme_count() {
         const ret = wasm.clankersvoder_phoneme_count();
         return ret >>> 0;
+    }
+    /**
+     * Phoneme name → index map, as a JSON object:
+     * `{"AA":0,"AE":1,"AH":2,...,"SIL":25,"HH":26,"NG":27,"B":28,...}`
+     * @returns {string}
+     */
+    static phoneme_map_json() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.clankersvoder_phoneme_map_json();
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * Render n_samples of audio.  Returns mono Float32Array.
@@ -658,6 +676,33 @@ export class ClankersVoder {
         const ptr0 = passStringToWasm0(json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         wasm.clankersvoder_set_phonemes(this.__wbg_ptr, ptr0, len0, hold_samps);
+    }
+    /**
+     * Set a timed phoneme sequence: parallel JSON arrays of phoneme indices,
+     * per-phoneme durations in samples, per-phoneme pitch multipliers (1.0=base
+     * note), and per-phoneme amplitude multipliers.  Any shorter array is
+     * padded with defaults (150ms / 1.0 / 1.0).
+     *
+     * Example (say "HI" on A3 with rising pitch):
+     *   phonemes:  "[26, 0, 8]"                    // HH AA IY
+     *   durations: "[1800, 6000, 4000]"            // samples @ 44.1k
+     *   pitches:   "[1.0, 1.06, 1.12]"             // +1 semi, +2 semi
+     *   amps:      "[0.8, 1.0, 1.0]"
+     * @param {string} phonemes_json
+     * @param {string} durations_json
+     * @param {string} pitches_json
+     * @param {string} amps_json
+     */
+    set_phonemes_timed(phonemes_json, durations_json, pitches_json, amps_json) {
+        const ptr0 = passStringToWasm0(phonemes_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(durations_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(pitches_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passStringToWasm0(amps_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len3 = WASM_VECTOR_LEN;
+        wasm.clankersvoder_set_phonemes_timed(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
     }
     /**
      * Vowel-pad mode: x=F1 axis (0=high/closed..1=low/open),

@@ -49,11 +49,13 @@ export const clankerssynthgraph_set_param: (a: number, b: number, c: number) => 
 export const clankerssynthgraph_trigger: (a: number, b: number, c: number, d: number) => void;
 export const clankersvoder_new: (a: number) => number;
 export const clankersvoder_phoneme_count: () => number;
+export const clankersvoder_phoneme_map_json: () => [number, number];
 export const clankersvoder_process: (a: number, b: number) => any;
 export const clankersvoder_release: (a: number) => void;
 export const clankersvoder_set_params: (a: number, b: number, c: number) => void;
 export const clankersvoder_set_phoneme: (a: number, b: number) => void;
 export const clankersvoder_set_phonemes: (a: number, b: number, c: number, d: number) => void;
+export const clankersvoder_set_phonemes_timed: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
 export const clankersvoder_set_xy: (a: number, b: number, c: number) => void;
 export const clankersvoder_trigger: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
 export const __wbindgen_externrefs: WebAssembly.Table;

@@ -12,10 +12,11 @@
 /// character formants.  All smoothing uses a per-block exponential approach
 /// so biquad coefficients are recomputed once per `process()` call (~3ms).
 ///
-/// Phoneme alphabet (25 phones, index 0-24):
+/// Phoneme alphabet (34 phones, index 0-33):
 ///   0 AA   1 AE   2 AH   3 AO   4 EH   5 ER   6 EY   7 IH   8 IY
 ///   9 OW  10 UH  11 UW  12 L   13 R   14 W   15 Y   16 M   17 N
 ///  18 F   19 S   20 SH  21 TH  22 V   23 Z   24 ZH
+///  25 SIL 26 HH  27 NG  28 B   29 D   30 G   31 P   32 T   33 K
 ///
 /// CC map:
 ///   CC74  brightness     0-127 → 0.5-1.5× formant freq scale
@@ -54,66 +55,90 @@ struct PhonemeSpec {
     f1: f32, f2: f32, f3: f32,
     b1: f32, b2: f32, b3: f32,
     voicing: f32,   // 0.0=unvoiced  1.0=fully voiced
+    amp:     f32,   // base amplitude (0=silent, 1=full) — stops use 0 for closure
 }
 
 const PHONEMES: &[PhonemeSpec] = &[
     // ── Vowels ────────────────────────────────────────────────────────────────
     //  0 AA  "father"
-    PhonemeSpec { f1: 730., f2: 1090., f3: 2440., b1: 90., b2: 110., b3: 170., voicing: 1.0 },
+    PhonemeSpec { f1: 730., f2: 1090., f3: 2440., b1: 90., b2: 110., b3: 170., voicing: 1.0, amp: 1.00 },
     //  1 AE  "cat"
-    PhonemeSpec { f1: 660., f2: 1720., f3: 2410., b1: 80., b2: 120., b3: 160., voicing: 1.0 },
+    PhonemeSpec { f1: 660., f2: 1720., f3: 2410., b1: 80., b2: 120., b3: 160., voicing: 1.0, amp: 1.00 },
     //  2 AH  "but"
-    PhonemeSpec { f1: 520., f2: 1190., f3: 2390., b1: 70., b2: 100., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 520., f2: 1190., f3: 2390., b1: 70., b2: 100., b3: 150., voicing: 1.0, amp: 1.00 },
     //  3 AO  "caught"
-    PhonemeSpec { f1: 570., f2:  840., f3: 2410., b1: 80., b2:  90., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 570., f2:  840., f3: 2410., b1: 80., b2:  90., b3: 150., voicing: 1.0, amp: 1.00 },
     //  4 EH  "bed"
-    PhonemeSpec { f1: 530., f2: 1840., f3: 2480., b1: 70., b2: 110., b3: 160., voicing: 1.0 },
+    PhonemeSpec { f1: 530., f2: 1840., f3: 2480., b1: 70., b2: 110., b3: 160., voicing: 1.0, amp: 1.00 },
     //  5 ER  "bird"  (retroflex — F3 collapses)
-    PhonemeSpec { f1: 490., f2: 1350., f3: 1690., b1: 80., b2: 150., b3: 200., voicing: 1.0 },
+    PhonemeSpec { f1: 490., f2: 1350., f3: 1690., b1: 80., b2: 150., b3: 200., voicing: 1.0, amp: 1.00 },
     //  6 EY  "say" (steady-state endpoint)
-    PhonemeSpec { f1: 390., f2: 2530., f3: 3000., b1: 70., b2: 110., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 390., f2: 2530., f3: 3000., b1: 70., b2: 110., b3: 150., voicing: 1.0, amp: 1.00 },
     //  7 IH  "bit"
-    PhonemeSpec { f1: 390., f2: 1990., f3: 2550., b1: 70., b2: 110., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 390., f2: 1990., f3: 2550., b1: 70., b2: 110., b3: 150., voicing: 1.0, amp: 1.00 },
     //  8 IY  "beet"
-    PhonemeSpec { f1: 270., f2: 2290., f3: 3010., b1: 60., b2:  90., b3: 120., voicing: 1.0 },
+    PhonemeSpec { f1: 270., f2: 2290., f3: 3010., b1: 60., b2:  90., b3: 120., voicing: 1.0, amp: 1.00 },
     //  9 OW  "go"
-    PhonemeSpec { f1: 450., f2:  800., f3: 2380., b1: 80., b2:  90., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 450., f2:  800., f3: 2380., b1: 80., b2:  90., b3: 150., voicing: 1.0, amp: 1.00 },
     // 10 UH  "book"
-    PhonemeSpec { f1: 440., f2: 1020., f3: 2240., b1: 70., b2:  90., b3: 130., voicing: 1.0 },
+    PhonemeSpec { f1: 440., f2: 1020., f3: 2240., b1: 70., b2:  90., b3: 130., voicing: 1.0, amp: 1.00 },
     // 11 UW  "boot"
-    PhonemeSpec { f1: 300., f2:  870., f3: 2240., b1: 70., b2:  80., b3: 110., voicing: 1.0 },
+    PhonemeSpec { f1: 300., f2:  870., f3: 2240., b1: 70., b2:  80., b3: 110., voicing: 1.0, amp: 1.00 },
     // ── Approximants / nasals ─────────────────────────────────────────────────
     // 12 L
-    PhonemeSpec { f1: 360., f2: 1000., f3: 2500., b1: 90., b2: 130., b3: 170., voicing: 1.0 },
+    PhonemeSpec { f1: 360., f2: 1000., f3: 2500., b1: 90., b2: 130., b3: 170., voicing: 1.0, amp: 0.85 },
     // 13 R
-    PhonemeSpec { f1: 460., f2: 1330., f3: 1700., b1: 90., b2: 130., b3: 200., voicing: 1.0 },
+    PhonemeSpec { f1: 460., f2: 1330., f3: 1700., b1: 90., b2: 130., b3: 200., voicing: 1.0, amp: 0.85 },
     // 14 W
-    PhonemeSpec { f1: 300., f2:  610., f3: 2200., b1: 90., b2: 120., b3: 160., voicing: 1.0 },
+    PhonemeSpec { f1: 300., f2:  610., f3: 2200., b1: 90., b2: 120., b3: 160., voicing: 1.0, amp: 0.85 },
     // 15 Y
-    PhonemeSpec { f1: 280., f2: 2230., f3: 3000., b1: 80., b2: 110., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 280., f2: 2230., f3: 3000., b1: 80., b2: 110., b3: 150., voicing: 1.0, amp: 0.85 },
     // 16 M  nasal murmur
-    PhonemeSpec { f1: 280., f2:  900., f3: 2200., b1: 90., b2: 100., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 280., f2:  900., f3: 2200., b1: 90., b2: 100., b3: 150., voicing: 1.0, amp: 0.70 },
     // 17 N
-    PhonemeSpec { f1: 280., f2: 1500., f3: 2200., b1: 90., b2: 120., b3: 150., voicing: 1.0 },
+    PhonemeSpec { f1: 280., f2: 1500., f3: 2200., b1: 90., b2: 120., b3: 150., voicing: 1.0, amp: 0.70 },
     // ── Unvoiced fricatives ───────────────────────────────────────────────────
     // 18 F  labiodental
-    PhonemeSpec { f1: 800., f2: 2000., f3: 5000., b1: 200., b2: 300., b3: 600., voicing: 0.0 },
+    PhonemeSpec { f1: 800., f2: 2000., f3: 5000., b1: 200., b2: 300., b3: 600., voicing: 0.0, amp: 0.55 },
     // 19 S  alveolar sibilant
-    PhonemeSpec { f1: 900., f2: 2200., f3: 5500., b1: 250., b2: 350., b3: 700., voicing: 0.0 },
+    PhonemeSpec { f1: 900., f2: 2200., f3: 5500., b1: 250., b2: 350., b3: 700., voicing: 0.0, amp: 0.75 },
     // 20 SH postalveolar
-    PhonemeSpec { f1: 800., f2: 1800., f3: 2800., b1: 200., b2: 300., b3: 400., voicing: 0.0 },
+    PhonemeSpec { f1: 800., f2: 1800., f3: 2800., b1: 200., b2: 300., b3: 400., voicing: 0.0, amp: 0.70 },
     // 21 TH dental
-    PhonemeSpec { f1: 800., f2: 1500., f3: 4000., b1: 200., b2: 300., b3: 500., voicing: 0.0 },
+    PhonemeSpec { f1: 800., f2: 1500., f3: 4000., b1: 200., b2: 300., b3: 500., voicing: 0.0, amp: 0.45 },
     // ── Voiced fricatives ─────────────────────────────────────────────────────
     // 22 V
-    PhonemeSpec { f1: 800., f2: 2000., f3: 5000., b1: 200., b2: 300., b3: 600., voicing: 0.8 },
+    PhonemeSpec { f1: 800., f2: 2000., f3: 5000., b1: 200., b2: 300., b3: 600., voicing: 0.8, amp: 0.65 },
     // 23 Z
-    PhonemeSpec { f1: 900., f2: 2200., f3: 5500., b1: 250., b2: 350., b3: 700., voicing: 0.8 },
+    PhonemeSpec { f1: 900., f2: 2200., f3: 5500., b1: 250., b2: 350., b3: 700., voicing: 0.8, amp: 0.80 },
     // 24 ZH  "measure"
-    PhonemeSpec { f1: 800., f2: 1800., f3: 2800., b1: 200., b2: 300., b3: 400., voicing: 0.8 },
+    PhonemeSpec { f1: 800., f2: 1800., f3: 2800., b1: 200., b2: 300., b3: 400., voicing: 0.8, amp: 0.75 },
+    // ── Silence / stop closure ────────────────────────────────────────────────
+    // 25 SIL — used for stop-consonant closures and inter-word gaps
+    PhonemeSpec { f1: 500., f2: 1500., f3: 2500., b1: 80., b2: 100., b3: 150., voicing: 0.0, amp: 0.00 },
+    // ── Aspiration /h/ ────────────────────────────────────────────────────────
+    // 26 HH  — breathy noise through the following vowel's formants
+    PhonemeSpec { f1: 500., f2: 1500., f3: 2500., b1: 150., b2: 200., b3: 300., voicing: 0.0, amp: 0.30 },
+    // ── Velar nasal ───────────────────────────────────────────────────────────
+    // 27 NG  "sing"
+    PhonemeSpec { f1: 280., f2: 2100., f3: 2800., b1: 90., b2: 130., b3: 180., voicing: 1.0, amp: 0.65 },
+    // ── Voiced stop bursts ────────────────────────────────────────────────────
+    // 28 B  bilabial release
+    PhonemeSpec { f1: 320., f2:  900., f3: 2100., b1: 90., b2: 150., b3: 200., voicing: 1.0, amp: 0.95 },
+    // 29 D  alveolar release
+    PhonemeSpec { f1: 320., f2: 1700., f3: 2600., b1: 90., b2: 150., b3: 200., voicing: 1.0, amp: 0.95 },
+    // 30 G  velar release
+    PhonemeSpec { f1: 320., f2: 2000., f3: 2400., b1: 90., b2: 150., b3: 200., voicing: 1.0, amp: 0.95 },
+    // ── Unvoiced stop bursts (noise-driven) ───────────────────────────────────
+    // 31 P  bilabial burst
+    PhonemeSpec { f1: 700., f2: 1500., f3: 3500., b1: 250., b2: 350., b3: 500., voicing: 0.0, amp: 0.85 },
+    // 32 T  alveolar burst
+    PhonemeSpec { f1: 900., f2: 2500., f3: 5500., b1: 250., b2: 350., b3: 700., voicing: 0.0, amp: 0.95 },
+    // 33 K  velar burst
+    PhonemeSpec { f1: 800., f2: 2000., f3: 4000., b1: 250., b2: 350., b3: 550., voicing: 0.0, amp: 0.90 },
 ];
 
-pub const N_PHONEMES: usize = 25;
+pub const N_PHONEMES: usize = 34;
 
 // ── VoderParams ───────────────────────────────────────────────────────────────
 
@@ -146,6 +171,15 @@ impl Default for VoderParams {
 
 // ── VoderVoice ────────────────────────────────────────────────────────────────
 
+/// One entry in a timed phoneme sequence.
+#[derive(Clone, Copy)]
+struct QueueEntry {
+    phoneme:    usize,
+    duration:   usize,   // samples this phoneme runs
+    pitch_mult: f32,     // multiplies freq_hz (1.0 = at midi_note pitch)
+    amp_mult:   f32,     // multiplies phoneme's base amp (1.0 = base)
+}
+
 pub struct VoderVoice {
     osc:          Oscillator,      // glottal (sawtooth)
     glot_lp:      Biquad,          // spectral tilt: ~1 kHz LP for -6dB/oct shaping
@@ -161,14 +195,18 @@ pub struct VoderVoice {
     f_cur:        [f32; 3],        // current F1, F2, F3 (Hz)
     bw_cur:       [f32; 3],        // current BW1, BW2, BW3 (Hz)
     v_cur:        f32,             // current voicing mix
+    amp_cur:      f32,             // current per-phoneme amp
+    pitch_cur:    f32,             // current per-phoneme pitch multiplier
 
     // Targets (set by set_phoneme / set_xy)
     f_tgt:        [f32; 3],
     bw_tgt:       [f32; 3],
     v_tgt:        f32,
+    amp_tgt:      f32,
+    pitch_tgt:    f32,
 
-    // Phoneme queue: each entry is (phoneme_idx, duration_samps)
-    queue:        Vec<(usize, usize)>,
+    // Phoneme queue
+    queue:        Vec<QueueEntry>,
     queue_samps:  usize,           // samples consumed in current phoneme slot
 
     // Performance: coefficient update throttling
@@ -194,9 +232,13 @@ impl VoderVoice {
             f_cur:        [600., 1200., 2400.],
             bw_cur:       [80., 100., 150.],
             v_cur:        1.0,
+            amp_cur:      1.0,
+            pitch_cur:    1.0,
             f_tgt:        [600., 1200., 2400.],
             bw_tgt:       [80., 100., 150.],
             v_tgt:        1.0,
+            amp_tgt:      1.0,
+            pitch_tgt:    1.0,
             queue:        Vec::new(),
             queue_samps:  0,
             coeff_block:  0,
@@ -250,9 +292,10 @@ impl VoderVoice {
     pub fn set_phoneme(&mut self, idx: usize) {
         let idx = idx.min(N_PHONEMES - 1);
         let ph  = &PHONEMES[idx];
-        self.f_tgt  = [ph.f1, ph.f2, ph.f3];
-        self.bw_tgt = [ph.b1, ph.b2, ph.b3];
-        self.v_tgt  = ph.voicing;
+        self.f_tgt   = [ph.f1, ph.f2, ph.f3];
+        self.bw_tgt  = [ph.b1, ph.b2, ph.b3];
+        self.v_tgt   = ph.voicing;
+        self.amp_tgt = ph.amp;
     }
 
     /// Set formant targets directly via a 0..1 vowel-space coordinate.
@@ -265,6 +308,7 @@ impl VoderVoice {
         self.f_tgt[2]  = 1600.0 + y.clamp(0., 1.) * 1400.0;
         self.bw_tgt    = [80., 100., 150.];
         self.v_tgt     = 1.0;
+        self.amp_tgt   = 1.0;
     }
 
     /// Install a phoneme sequence.  On each trigger the voice will step through
@@ -279,16 +323,53 @@ impl VoderVoice {
             (hold_samps / phonemes.len()).max(1)
         };
         for &ph in phonemes {
-            self.queue.push((ph.min(N_PHONEMES - 1), per));
+            self.queue.push(QueueEntry {
+                phoneme:    ph.min(N_PHONEMES - 1),
+                duration:   per,
+                pitch_mult: 1.0,
+                amp_mult:   1.0,
+            });
         }
         self.queue_samps = 0;
-        // Prime: set first phoneme immediately
-        if let Some(&(ph, _)) = self.queue.first() {
-            self.set_phoneme(ph);
+        self.prime_first();
+    }
+
+    /// Install a timed phoneme sequence.  Parallel arrays: each phoneme gets
+    /// its own duration (samples), pitch multiplier, and amp multiplier.
+    /// Shorter arrays are padded with defaults (duration=150ms, pitch=1.0, amp=1.0).
+    pub fn set_queue_detailed(
+        &mut self,
+        phonemes:  &[usize],
+        durations: &[usize],
+        pitches:   &[f32],
+        amps:      &[f32],
+    ) {
+        self.queue.clear();
+        if phonemes.is_empty() { return; }
+        let default_dur = (0.15 * SR) as usize;
+        for (i, &ph) in phonemes.iter().enumerate() {
+            self.queue.push(QueueEntry {
+                phoneme:    ph.min(N_PHONEMES - 1),
+                duration:   durations.get(i).copied().unwrap_or(default_dur).max(1),
+                pitch_mult: pitches.get(i).copied().unwrap_or(1.0).clamp(0.25, 4.0),
+                amp_mult:   amps.get(i).copied().unwrap_or(1.0).clamp(0.0, 2.0),
+            });
+        }
+        self.queue_samps = 0;
+        self.prime_first();
+    }
+
+    fn prime_first(&mut self) {
+        if let Some(&first) = self.queue.first() {
+            self.set_phoneme(first.phoneme);
+            self.pitch_tgt = first.pitch_mult;
+            self.amp_tgt   = PHONEMES[first.phoneme].amp * first.amp_mult;
             // Snap formants to target instantly at note start (no glide from previous state)
-            self.f_cur  = self.f_tgt;
-            self.bw_cur = self.bw_tgt;
-            self.v_cur  = self.v_tgt;
+            self.f_cur     = self.f_tgt;
+            self.bw_cur    = self.bw_tgt;
+            self.v_cur     = self.v_tgt;
+            self.amp_cur   = self.amp_tgt;
+            self.pitch_cur = self.pitch_tgt;
         }
     }
 
@@ -299,13 +380,15 @@ impl VoderVoice {
 
         // ── Advance phoneme queue ─────────────────────────────────────────────
         if !self.queue.is_empty() {
-            let (_ph, dur) = self.queue[0];
+            let dur = self.queue[0].duration;
             self.queue_samps += n;
             if self.queue_samps >= dur {
                 self.queue.remove(0);
                 self.queue_samps = 0;
-                if let Some(&(next_ph, _)) = self.queue.first() {
-                    self.set_phoneme(next_ph);
+                if let Some(&next) = self.queue.first() {
+                    self.set_phoneme(next.phoneme);
+                    self.pitch_tgt = next.pitch_mult;
+                    self.amp_tgt   = PHONEMES[next.phoneme].amp * next.amp_mult;
                 } else {
                     // All phonemes consumed — trigger release
                     self.release();
@@ -336,6 +419,14 @@ impl VoderVoice {
             self.bw_cur[i] = self.bw_tgt[i] + (self.bw_cur[i] - self.bw_tgt[i]) * alpha_n;
         }
         self.v_cur = self.v_tgt + (self.v_cur - self.v_tgt) * alpha_n;
+
+        // Amp tracks phoneme changes with a faster time constant (~8ms) so stops
+        // get a crisp attack/closure rather than a slow fade.  Pitch follows the
+        // user's coarticulation setting (prosody glide).
+        let amp_tau_samps = (0.008 * SR).max(1.0);
+        let amp_alpha_n   = (-(n as f32) / amp_tau_samps).exp();
+        self.amp_cur   = self.amp_tgt   + (self.amp_cur   - self.amp_tgt)   * amp_alpha_n;
+        self.pitch_cur = self.pitch_tgt + (self.pitch_cur - self.pitch_tgt) * alpha_n;
 
         // Apply brightness scale to F1-F3 (F4/F5 are pre-computed fixed formants)
         let br = p.brightness.clamp(0.5, 1.5);
@@ -374,7 +465,7 @@ impl VoderVoice {
                 if self.vib_phase >= 1.0 { self.vib_phase -= 1.0; }
                 (self.vib_phase * core::f32::consts::TAU).sin() * vib_cents * (2.0f32.ln() / 1200.0)
             } else { 0.0 };
-            let f_vib = self.freq_hz * (vib_mod).exp();
+            let f_vib = self.freq_hz * self.pitch_cur * (vib_mod).exp();
 
             // Glottal source: PolyBLEP saw → spectral-tilt LP
             let glot_raw  = self.osc.next(f_vib, Waveform::Saw);
@@ -395,8 +486,8 @@ impl VoderVoice {
                 formant_sum += self.resonators[i].process(source) * GAINS[i];
             }
 
-            // Amp envelope
-            let amp    = self.env.process() * p.volume;
+            // Amp envelope * per-phoneme amp (for stop closures / intonation)
+            let amp    = self.env.process() * p.volume * self.amp_cur;
             *s        += formant_sum * amp;
         }
 
@@ -460,6 +551,16 @@ impl VoderEngine {
 
     pub fn set_queue_for_last(&mut self, phonemes: &[usize], hold_samps: usize) {
         self.voices[self.last_voice].set_queue(phonemes, hold_samps);
+    }
+
+    pub fn set_queue_detailed_for_last(
+        &mut self,
+        phonemes:  &[usize],
+        durations: &[usize],
+        pitches:   &[f32],
+        amps:      &[f32],
+    ) {
+        self.voices[self.last_voice].set_queue_detailed(phonemes, durations, pitches, amps);
     }
 
     pub fn process(&mut self, buf: &mut [f32], p: &VoderParams) {

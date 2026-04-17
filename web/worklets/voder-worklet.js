@@ -10,6 +10,7 @@
  *   { type:'setParams', ccJson }          — live param update
  *   { type:'phoneme',  idx }              — change phoneme target (0-24)
  *   { type:'phonemes', array, holdSamples } — phoneme sequence (JSON array)
+ *   { type:'phonemesTimed', phonemes, durations, pitches, amps } — timed sequence
  *   { type:'xy',       x, y }             — vowel-pad mode (0..1 each axis)
  *   { type:'stop' }                       — clear queue, silence immediately
  *
@@ -17,10 +18,11 @@
  *   { type:'ready' }
  *   { type:'error', message }
  *
- * Phoneme indices (0-24):
+ * Phoneme indices (0-33):
  *   0 AA   1 AE   2 AH   3 AO   4 EH   5 ER   6 EY   7 IH   8 IY
  *   9 OW  10 UH  11 UW  12 L   13 R   14 W   15 Y   16 M   17 N
  *  18 F   19 S   20 SH  21 TH  22 V   23 Z   24 ZH
+ *  25 SIL 26 HH  27 NG  28 B   29 D   30 G   31 P   32 T   33 K
  */
 
 const { initSync, ClankersVoder } = globalThis;
@@ -69,6 +71,15 @@ class VoderWorkletProcessor extends AudioWorkletProcessor {
                         this._engine.set_phonemes(arr, data.holdSamples ?? 0);
                     } catch (_) {}
                     break;
+                case 'phonemesTimed':
+                    try {
+                        const ph = JSON.stringify(data.phonemes  ?? []);
+                        const du = JSON.stringify(data.durations ?? []);
+                        const pi = JSON.stringify(data.pitches   ?? []);
+                        const am = JSON.stringify(data.amps      ?? []);
+                        this._engine.set_phonemes_timed(ph, du, pi, am);
+                    } catch (_) {}
+                    break;
                 case 'xy':
                     try { this._engine.set_xy(data.x ?? 0.5, data.y ?? 0.5); } catch (_) {}
                     break;
@@ -101,7 +112,17 @@ class VoderWorkletProcessor extends AudioWorkletProcessor {
                 // Trigger first so last_voice is updated before phoneme queue is set
                 this._engine.trigger(ev.midiNote, ev.velocity,
                                      ev.holdSamples ?? 0, ev.ccJson ?? '{}');
-                if (ev.phonemes) {
+                if (ev.timed) {
+                    try {
+                        const t = ev.timed;
+                        this._engine.set_phonemes_timed(
+                            JSON.stringify(t.phonemes  ?? []),
+                            JSON.stringify(t.durations ?? []),
+                            JSON.stringify(t.pitches   ?? []),
+                            JSON.stringify(t.amps      ?? []),
+                        );
+                    } catch (_) {}
+                } else if (ev.phonemes) {
                     try {
                         const arr = Array.isArray(ev.phonemes)
                             ? JSON.stringify(ev.phonemes)

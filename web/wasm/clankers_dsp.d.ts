@@ -260,10 +260,11 @@ export class ClankersSynthGraph {
  * noise drive a bank of 5 parallel biquad resonators whose centre frequencies
  * interpolate smoothly between phoneme targets (coarticulation).
  *
- * Phoneme indices (0-24):
+ * Phoneme indices (0-33):
  *   0 AA   1 AE   2 AH   3 AO   4 EH   5 ER   6 EY   7 IH   8 IY
  *   9 OW  10 UH  11 UW  12 L   13 R   14 W   15 Y   16 M   17 N
  *  18 F   19 S   20 SH  21 TH  22 V   23 Z   24 ZH
+ *  25 SIL 26 HH  27 NG  28 B   29 D   30 G   31 P   32 T   33 K
  *
  * CC map:
  *   CC74  brightness     0-127 → 0.5-1.5× formant freq scale
@@ -290,9 +291,14 @@ export class ClankersVoder {
     [Symbol.dispose](): void;
     constructor(seed: number);
     /**
-     * Number of phonemes in the built-in table (25).
+     * Number of phonemes in the built-in table (34).
      */
     static phoneme_count(): number;
+    /**
+     * Phoneme name → index map, as a JSON object:
+     * `{"AA":0,"AE":1,"AH":2,...,"SIL":25,"HH":26,"NG":27,"B":28,...}`
+     */
+    static phoneme_map_json(): string;
     /**
      * Render n_samples of audio.  Returns mono Float32Array.
      */
@@ -314,6 +320,19 @@ export class ClankersVoder {
      * The last triggered voice will step through the sequence over its hold duration.
      */
     set_phonemes(json: string, hold_samps: number): void;
+    /**
+     * Set a timed phoneme sequence: parallel JSON arrays of phoneme indices,
+     * per-phoneme durations in samples, per-phoneme pitch multipliers (1.0=base
+     * note), and per-phoneme amplitude multipliers.  Any shorter array is
+     * padded with defaults (150ms / 1.0 / 1.0).
+     *
+     * Example (say "HI" on A3 with rising pitch):
+     *   phonemes:  "[26, 0, 8]"                    // HH AA IY
+     *   durations: "[1800, 6000, 4000]"            // samples @ 44.1k
+     *   pitches:   "[1.0, 1.06, 1.12]"             // +1 semi, +2 semi
+     *   amps:      "[0.8, 1.0, 1.0]"
+     */
+    set_phonemes_timed(phonemes_json: string, durations_json: string, pitches_json: string, amps_json: string): void;
     /**
      * Vowel-pad mode: x=F1 axis (0=high/closed..1=low/open),
      * y=F2 axis (0=back..1=front).  All voices update live.
@@ -378,11 +397,13 @@ export interface InitOutput {
     readonly clankerssynthgraph_trigger: (a: number, b: number, c: number, d: number) => void;
     readonly clankersvoder_new: (a: number) => number;
     readonly clankersvoder_phoneme_count: () => number;
+    readonly clankersvoder_phoneme_map_json: () => [number, number];
     readonly clankersvoder_process: (a: number, b: number) => any;
     readonly clankersvoder_release: (a: number) => void;
     readonly clankersvoder_set_params: (a: number, b: number, c: number) => void;
     readonly clankersvoder_set_phoneme: (a: number, b: number) => void;
     readonly clankersvoder_set_phonemes: (a: number, b: number, c: number, d: number) => void;
+    readonly clankersvoder_set_phonemes_timed: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
     readonly clankersvoder_set_xy: (a: number, b: number, c: number) => void;
     readonly clankersvoder_trigger: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly __wbindgen_externrefs: WebAssembly.Table;
