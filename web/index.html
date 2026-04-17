@@ -7096,7 +7096,7 @@ if (typeof TextEncoder === 'undefined') {
       fqKnob.onChange = v => delay.setFilterQ(v);
 
       document.getElementById('fx-delay-time').addEventListener('change', function () {
-        delay.setDelayTime(bpmDelaySeconds(this.value));
+        delay.setDelayTime(bpmDelaySeconds(this.value), this.value);
       });
       document.getElementById('fx-delay-ltype').addEventListener('change', function () {
         delay.setLfoType(this.value);
@@ -7108,6 +7108,7 @@ if (typeof TextEncoder === 'undefined') {
         _fxOn[0] = !_fxOn[0];
         this.classList.toggle('active', _fxOn[0]);
         delay.setWet(_fxOn[0] ? _fxK.d_wet.val : 0);
+        delay.setOn(_fxOn[0]);
       });
       document.getElementById('fx-delay-pp').addEventListener('click', function () {
         delay.setPingPong(!delay._p.ping_pong);
@@ -7130,6 +7131,7 @@ if (typeof TextEncoder === 'undefined') {
         _fxOn[1] = !_fxOn[1];
         this.classList.toggle('active', _fxOn[1]);
         shape.setWet(_fxOn[1] ? _fxK.w_wet.val : 0);
+        shape.setOn(_fxOn[1]);
       });
 
       // BPM → delay time sync
