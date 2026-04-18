@@ -136,7 +136,7 @@ module.exports = async function handler(req, res) {
     const response = await callLLM(
       provider, apiKey, model, CONDUCTOR_SYSTEM,
       [{ role: 'user', content: userContent }],
-      8192,
+      32768,
     );
 
     let data;

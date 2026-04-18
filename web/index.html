@@ -4266,6 +4266,17 @@
           <option value="8">2 bars</option>
         </select>
       </label>
+      <span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.75rem;margin-left:.4rem;">
+        OCT
+        <button id="room-oct-down" title="Shift visible range down an octave"
+          style="background:#0e0e0e;color:#00d4ff;border:1px solid #004060;font-family:monospace;font-size:.72rem;padding:.2rem .45rem;border-radius:2px;cursor:pointer;">−</button>
+        <button id="room-oct-up" title="Shift visible range up an octave"
+          style="background:#0e0e0e;color:#00d4ff;border:1px solid #004060;font-family:monospace;font-size:.72rem;padding:.2rem .45rem;border-radius:2px;cursor:pointer;">+</button>
+        <button id="room-oct-expand" title="Expand visible range by an octave"
+          style="background:#0e0e0e;color:#00d4ff;border:1px solid #004060;font-family:monospace;font-size:.72rem;padding:.2rem .45rem;border-radius:2px;cursor:pointer;">⤢</button>
+        <button id="room-oct-fit" title="Fit range to existing notes"
+          style="background:#0e0e0e;color:#00d4ff;border:1px solid #004060;font-family:monospace;font-size:.72rem;padding:.2rem .45rem;border-radius:2px;cursor:pointer;">FIT</button>
+      </span>
     </div>
     <canvas id="room-roll"></canvas>
     <div id="room-knobs-wrap"></div>
@@ -7693,6 +7704,35 @@ if (typeof TextEncoder === 'undefined') {
         }
       }
 
+      shiftOctave(delta) {
+        if (this.isDrum || !this._sheet) return;
+        const lo = this.pitchMin + delta * 12;
+        const hi = this.pitchMax + delta * 12;
+        if (lo < 0 || hi > 127) return;
+        this.pitchMin = lo;
+        this.pitchMax = hi;
+        this._resize();
+        this.draw(-1);
+      }
+
+      expandOctave() {
+        if (this.isDrum || !this._sheet) return;
+        this.pitchMin = Math.max(0, this.pitchMin - 6);
+        this.pitchMax = Math.min(127, this.pitchMax + 6);
+        this._resize();
+        this.draw(-1);
+      }
+
+      fitOctave() {
+        if (this.isDrum || !this._sheet) return;
+        const pitches = this.notes.map(n => n.pitch);
+        if (!pitches.length) return;
+        this.pitchMin = Math.max(0, Math.min(...pitches) - 4);
+        this.pitchMax = Math.min(127, Math.max(...pitches) + 4);
+        this._resize();
+        this.draw(-1);
+      }
+
       _nudgeSelected(dBeat, dPitch) {
         for (const sn of this.selectedNotes) this._deleteNote(sn.beat, sn.pitch);
         const moved = this.selectedNotes.map(sn => ({
@@ -8548,6 +8588,11 @@ if (typeof TextEncoder === 'undefined') {
       if (seq) seq.setLoopBeats(beats);
       if (_roll) { _roll.loopBeats = beats; if (!_roll._raf) _roll.draw(-1); }
     });
+
+    document.getElementById('room-oct-down').addEventListener('click', () => { if (_roll) _roll.shiftOctave(-1); });
+    document.getElementById('room-oct-up').addEventListener('click', () => { if (_roll) _roll.shiftOctave(1); });
+    document.getElementById('room-oct-expand').addEventListener('click', () => { if (_roll) _roll.expandOctave(); });
+    document.getElementById('room-oct-fit').addEventListener('click', () => { if (_roll) _roll.fitOctave(); });
 
     document.getElementById('btn-back').addEventListener('click', () => {
       if (_roll) { _roll.stopLoop(); _roll = null; }

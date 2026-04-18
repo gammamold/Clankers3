@@ -285,17 +285,39 @@ function extractAndRepairJSON(response) {
 }
 
 // Canonical sheet normalization:
-//   - Forces d:0.25 on every step (uniform 16th-note grid)
-//   - Pads to the next whole-bar boundary (multiples of 16 steps)
-//   - Minimum 32 steps (2 bars), maximum 128 steps (8 bars)
+//   - Forces d:0.25 on every step (uniform 16th-note grid).
+//   - Truncates to the nearest whole-bar boundary at or below the LLM's output
+//     so we never leave a partially-composed trailing bar.
+//   - Loop-fills from existing bars up to 128 steps (8 bars). The LLM output is
+//     often truncated by max_tokens; repeating earlier bars is musically
+//     coherent — way better than silent padding.
+//   - Minimum 32 steps (2 bars), maximum 128 steps (8 bars).
 function normalizeSheet(sheet) {
   if (!sheet || !Array.isArray(sheet.steps) || !sheet.steps.length) return;
   for (const step of sheet.steps) step.d = 0.25;
-  const len = sheet.steps.length;
-  const targetBars = Math.min(8, Math.max(2, Math.ceil(len / 16)));
-  const target = targetBars * 16;
-  while (sheet.steps.length < target) sheet.steps.push({ d: 0.25, tracks: [] });
-  if (sheet.steps.length > 128) sheet.steps.length = 128;
+
+  // Drop any incomplete trailing bar (keep only whole 16-step bars).
+  const bars = Math.floor(sheet.steps.length / 16);
+  if (bars >= 1) sheet.steps.length = bars * 16;
+
+  // Ensure at least 2 bars; loop-fill up to 8 bars.
+  const TARGET = 128;
+  const MIN = 32;
+  if (sheet.steps.length < MIN) {
+    // Not enough content to loop — pad with silence to minimum.
+    while (sheet.steps.length < MIN) sheet.steps.push({ d: 0.25, tracks: [] });
+  }
+  const sourceLen = sheet.steps.length;
+  if (sourceLen && sourceLen < TARGET) {
+    // Deep-clone existing bars and append until we hit 128 steps.
+    let i = 0;
+    while (sheet.steps.length < TARGET) {
+      const src = sheet.steps[i % sourceLen];
+      sheet.steps.push(JSON.parse(JSON.stringify(src)));
+      i++;
+    }
+  }
+  if (sheet.steps.length > TARGET) sheet.steps.length = TARGET;
 }
 
 module.exports = { callLLM, extractAndRepairJSON, normalizeSheet };

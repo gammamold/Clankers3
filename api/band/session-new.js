@@ -143,7 +143,7 @@ module.exports = async function handler(req, res) {
       const bassistReply = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
         [{ role: 'user', content: `${briefBlock}\n\nYou are The Bassist. Propose an opening Music Sheet that serves the groove. Output the full JSON.` }],
-        8192,
+        32768,
       );
       const transcript = [{ role: 'The Bassist', content: bassistReply.slice(0, 300).replace(/\{[\s\S]*/s, '').trim() || 'Here\'s my take on the groove...' }];
 
@@ -154,7 +154,7 @@ module.exports = async function handler(req, res) {
           { role: 'assistant', content: bassistReply },
           { role: 'user', content: 'You are the Conductor. Refine this into the final definitive Music Sheet. Output ONLY the final JSON.' },
         ],
-        8192,
+        32768,
       );
 
       let sheet;
@@ -174,7 +174,7 @@ module.exports = async function handler(req, res) {
       const response = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
         [{ role: 'user', content: `${briefBlock}\n\nGenerate the opening ClankerBoy JSON Music Sheet.` }],
-        8192,
+        32768,
       );
 
       let sheet;

@@ -85,7 +85,7 @@ module.exports = async function handler(req, res) {
     const response = await callLLM(
       provider, apiKey, model, EVOLVE_SYSTEM,
       [{ role: 'user', content: userContent }],
-      8192,
+      32768,
     );
 
     let evolved;
