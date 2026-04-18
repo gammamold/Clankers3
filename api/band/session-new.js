@@ -2,16 +2,17 @@
 // Generates an opening Music Sheet JSON from a brief using Claude.
 // Stateless — no session stored server-side; client owns the sheet.
 const { callLLM, extractAndRepairJSON, normalizeSheet } = require('./utils');
+const { buildHarmonicContext } = require('./harmony');
 
 const SHEET_SYSTEM = `You are The Clankers — an AI electronic music band. Given a brief, compose a complete opening section as a ClankerBoy JSON Music Sheet.
 
 INSTRUMENTS (track IDs):
-  t:1  Buchla 259/292   Percussive plucks/arps (MIDI 48–72)
-  t:2  Pro-One Bass     Sub bass (MIDI 0–23 primarily)
-  t:3  Rhodes EP        FM tine piano (MIDI 36–84), always use "dur" field
-  t:5  Voder           Vocal formant synth — pitch + phoneme sequence, always use dur
-  t:6  HybridSynth Pads Chordal sustain — always include "dur" field
-  t:10 Drums MS-20      Kick:36  Snare:38  HH Cl:42  HH Op:46  Tom L:41  Tom M:45  Clap:48
+  t:1  POLY FM         Percussive plucks/arps (MIDI 48–72)
+  t:2  BASS FM         Sub bass (MIDI 0–23 primarily)
+  t:3  ORGAN           Sustained melodic voice (MIDI 36–84), always use "dur" field
+  t:5  VODER           Vocal formant synth — pitch + phoneme sequence, always use dur
+  t:6  POLY SYNTH      Chordal sustain pads — always include "dur" field
+  t:10 DRUMS           Kick:36  Snare:38  HH Cl:42  HH Op:46  Tom L:41  Tom M:45  Clap:48
 
 STEP COUNT — GOLDEN RULE:
   128 steps at d:0.25 = 8 bars. This is the canonical composition size.
@@ -38,35 +39,39 @@ DILLA / HUMAN FEEL — mandatory for all styles:
   If a drum pattern looks metronomically perfect, it is wrong. Break it.
 
 STYLE RECIPES:
-  FUNK/GROOVE: BPM 95–120. Dense closed hats, ghost snares on unexpected 16ths, syncopated kick, bass walks the root with passing tones. Pads/Rhodes hold whole-bar chords.
+  FUNK/GROOVE: BPM 95–120. Dense closed hats, ghost snares on unexpected 16ths, syncopated kick, bass walks the root with passing tones. POLY SYNTH/ORGAN hold whole-bar chords.
   HOUSE: BPM 120–128. 4-on-floor kick, clap(48) on 2&4, HH(42) on every 8th, HH open(46) on upbeats. Bass: root notes with occasional 16th approach.
   DETROIT TECHNO: BPM 125–135. 4-on-floor kick, sparse clap(48), rolling 16th HH with velocity drops. Bass: repetitive minimal riff, CC sweep implied.
-  LO-FI: BPM 75–95. Kick + snare only, 30–40% empty steps, pads dur:16+, slow rhodes melody, Dilla feel essential.
-  IDM: BPM 140–170. Displaced kicks, irregular HH, ghost notes everywhere, Buchla percussive plucks, pads change chord per 4 bars.
-  AMBIENT: BPM 80–100. Minimal or no drums. Long pad sustains (dur:16+), sparse Rhodes, Buchla textures.
+  LO-FI: BPM 75–95. Kick + snare only, 30–40% empty steps, POLY SYNTH dur:16+, slow ORGAN melody, Dilla feel essential.
+  IDM: BPM 140–170. Displaced kicks, irregular HH, ghost notes everywhere, POLY FM percussive plucks, POLY SYNTH changes chord per 4 bars.
+  AMBIENT: BPM 80–100. Minimal or no drums. Long POLY SYNTH sustains (dur:16+), sparse ORGAN, POLY FM textures.
 
-BASS RULES:
-  - Bass (t:2) first note per phrase must include full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
+BASS FM RULES:
+  - BASS FM (t:2) first note per phrase must include full CC patch: {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   - Subsequent bass notes: only per-note CCs if needed (e.g. {"74":50,"23":26})
   - MIDI 0–23 primarily. Max 24 for fills.
   - Use "dur" on bass notes to sustain across steps.
 
-PADS & RHODES:
-  - Pads (t:6) and Rhodes (t:3): ALWAYS include "dur". One trigger, long hold.
-  - Pads: trigger once per chord, dur:4.0–16.0. Change chord every 2–4 bars.
-  - Rhodes: melodic phrases, dur:0.5–4.0 per note.
+POLY SYNTH & ORGAN:
+  - POLY SYNTH (t:6) and ORGAN (t:3): ALWAYS include "dur". One trigger, long hold.
+  - POLY SYNTH: trigger once per chord, dur:4.0–16.0. Change chord every 2–4 bars.
+  - ORGAN: melodic phrases, dur:0.5–4.0 per note.
 
-VODER (t:5) — PHONEME SEQUENCING:
-  - Always include both "dur" and "ph" fields. MIDI 36–84.
+VODER (t:5) — SINGING:
+  - Prefer the "lyric" field with plain English — the engine converts it to phonemes automatically.
+    Example: { "t":5, "n":[60], "v":80, "dur":4, "lyric":"hello" }
+  - For precise rhythmic hooks (robotic stabs, vowel pads), you may still use "ph" (phoneme array).
+  - Always include "dur". MIDI 36–84. Use "lyric" OR "ph" — if both, "ph" wins.
   - "ph": array of phoneme indices spread evenly over dur.
   - Phonemes: 0:AA 1:AE 2:AH 3:AO 4:EH 5:ER 6:EY 7:IH 8:IY 9:OW 10:UH 11:UW
               12:L 13:R 14:W 15:Y 16:M 17:N  18:F 19:S 20:SH 21:TH  22:V 23:Z 24:ZH
   - CC: 74=brightness(64=neutral) 73=attack 72=release 77=coartic(30=smooth,80=robotic) 75=vibrato_depth 76=vibrato_rate 20=voicing(0=auto)
   - Default CC (first note per phrase): {"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0}
   - Uses: sustained vowel pads ph:[8] or ph:[9] dur:4–16; melodic syllables ph:[19,8]="see" ph:[2,16]="ahm" ph:[4,15]="yeah"; robotic speech = short dur + cc.77 high
-  - Example: { "t":5, "n":[60], "v":80, "dur":4, "ph":[2,16], "cc":{"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0} }
+  - Example (lyric): { "t":5, "n":[60], "v":80, "dur":4, "lyric":"yeah", "cc":{"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0} }
+  - Example (phonemes): { "t":5, "n":[60], "v":80, "dur":4, "ph":[2,16], "cc":{"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0} }
 
-BUCHLA (t:1):
+POLY FM (t:1):
   - Percussive plucks and arps. Short notes. MIDI 48–72.
   - Use for rhythmic top-line texture, not chord pads.
 
@@ -125,12 +130,19 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(401).json({ error: 'Missing apiKey' });
   if (!brief) return res.status(400).json({ error: 'Missing brief' });
 
+  const harmony = buildHarmonicContext({
+    brief,
+    section,
+    tension: SECTION_TENSION[section] ?? 0.35,
+  });
+  const briefBlock = `Brief: ${brief}\nSection: ${section}\n\n${harmony}`;
+
   try {
     if (!solo) {
       // Two-pass: Bassist proposes → Conductor refines
       const bassistReply = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
-        [{ role: 'user', content: `Brief: ${brief}\nSection: ${section}\n\nYou are The Bassist. Propose an opening Music Sheet that serves the groove. Output the full JSON.` }],
+        [{ role: 'user', content: `${briefBlock}\n\nYou are The Bassist. Propose an opening Music Sheet that serves the groove. Output the full JSON.` }],
         8192,
       );
       const transcript = [{ role: 'The Bassist', content: bassistReply.slice(0, 300).replace(/\{[\s\S]*/s, '').trim() || 'Here\'s my take on the groove...' }];
@@ -138,7 +150,7 @@ module.exports = async function handler(req, res) {
       const conductorReply = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
         [
-          { role: 'user', content: `Brief: ${brief}\nSection: ${section}\n\nYou are The Bassist. Propose an opening Music Sheet that serves the groove. Output the full JSON.` },
+          { role: 'user', content: `${briefBlock}\n\nYou are The Bassist. Propose an opening Music Sheet that serves the groove. Output the full JSON.` },
           { role: 'assistant', content: bassistReply },
           { role: 'user', content: 'You are the Conductor. Refine this into the final definitive Music Sheet. Output ONLY the final JSON.' },
         ],
@@ -161,7 +173,7 @@ module.exports = async function handler(req, res) {
       // Solo mode: single pass
       const response = await callLLM(provider, apiKey, model,
         SHEET_SYSTEM,
-        [{ role: 'user', content: `Brief: ${brief}\nSection: ${section}\n\nGenerate the opening ClankerBoy JSON Music Sheet.` }],
+        [{ role: 'user', content: `${briefBlock}\n\nGenerate the opening ClankerBoy JSON Music Sheet.` }],
         8192,
       );
 

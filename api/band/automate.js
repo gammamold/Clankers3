@@ -6,19 +6,19 @@ Your job is to suggest live CC (MIDI continuous controller) values for each inst
 
 INSTRUMENTS AND CC PARAMETERS (all values 0–127 integers):
 
-bass (Pro-One):
+bass (BASS FM):
   71 = filter_cutoff  (0=closed, 127=wide open)
   74 = fm_index       (0=clean, 127=full FM distortion)
   23 = filter_decay   (0=snap, 127=slow)
   75 = amp_decay      (0=tight, 127=long tail)
 
-buchla (259/292):
+buchla (POLY FM):
   74 = cutoff         (0=dark, 127=bright)
   20 = fold_amount    (0=clean, 127=heavy)
   19 = release        (0=tight, 127=long)
   21 = filter_mod     (0=static, 127=deep mod)
 
-pads (HybridSynth):
+pads (POLY SYNTH):
   74 = filter         (0=closed, 127=open)
   71 = env_amt        (0=none, 127=full sweep)
   73 = attack         (0=instant, 127=slow)
@@ -27,7 +27,7 @@ pads (HybridSynth):
   91 = space_wet      (0=dry, 127=full wet)
   88 = reverb_size    (0=small, 127=large)
 
-rhodes (FM tine piano):
+rhodes (ORGAN):
   74 = brightness     (0=dark, 127=bright)
   72 = release        (0=short, 127=long)
   73 = attack         (0=hard, 127=soft)
@@ -35,7 +35,7 @@ rhodes (FM tine piano):
   26 = chorus_depth   (0=off, 127=thick)
   27 = chorus_rate    (0=slow, 127=fast)
 
-voder (vocal formant):
+voder (VODER — vocal formant):
   74 = brightness     (64=neutral, >64=bright, <64=dark)
   20 = voicing        (0=auto, 127=full voiced)
   73 = attack         (5=fast, 80=slow)

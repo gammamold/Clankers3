@@ -2,6 +2,7 @@
 // Evolves the current Music Sheet into a new section.
 // Stateless — full sheet sent by client.
 const { callLLM, extractAndRepairJSON, normalizeSheet } = require('./utils');
+const { buildHarmonicContext } = require('./harmony');
 
 const EVOLVE_SYSTEM = `You are the Conductor of The Clankers 3 — an AI electronic music band.
 You will receive a Music Sheet and a target section name. Evolve the sheet for that new section.
@@ -19,12 +20,12 @@ EVOLUTION RULES:
   - Keep bpm IDENTICAL to the input sheet — do NOT change it
   - Adjust tension, energy to match the section guide above
   - Meaningfully change the pattern: vary note choices, rhythm density, velocities, CC sweeps
-  - Add or remove layers (e.g. bring in buchla on verse2, strip bass on bridge)
+  - Add or remove layers (e.g. bring in POLY FM on verse2, strip BASS FM on bridge)
   - Preserve the key and genre unless the section demands a shift
-  - Keep MIDI ranges: Drums t:10 d:0.25 no-dur; Pads t:6 + Rhodes t:3 + Voder t:5 always use dur; Bass MIDI 0–23; Voder MIDI 36–84
+  - Keep MIDI ranges: DRUMS t:10 d:0.25 no-dur; POLY SYNTH t:6 + ORGAN t:3 + VODER t:5 always use dur; BASS FM MIDI 0–23; VODER MIDI 36–84
   - ACCENT: add "a":1 on any track for emphasis (velocity × 1.3). Use sparingly — downbeat kick, stabbed chord, peak snare. Omit or 0 for normal steps.
-  - Voder t:5 always includes both dur and ph (phoneme array). Default CC: {"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0}
-  - Bass first note per phrase: CC {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
+  - VODER t:5 always includes dur and one of: "lyric" (plain English, preferred) or "ph" (phoneme index array). Default CC: {"74":64,"73":5,"72":50,"77":30,"75":20,"76":64,"20":0}
+  - BASS FM first note per phrase: CC {"71":42,"73":8,"75":50,"79":80,"72":22,"18":10}
   - Output 128 steps (8 bars) at d:0.25 unless the input sheet uses a different length
 
 DRUM RICHNESS — mandatory in every section:
@@ -34,8 +35,10 @@ DRUM RICHNESS — mandatory in every section:
   Vary ALL velocities — kick v:100–115, snare v:70–95, hats v:45–80. Never flat.
   If a drum pattern looks metronomically perfect, it is wrong. Break it.
 
-VODER (t:5) — PHONEME SEQUENCING:
-  "ph" field: array of phoneme indices spread evenly over "dur". Always include both.
+VODER (t:5) — SINGING:
+  Preferred: "lyric" field with plain English — engine converts to phonemes, e.g. { "t":5, "n":[60], "dur":2, "lyric":"sing it" }.
+  Precise: "ph" field — array of phoneme indices spread evenly over "dur".
+  Always include "dur". If both provided, "ph" wins.
   Phonemes: 0:AA 1:AE 2:AH 3:AO 4:EH 5:ER 6:EY 7:IH 8:IY 9:OW 10:UH 11:UW
             12:L 13:R 14:W 15:Y 16:M 17:N  18:F 19:S 20:SH 21:TH  22:V 23:Z 24:ZH
   CC: 74=brightness(64=neutral) 73=attack 72=release 77=coartic(30=smooth,80=robotic) 75=vibrato_depth 76=vibrato_rate 20=voicing(0=auto)
@@ -61,9 +64,18 @@ module.exports = async function handler(req, res) {
   if (!section) return res.status(400).json({ error: 'Missing section' });
 
   const prevSection = sheet.explanation?.section ?? 'previous section';
+  const SECTION_TENSION = { verse1: 0.35, verse2: 0.45, bridge: 0.60, outro: 0.50, instrumental: 0.45, verse3: 0.50 };
+  const harmony = buildHarmonicContext({
+    brief: hint || sheet.explanation?.intent || sheet.explanation?.style || '',
+    section,
+    tension: SECTION_TENSION[section] ?? sheet.tension ?? 0.45,
+    existingKey: sheet.explanation?.key,
+    existingProgression: sheet.explanation?.progression,
+  });
   const userContent = [
     `TARGET SECTION: ${section}`,
     hint ? `SPECIAL REQUEST FROM USER: ${hint}` : '',
+    harmony,
     `Current sheet (previous section: ${prevSection}):\n${JSON.stringify(sheet, null, 2)}`,
     synth_context || '',
     `Generate a FULL EVOLVED SHEET for "${section}". This must sound distinctly different from the ${prevSection} above — different rhythmic density, pattern structure, and arrangement. Set explanation.section to "${section}". Output valid JSON only.`,

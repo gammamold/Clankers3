@@ -5063,6 +5063,7 @@
     import { midiIn } from './midi-input.js';
     import { modularSync } from './modular-sync.js';
     import { sayText as voderSayText } from './synth/voder-say.js';
+    import { textToPhonemes as _voderTextToPhonemes } from './synth/voder-g2p.js';
 
     // ── Synth Lab singleton ───────────────────────────────────────────────────────
     const synthLab = new SynthLab();
@@ -5876,11 +5877,43 @@ if (typeof TextEncoder === 'undefined') {
       const note = +document.getElementById('voder-say-note').value;
       const wpm  = +document.getElementById('voder-say-wpm').value;
       if (!text.trim() || !voderNode) return;
-      voderSayText(voderNode, ctx, text, {
+      // If the sequencer isn't running, voderNode has no path to destination.
+      // Temporarily route it through a preview gain → LPF → limiter for this
+      // utterance only. Matches the per-channel attenuation the seq applies,
+      // so the (hot) raw voder output never clips the destination.
+      const previewRoute = !seq?.isPlaying;
+      let previewGain = null, previewLpf = null, previewLimiter = null;
+      if (previewRoute) {
+        previewGain = ctx.createGain();
+        previewGain.gain.value = 0.1;
+        previewLpf = ctx.createBiquadFilter();
+        previewLpf.type = 'lowpass';
+        previewLpf.frequency.value = 6000;
+        previewLpf.Q.value = 0.5;
+        previewLimiter = ctx.createDynamicsCompressor();
+        previewLimiter.threshold.value = -6;
+        previewLimiter.knee.value = 0;
+        previewLimiter.ratio.value = 20;
+        previewLimiter.attack.value = 0.003;
+        previewLimiter.release.value = 0.1;
+        voderNode.connect(previewGain);
+        previewGain.connect(previewLpf);
+        previewLpf.connect(previewLimiter);
+        previewLimiter.connect(ctx.destination);
+      }
+      const { durationSec } = voderSayText(voderNode, ctx, text, {
         midiNote: note,
         wpm,
         ccJson:   JSON.stringify(voderCC()),
       });
+      if (previewRoute) {
+        setTimeout(() => {
+          try { voderNode.disconnect(previewGain); } catch (_) {}
+          try { previewGain.disconnect(); } catch (_) {}
+          try { previewLpf.disconnect(); } catch (_) {}
+          try { previewLimiter.disconnect(); } catch (_) {}
+        }, (durationSec + 0.3) * 1000);
+      }
     });
     sayInput?.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); sayBtn.click(); }
@@ -6731,8 +6764,33 @@ if (typeof TextEncoder === 'undefined') {
       chatMsgs.scrollTop = chatMsgs.scrollHeight;
     }
 
+    // Expand any voder tracks that carry a plain-English `lyric` field into a
+    // phoneme array (`ph`). LLM-friendly: the model can write "hello world"
+    // instead of phoneme indices. Runs once on sheet ingest; the sequencer and
+    // storage format still use `ph`.
+    function _expandVoderLyrics(sheet) {
+      if (!sheet?.steps) return;
+      for (const step of sheet.steps) {
+        if (!Array.isArray(step?.tracks)) continue;
+        for (const tr of step.tracks) {
+          if (tr?.t !== 5 || !tr.lyric) continue;
+          if (Array.isArray(tr.ph) && tr.ph.length) continue;
+          try {
+            const toks = _voderTextToPhonemes(String(tr.lyric));
+            const ph = [];
+            for (const tok of toks) {
+              if (tok.punct) continue;
+              for (const p of tok.phonemes) ph.push(p);
+            }
+            if (ph.length) tr.ph = ph;
+          } catch (_) { /* leave note without ph — plays a sustained vowel */ }
+        }
+      }
+    }
+
     function sheetToSequencer(sheet, { autoStore = false, autoStoreNext = false, autoPlay = false, focusMain = true } = {}) {
       try {
+        _expandVoderLyrics(sheet);
         const steps = sheet.steps;
         if (!steps || !steps.length) return;
         const bpm = sheet.bpm ?? 120;
@@ -8285,16 +8343,6 @@ if (typeof TextEncoder === 'undefined') {
         card.addEventListener('click', () => openRoom(f));
 
         const ascii = card.querySelector('.face-ascii');
-        card.addEventListener('mouseenter', () => {
-          const c = INST_COLORS[f.id] ?? '#00d4ff';
-          ascii.style.color = c;
-          ascii.style.textShadow = `0 0 6px ${c}, 0 0 14px ${c}, 0 0 30px ${c}99`;
-        });
-        card.addEventListener('mouseleave', () => {
-          ascii.style.color = '';
-          ascii.style.textShadow = '';
-        });
-
         _faceAsciiMap[f.id] = ascii;
         row.appendChild(card);
       });
