@@ -5956,7 +5956,7 @@ if (typeof TextEncoder === 'undefined') {
         };
         seq.onTrigger = _pulseFace;
         seq.setVoderLpf(vk['vod-lpf'].val);
-        seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
+        seq.bassOctaveOffset = bassOctKnob.val * 12;
         seq.buchlaOctaveOffset = buchlaOctave * 12;
         seq.synthLab = synthLab;  // enable Synth Lab track playback
         seq.midiOut   = midiOut;  // enable MIDI output (REACH THE OUTSIDE)
@@ -6057,7 +6057,7 @@ if (typeof TextEncoder === 'undefined') {
     // Bass YZ wired via sendBassParams() called from bassXY profiles above
     bassOctKnob.onChange = () => {
       sendBassParams();
-      if (seq) seq.bassOctaveOffset = 48 + bassOctKnob.val * 12;
+      if (seq) seq.bassOctaveOffset = bassOctKnob.val * 12;
     };
 
     // Poly FM wired via sendBuchlaParams() called from polyfmXY profiles above
