@@ -6326,6 +6326,10 @@ if (typeof TextEncoder === 'undefined') {
       catch (e) { log('Store failed — invalid JSON'); return; }
       // Capture current FX state into the sheet
       if (rack) sheet.fx = rack.getParams();
+      // Capture current loop length (room LOOP select) so SONG mode can respect
+      // the authored bar length when concatenating patterns.
+      const loopSel = parseFloat(document.getElementById('room-loop-len')?.value || '0');
+      if (loopSel > 0) sheet.loopBeats = loopSel;
       const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
       patternBank[activeSlot] = { sheet, label };
       patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
@@ -6405,7 +6409,11 @@ if (typeof TextEncoder === 'undefined') {
 
     selectSlot(0); // arrSlots now initialised — safe to call
 
-    // Build concatenated song sheet from arrangement
+    // Build concatenated song sheet from arrangement.
+    // Each pattern contributes its authored loop length (sheet.loopBeats,
+    // captured at STORE time from the room LOOP select) — any steps past the
+    // cap are dropped so each pattern plays for exactly the bar length the
+    // user chose. Patterns without loopBeats play their full step total.
     function buildSongSheet() {
       const steps = [];
       arrBeatOffsets = [];
@@ -6416,10 +6424,15 @@ if (typeof TextEncoder === 'undefined') {
         if (!pat) continue;
         arrBeatOffsets.push(totalBeats);
         bpm = bpm ?? pat.sheet.bpm;
-        for (const step of pat.sheet.steps || []) {
-          totalBeats += step.d ?? 0.25;
+        const patSteps = pat.sheet.steps || [];
+        const cap = pat.sheet.loopBeats && pat.sheet.loopBeats > 0 ? pat.sheet.loopBeats : Infinity;
+        let patBeats = 0;
+        for (const step of patSteps) {
+          if (patBeats >= cap) break;
+          steps.push(step);
+          patBeats += step.d ?? 0.25;
         }
-        steps.push(...pat.sheet.steps);
+        totalBeats += Math.min(patBeats, cap === Infinity ? patBeats : cap);
       }
       return { bpm: bpm ?? 120, steps, loopBeats: totalBeats };
     }
@@ -6837,6 +6850,8 @@ if (typeof TextEncoder === 'undefined') {
           const label = sheet.explanation?.section ?? sheet.explanation?.song ?? `P${activeSlot + 1}`;
           const stored = Object.assign({}, sheet);
           if (rack) stored.fx = rack.getParams();
+          const loopSel = parseFloat(document.getElementById('room-loop-len')?.value || '0');
+          if (loopSel > 0) stored.loopBeats = loopSel;
           patternBank[activeSlot] = { sheet: stored, label };
           patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
           patBtns[activeSlot].classList.add('has-pat');
