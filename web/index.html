@@ -6032,7 +6032,10 @@ if (typeof TextEncoder === 'undefined') {
             stopViz();
             log('[seq] ■ song ended');
           };
-          s.stop(); s.load(sheet); s.start();
+          s.stop();
+          s.setLoopBeats(0); // clear any per-bar loop override so the full song plays
+          s.load(sheet);
+          s.start();
           if (sheet.fx) applyFxParams(sheet.fx);
           startArrIndicator();
           log(`[seq] ▶ SONG ${bpm} BPM — ${songArrangement.length} patterns — ${sheet.steps.length} steps`);
