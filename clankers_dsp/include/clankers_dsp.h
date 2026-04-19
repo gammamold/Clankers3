@@ -27,12 +27,12 @@
  *   (`_set_*`) can be called from another thread only if you provide
  *   your own synchronisation. No internal locking.
  *
- * Status
+ * Errors
  * ------
- *   Drums is the first engine exposed via C ABI as proof-of-concept.
- *   Bass, Buchla, Rhodes, Pads, Voder, SynthGraph, GraphFx will follow
- *   the same pattern (opaque handle + flat functions + CC-JSON strings
- *   for param bundles). See clankers_dsp/README_FFI.md.
+ *   Fallible constructors (currently the graph engines) return NULL on
+ *   failure. Retrieve the reason with `clankers_last_error()`, which is
+ *   per-thread and only valid until the next FFI call on that thread.
+ *   Infallible constructors never return NULL.
  */
 
 #ifndef CLANKERS_DSP_H
@@ -315,6 +315,99 @@ uint32_t clankers_voder_phoneme_count(void);
 
 const char* clankers_voder_param_info(const ClankersVoder* voder);
 void        clankers_voder_set_param (ClankersVoder* voder, uint32_t idx, float value);
+
+/* ── Error reporting (thread-local) ────────────────────────────────────────
+ *
+ * Fallible FFI calls (currently only the graph constructors) record their
+ * error message here on failure. Successful calls clear it.
+ *
+ * The returned pointer is valid only until the next FFI call on this thread.
+ * Copy the string if you need to retain it. Do NOT free it.
+ * Returns NULL if the last fallible call on this thread succeeded.
+ */
+const char* clankers_last_error(void);
+
+/* ── SynthGraph ────────────────────────────────────────────────────────────
+ *
+ * Graph-based polyphonic synth engine — nodes (oscillators, filters, envs,
+ * LFOs, effects) + connections, designed at runtime (typically by an LLM)
+ * and described in JSON. Topology is frozen at construction; only parameter
+ * values change at runtime. The exposed parameter list depends on the
+ * specific graph loaded, so the descriptor lives on the handle.
+ *
+ *   const char* g = "{\"nodes\":[...],\"connections\":[...]}";
+ *   ClankersGraph* sg = clankers_graph_new(g, 8);
+ *   if (!sg) { fprintf(stderr, "%s\n", clankers_last_error()); return; }
+ *   clankers_graph_trigger(sg, 60, 1.0f, 22050);
+ *   clankers_graph_process(sg, L, R, 512);
+ *   ...
+ *   clankers_graph_free(sg);
+ */
+
+typedef struct ClankersGraph ClankersGraph;
+
+/* Parse JSON and build a synth graph. num_voices is clamped to 1..=16.
+ * Returns NULL on parse or validation failure; see clankers_last_error. */
+ClankersGraph* clankers_graph_new(const char* graph_json, uint8_t num_voices);
+
+/* Destroy a graph. NULL is a no-op. */
+void clankers_graph_free(ClankersGraph* graph);
+
+/* Total number of parameters exposed by this graph (sum across all nodes). */
+uint32_t clankers_graph_param_count(const ClankersGraph* graph);
+
+/* Set one parameter by flat index (0..param_count). Out-of-range ignored. */
+void clankers_graph_set_param(ClankersGraph* graph, uint32_t idx, float value);
+
+/* JSON descriptor array for this specific graph's parameters. The pointer
+ * is valid for the handle's lifetime; caller must NOT free it.
+ *   [{"index":0,"node":"osc1","param":"freq","min":20,"max":20000,...}, ...]
+ */
+const char* clankers_graph_param_info(const ClankersGraph* graph);
+
+/* Trigger a note with round-robin voice stealing. */
+void clankers_graph_trigger(
+    ClankersGraph* graph,
+    uint8_t        midi_note,
+    float          velocity,
+    uint32_t       hold_samples);
+
+/* Render n_samples stereo samples into caller-owned L/R buffers. */
+void clankers_graph_process(
+    ClankersGraph* graph,
+    float*         out_l,
+    float*         out_r,
+    uint32_t       n_samples);
+
+/* ── GraphFx ───────────────────────────────────────────────────────────────
+ *
+ * Graph-based stereo effects processor — same node library as SynthGraph
+ * but processes an external stereo input. The graph must contain exactly
+ * one `input` node and one `output` node.
+ */
+
+typedef struct ClankersGraphFx ClankersGraphFx;
+
+/* Parse JSON and build an FX graph. Returns NULL on failure;
+ * see clankers_last_error. */
+ClankersGraphFx* clankers_graphfx_new(const char* graph_json);
+
+/* Destroy. NULL is a no-op. */
+void clankers_graphfx_free(ClankersGraphFx* fx);
+
+uint32_t    clankers_graphfx_param_count(const ClankersGraphFx* fx);
+void        clankers_graphfx_set_param  (ClankersGraphFx* fx, uint32_t idx, float value);
+const char* clankers_graphfx_param_info (const ClankersGraphFx* fx);
+
+/* Process n_samples frames. All four buffers must have capacity >= n_samples.
+ * Outputs are overwritten (not mixed). */
+void clankers_graphfx_process(
+    ClankersGraphFx* fx,
+    const float*     in_l,
+    const float*     in_r,
+    float*           out_l,
+    float*           out_r,
+    uint32_t         n_samples);
 
 #ifdef __cplusplus
 } /* extern "C" */

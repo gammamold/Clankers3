@@ -22,11 +22,14 @@ use crate::cc::{
     parse_usize_array, parse_float_array, parse_voder_params,
 };
 use crate::drums::DrumsEngine;
+use crate::graph::engine::{GraphFx, SynthGraph};
 use crate::pads::{PadsEngine, PadsParams};
 use crate::rhodes::{RhodesEngine, RhodesParams};
 use crate::voder::{self, VoderEngine, VoderParams};
 use core::ffi::c_char;
 use core::ffi::CStr;
+use std::cell::RefCell;
+use std::ffi::CString;
 
 /// Safely convert a `const char*` from C into `Option<&str>`.
 /// `None` if the pointer is null, the string isn't valid UTF-8, or after
@@ -616,4 +619,237 @@ pub unsafe extern "C" fn clankers_voder_set_param(
     value: f32,
 ) {
     (*ptr).params.set_param(idx, value);
+}
+
+// ── Error reporting (thread-local) ───────────────────────────────────────────
+
+thread_local! {
+    static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
+}
+
+fn set_last_error(msg: impl Into<String>) {
+    let s = msg.into();
+    let c = CString::new(s.replace('\0', " ")).unwrap_or_else(|_| CString::new("error").unwrap());
+    LAST_ERROR.with(|slot| *slot.borrow_mut() = Some(c));
+}
+
+fn clear_last_error() {
+    LAST_ERROR.with(|slot| *slot.borrow_mut() = None);
+}
+
+/// Return the most recent error message set by this thread, or null if the
+/// last fallible call on this thread succeeded.
+///
+/// Lifetime: the returned pointer is valid only until the next FFI call on
+/// this thread. Copy the string if you need to retain it. The caller must
+/// NOT free the pointer.
+#[no_mangle]
+pub extern "C" fn clankers_last_error() -> *const c_char {
+    LAST_ERROR.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|c| c.as_ptr())
+            .unwrap_or(core::ptr::null())
+    })
+}
+
+// ── SynthGraph (graph-based polyphonic synth, LLM-designed) ──────────────────
+
+/// Opaque handle to a `SynthGraph`. Topology is frozen at construction —
+/// parameter values can change at runtime but nodes/connections cannot.
+/// Construct with [`clankers_graph_new`], destroy with [`clankers_graph_free`].
+pub struct ClankersGraph {
+    engine: SynthGraph,
+    param_info_c: CString,
+}
+
+/// Allocate a new SynthGraph from a JSON description. Returns null on parse
+/// or validation failure; call [`clankers_last_error`] to retrieve the
+/// reason. `num_voices` is clamped to 1..=16 internally.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_new(
+    graph_json: *const c_char,
+    num_voices: u8,
+) -> *mut ClankersGraph {
+    if graph_json.is_null() {
+        set_last_error("graph_json is null");
+        return core::ptr::null_mut();
+    }
+    let s = match CStr::from_ptr(graph_json).to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            set_last_error("graph_json is not valid UTF-8");
+            return core::ptr::null_mut();
+        }
+    };
+    match SynthGraph::new(s, num_voices) {
+        Ok(engine) => {
+            let info = CString::new(engine.param_info_json())
+                .unwrap_or_else(|_| CString::new("[]").unwrap());
+            clear_last_error();
+            Box::into_raw(Box::new(ClankersGraph {
+                engine,
+                param_info_c: info,
+            }))
+        }
+        Err(e) => {
+            set_last_error(e);
+            core::ptr::null_mut()
+        }
+    }
+}
+
+/// Destroy a SynthGraph. Passing null is a no-op.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_free(ptr: *mut ClankersGraph) {
+    if !ptr.is_null() {
+        drop(Box::from_raw(ptr));
+    }
+}
+
+/// Total number of params exposed by this graph (sum across all nodes).
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_param_count(ptr: *const ClankersGraph) -> u32 {
+    (*ptr).engine.param_count() as u32
+}
+
+/// Set one parameter by flat index (0..param_count). Out-of-range indices
+/// are ignored.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_set_param(
+    ptr: *mut ClankersGraph,
+    idx: u32,
+    value: f32,
+) {
+    (*ptr).engine.set_param(idx as usize, value);
+}
+
+/// Pointer to a NUL-terminated JSON descriptor array built at construction
+/// time. Unlike the fixed engines, each graph has its own descriptor — the
+/// pointer is valid for the lifetime of this handle only. The caller must
+/// NOT free it.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_param_info(ptr: *const ClankersGraph) -> *const c_char {
+    (*ptr).param_info_c.as_ptr()
+}
+
+/// Trigger a note with round-robin voice stealing.
+/// `hold_samples`: note-on duration in samples.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_trigger(
+    ptr: *mut ClankersGraph,
+    midi_note: u8,
+    velocity: f32,
+    hold_samples: u32,
+) {
+    (*ptr).engine.trigger(midi_note, velocity, hold_samples);
+}
+
+/// Render `n_samples` stereo samples into caller-owned L/R buffers.
+/// Each buffer must have capacity >= `n_samples`. Buffers are overwritten.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_process(
+    ptr: *mut ClankersGraph,
+    out_l: *mut f32,
+    out_r: *mut f32,
+    n_samples: u32,
+) {
+    let n = n_samples as usize;
+    let l = core::slice::from_raw_parts_mut(out_l, n);
+    let r = core::slice::from_raw_parts_mut(out_r, n);
+    (*ptr).engine.process_stereo_lr(l, r);
+}
+
+// ── GraphFx (graph-based stereo effects processor) ───────────────────────────
+
+/// Opaque handle to a `GraphFx`. Like `ClankersGraph` but processes an
+/// external stereo input instead of synthesising voices. Graph must contain
+/// exactly one `input` and one `output` node.
+pub struct ClankersGraphFx {
+    engine: GraphFx,
+    param_info_c: CString,
+}
+
+/// Allocate a new GraphFx from a JSON description. Returns null on parse or
+/// validation failure; call [`clankers_last_error`] for the reason.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graphfx_new(
+    graph_json: *const c_char,
+) -> *mut ClankersGraphFx {
+    if graph_json.is_null() {
+        set_last_error("graph_json is null");
+        return core::ptr::null_mut();
+    }
+    let s = match CStr::from_ptr(graph_json).to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            set_last_error("graph_json is not valid UTF-8");
+            return core::ptr::null_mut();
+        }
+    };
+    match GraphFx::new(s) {
+        Ok(engine) => {
+            let info = CString::new(engine.param_info_json())
+                .unwrap_or_else(|_| CString::new("[]").unwrap());
+            clear_last_error();
+            Box::into_raw(Box::new(ClankersGraphFx {
+                engine,
+                param_info_c: info,
+            }))
+        }
+        Err(e) => {
+            set_last_error(e);
+            core::ptr::null_mut()
+        }
+    }
+}
+
+/// Destroy a GraphFx. Passing null is a no-op.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graphfx_free(ptr: *mut ClankersGraphFx) {
+    if !ptr.is_null() {
+        drop(Box::from_raw(ptr));
+    }
+}
+
+/// Total number of params exposed by this FX graph.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graphfx_param_count(ptr: *const ClankersGraphFx) -> u32 {
+    (*ptr).engine.param_count() as u32
+}
+
+/// Set one parameter by flat index. Out-of-range indices are ignored.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graphfx_set_param(
+    ptr: *mut ClankersGraphFx,
+    idx: u32,
+    value: f32,
+) {
+    (*ptr).engine.set_param(idx as usize, value);
+}
+
+/// Pointer to a NUL-terminated JSON descriptor array built at construction
+/// time. Valid for the handle's lifetime; caller must NOT free it.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graphfx_param_info(ptr: *const ClankersGraphFx) -> *const c_char {
+    (*ptr).param_info_c.as_ptr()
+}
+
+/// Process `n_samples` frames. All four buffers must have capacity >=
+/// `n_samples`. Outputs are overwritten, not mixed.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graphfx_process(
+    ptr: *mut ClankersGraphFx,
+    in_l:  *const f32,
+    in_r:  *const f32,
+    out_l: *mut f32,
+    out_r: *mut f32,
+    n_samples: u32,
+) {
+    let n = n_samples as usize;
+    let il = core::slice::from_raw_parts(in_l, n);
+    let ir = core::slice::from_raw_parts(in_r, n);
+    let ol = core::slice::from_raw_parts_mut(out_l, n);
+    let or = core::slice::from_raw_parts_mut(out_r, n);
+    (*ptr).engine.process_stereo_lr(il, ir, ol, or);
 }

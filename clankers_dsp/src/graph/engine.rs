@@ -210,6 +210,30 @@ impl SynthGraph {
     pub fn param_count(&self) -> usize {
         self.params.len()
     }
+
+    /// Zero-alloc stereo render into caller-owned L/R buffers. Buffers must
+    /// be the same length; that length sets `n_samples`. Overwrites (not mixes).
+    pub fn process_stereo_lr(&mut self, out_l: &mut [f32], out_r: &mut [f32]) {
+        let n = out_l.len().min(out_r.len());
+        for i in 0..n {
+            let mut sum_l = 0.0f32;
+            let mut sum_r = 0.0f32;
+            for voice in self.voices.iter_mut() {
+                if voice.is_active() {
+                    let (l, r) = voice.tick(
+                        &self.exec_order,
+                        &self.connections,
+                        &self.params,
+                        &self.param_offsets,
+                    );
+                    sum_l += l;
+                    sum_r += r;
+                }
+            }
+            out_l[i] = sum_l.tanh();
+            out_r[i] = sum_r.tanh();
+        }
+    }
 }
 
 // ── GraphFx — continuous audio FX processor ──────────────────────────────────
@@ -393,6 +417,60 @@ impl GraphFx {
 
     pub fn param_count(&self) -> usize {
         self.params.len()
+    }
+
+    /// Zero-alloc stereo process into caller-owned L/R buffers. All three
+    /// buffers must be the same length; that length sets `n_samples`.
+    /// Overwrites outputs (not mixes).
+    pub fn process_stereo_lr(
+        &mut self,
+        in_l:  &[f32],
+        in_r:  &[f32],
+        out_l: &mut [f32],
+        out_r: &mut [f32],
+    ) {
+        let max_slots = super::node::MAX_SLOTS;
+        let n = out_l.len().min(out_r.len()).min(in_l.len()).min(in_r.len());
+
+        for i in 0..n {
+            let xl = in_l[i];
+            let xr = in_r[i];
+
+            self.signals.fill(0.0);
+            if let Some(inp_idx) = self.input_node {
+                self.signals[inp_idx * max_slots]     = xl;
+                self.signals[inp_idx * max_slots + 1] = xr;
+            }
+
+            for &ni in &self.exec_order {
+                let mut inputs = [0.0f32; super::node::MAX_SLOTS];
+                for conn in &self.connections {
+                    if conn.dst_node == ni {
+                        inputs[conn.dst_slot] += self.signals[conn.src_node * max_slots + conn.src_slot];
+                    }
+                }
+                if Some(ni) == self.input_node {
+                    inputs[0] += xl;
+                    inputs[1] += xr;
+                }
+
+                let p_off = self.param_offsets[ni];
+                let p_end = if ni + 1 < self.param_offsets.len() {
+                    self.param_offsets[ni + 1]
+                } else {
+                    self.params.len()
+                };
+
+                let outputs = self.nodes[ni].tick(&inputs, &self.params[p_off..p_end], 440.0, 1.0);
+                for s in 0..max_slots {
+                    self.signals[ni * max_slots + s] = outputs[s];
+                }
+            }
+
+            let oi = self.output_node;
+            out_l[i] = self.signals[oi * max_slots];
+            out_r[i] = self.signals[oi * max_slots + 1];
+        }
     }
 }
 
