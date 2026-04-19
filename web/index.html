@@ -6449,23 +6449,7 @@ if (typeof TextEncoder === 'undefined') {
         added++;
       }
       ARR_COUNT = arrSlots.length;
-      // Auto-populate newly-added slots so SONG mode plays them. We cycle
-      // through filled pattern-bank slots so the song actually extends instead
-      // of silently ending on empty slots.
       if (added > 0) {
-        const filled = patternBank
-          .map((p, idx) => (p ? idx : -1))
-          .filter(i => i >= 0);
-        if (filled.length) {
-          const startFrom = songArrangement.length
-            ? filled.indexOf(songArrangement[songArrangement.length - 1])
-            : -1;
-          let fi = (startFrom + 1) % filled.length;
-          while (songArrangement.length < arrSlots.length) {
-            songArrangement.push(filled[fi]);
-            fi = (fi + 1) % filled.length;
-          }
-        }
         updateArrGrid();
         log(`+${added} arrangement slot${added > 1 ? 's' : ''} (${ARR_COUNT}/${ARR_MAX})`);
       }
@@ -9069,6 +9053,9 @@ if (typeof TextEncoder === 'undefined') {
         [...songArr.children].forEach((slot, i) => {
           const orig = legArr.children[i];
           if (!orig) return;
+          if (i < songArrangement.length) {
+            slot.title = 'Click: select  ·  Right-click: remove this slot';
+          }
           slot.addEventListener('click', (e) => {
             // If slot has a pattern, select it for preview instead of toggling arrangement
             if (i < songArrangement.length) {
@@ -9083,6 +9070,36 @@ if (typeof TextEncoder === 'undefined') {
               orig.click();
             }
           });
+          // Right-click (or long-press on touch) removes just this slot from the
+          // arrangement, so the user can edit a song in place instead of clearing
+          // everything and re-entering it.
+          slot.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (i >= songArrangement.length) return;
+            songArrangement.splice(i, 1);
+            if (_songSelectedArrIdx === i) _songSelectedArrIdx = -1;
+            else if (_songSelectedArrIdx > i) _songSelectedArrIdx--;
+            updateArrGrid();
+            log(`[seq] removed arrangement slot ${i + 1}`);
+          });
+          // Touch-friendly long-press (~600 ms) as an alternative to right-click.
+          let _lpTimer = null;
+          slot.addEventListener('pointerdown', (e) => {
+            if (e.pointerType !== 'touch') return;
+            if (i >= songArrangement.length) return;
+            _lpTimer = setTimeout(() => {
+              songArrangement.splice(i, 1);
+              if (_songSelectedArrIdx === i) _songSelectedArrIdx = -1;
+              else if (_songSelectedArrIdx > i) _songSelectedArrIdx--;
+              updateArrGrid();
+              log(`[seq] removed arrangement slot ${i + 1}`);
+            }, 600);
+          });
+          const _cancelLp = () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } };
+          slot.addEventListener('pointerup', _cancelLp);
+          slot.addEventListener('pointercancel', _cancelLp);
+          slot.addEventListener('pointerleave', _cancelLp);
+          slot.addEventListener('pointermove', _cancelLp);
         });
         // Re-apply selection highlight that may have been wiped by innerHTML rebuild
         if (_songSelectedArrIdx >= 0) {
