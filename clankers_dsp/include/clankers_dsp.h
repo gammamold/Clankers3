@@ -17,8 +17,11 @@
  *     undefined behaviour.
  *   - Buffers passed to `_process` are caller-owned and overwritten in
  *     place (not mixed). No allocation occurs in the audio path.
- *   - Sample rate is 44_100 Hz. (For now. A future revision will add
- *     per-engine SR configuration.)
+ *   - Sample rate is configured per engine at construction via the
+ *     `sample_rate` argument (Hz) on every `_new(...)` call, and can be
+ *     changed mid-life with `_set_sample_rate(engine, sample_rate)`.
+ *     `_set_sample_rate` wipes any in-flight voice state — call it from
+ *     the `prepareToPlay` lifecycle, not the audio thread.
  *
  * Thread safety
  * -------------
@@ -56,8 +59,13 @@ extern "C" {
 
 typedef struct ClankersDrums ClankersDrums;
 
-/* Allocate a new drum engine. Never returns NULL. */
-ClankersDrums* clankers_drums_new(uint32_t seed);
+/* Allocate a new drum engine. Never returns NULL.
+ * sample_rate: audio device SR in Hz (e.g. 44100, 48000). */
+ClankersDrums* clankers_drums_new(uint32_t seed, float sample_rate);
+
+/* Reconfigure SR — rebuilds SR-dependent state and wipes voices.
+ * Call from prepareToPlay, not the audio thread. */
+void clankers_drums_set_sample_rate(ClankersDrums* drums, float sample_rate);
 
 /* Destroy an engine previously returned by clankers_drums_new. */
 void clankers_drums_free(ClankersDrums* drums);
@@ -99,7 +107,8 @@ void clankers_drums_process(ClankersDrums* drums, float* output, uint32_t n_samp
 
 typedef struct ClankersBass ClankersBass;
 
-ClankersBass* clankers_bass_new(uint32_t seed);
+ClankersBass* clankers_bass_new(uint32_t seed, float sample_rate);
+void          clankers_bass_set_sample_rate(ClankersBass* bass, float sample_rate);
 void          clankers_bass_free(ClankersBass* bass);
 
 /* Update stored params from a CC-JSON object like {"71":80,"74":60}.
@@ -154,7 +163,8 @@ void clankers_bass_set_param(ClankersBass* bass, uint32_t idx, float value);
 
 typedef struct ClankersBuchla ClankersBuchla;
 
-ClankersBuchla* clankers_buchla_new(void);
+ClankersBuchla* clankers_buchla_new(float sample_rate);
+void            clankers_buchla_set_sample_rate(ClankersBuchla* buchla, float sample_rate);
 void            clankers_buchla_free(ClankersBuchla* buchla);
 
 /* Update stored params from CC-JSON. NULL/""/"{}" is a no-op. */
@@ -184,7 +194,8 @@ void clankers_buchla_set_param(ClankersBuchla* buchla, uint32_t idx, float value
 
 typedef struct ClankersRhodes ClankersRhodes;
 
-ClankersRhodes* clankers_rhodes_new(void);
+ClankersRhodes* clankers_rhodes_new(float sample_rate);
+void            clankers_rhodes_set_sample_rate(ClankersRhodes* rhodes, float sample_rate);
 void            clankers_rhodes_free(ClankersRhodes* rhodes);
 
 /* Update stored params from CC-JSON. NULL/""/"{}" is a no-op. */
@@ -221,7 +232,8 @@ void        clankers_rhodes_set_param (ClankersRhodes* rhodes, uint32_t idx, flo
 
 typedef struct ClankersPads ClankersPads;
 
-ClankersPads* clankers_pads_new(void);
+ClankersPads* clankers_pads_new(float sample_rate);
+void          clankers_pads_set_sample_rate(ClankersPads* pads, float sample_rate);
 void          clankers_pads_free(ClankersPads* pads);
 
 /* Update stored params from CC-JSON. NULL/""/"{}" is a no-op. */
@@ -264,7 +276,8 @@ void        clankers_pads_set_param (ClankersPads* pads, uint32_t idx, float val
 
 typedef struct ClankersVoder ClankersVoder;
 
-ClankersVoder* clankers_voder_new(uint32_t seed);
+ClankersVoder* clankers_voder_new(uint32_t seed, float sample_rate);
+void           clankers_voder_set_sample_rate(ClankersVoder* voder, float sample_rate);
 void           clankers_voder_free(ClankersVoder* voder);
 
 /* Update stored params from CC-JSON. NULL/""/"{}" is a no-op. */
@@ -348,7 +361,10 @@ typedef struct ClankersGraph ClankersGraph;
 
 /* Parse JSON and build a synth graph. num_voices is clamped to 1..=16.
  * Returns NULL on parse or validation failure; see clankers_last_error. */
-ClankersGraph* clankers_graph_new(const char* graph_json, uint8_t num_voices);
+ClankersGraph* clankers_graph_new(const char* graph_json, uint8_t num_voices, float sample_rate);
+
+/* Rebuild voices at a new SR; topology + params preserved, voice state wiped. */
+void clankers_graph_set_sample_rate(ClankersGraph* graph, float sample_rate);
 
 /* Destroy a graph. NULL is a no-op. */
 void clankers_graph_free(ClankersGraph* graph);
@@ -390,7 +406,10 @@ typedef struct ClankersGraphFx ClankersGraphFx;
 
 /* Parse JSON and build an FX graph. Returns NULL on failure;
  * see clankers_last_error. */
-ClankersGraphFx* clankers_graphfx_new(const char* graph_json);
+ClankersGraphFx* clankers_graphfx_new(const char* graph_json, float sample_rate);
+
+/* Rebuild nodes at a new SR; topology + params preserved. */
+void clankers_graphfx_set_sample_rate(ClankersGraphFx* fx, float sample_rate);
 
 /* Destroy. NULL is a no-op. */
 void clankers_graphfx_free(ClankersGraphFx* fx);

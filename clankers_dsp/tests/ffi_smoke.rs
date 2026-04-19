@@ -15,7 +15,7 @@ fn c(s: &str) -> CString { CString::new(s).unwrap() }
 #[test]
 fn drums_produces_audio() {
     unsafe {
-        let d = clankers_drums_new(0xbeef);
+        let d = clankers_drums_new(0xbeef, 44100.0);
         assert!(!d.is_null());
         clankers_drums_trigger(d, 0, 1.0);
         let mut buf = vec![0.0f32; 512];
@@ -28,7 +28,7 @@ fn drums_produces_audio() {
 #[test]
 fn bass_null_ccjson_preserves_params() {
     unsafe {
-        let b = clankers_bass_new(1);
+        let b = clankers_bass_new(1, 44100.0);
         let cc = c(r#"{"74":90}"#);
         clankers_bass_set_params(b, cc.as_ptr());
         // Empty/"{}" must NOT wipe stored params — plain note-on should still play.
@@ -44,7 +44,7 @@ fn bass_null_ccjson_preserves_params() {
 fn graph_invalid_json_returns_null_with_error() {
     unsafe {
         let bad = c("not json at all");
-        let g = clankers_graph_new(bad.as_ptr(), 4);
+        let g = clankers_graph_new(bad.as_ptr(), 4, 44100.0);
         assert!(g.is_null());
         let err = clankers_last_error();
         assert!(!err.is_null());
@@ -58,7 +58,7 @@ fn graph_missing_output_returns_null() {
     unsafe {
         // Valid JSON, but no output node → should fail validation
         let json = c(r#"{"nodes":[{"id":"o1","type":"oscillator"}],"connections":[]}"#);
-        let g = clankers_graph_new(json.as_ptr(), 4);
+        let g = clankers_graph_new(json.as_ptr(), 4, 44100.0);
         assert!(g.is_null());
         let err = clankers_last_error();
         assert!(!err.is_null());
@@ -80,7 +80,7 @@ fn graph_minimal_produces_audio() {
                 {"from":"osc1:0","to":"out:0"}
             ]
         }"#);
-        let g = clankers_graph_new(json.as_ptr(), 4);
+        let g = clankers_graph_new(json.as_ptr(), 4, 44100.0);
         assert!(!g.is_null(), "graph_new failed: {}",
             CStr::from_ptr(clankers_last_error()).to_string_lossy());
 
@@ -111,6 +111,57 @@ fn graph_minimal_produces_audio() {
 }
 
 #[test]
+fn engines_render_at_48k_and_after_set_sample_rate() {
+    unsafe {
+        // Construct each engine at 48k and render a buffer; expect non-zero output.
+        let d = clankers_drums_new(0xbeef, 48000.0);
+        clankers_drums_trigger(d, 0, 1.0);
+        let mut buf = vec![0.0f32; 1024];
+        clankers_drums_process(d, buf.as_mut_ptr(), buf.len() as u32);
+        assert!(buf.iter().any(|x| x.abs() > 1e-4), "drums at 48k");
+        // Switch SR live, re-trigger, render again.
+        clankers_drums_set_sample_rate(d, 44100.0);
+        clankers_drums_trigger(d, 0, 1.0);
+        buf.fill(0.0);
+        clankers_drums_process(d, buf.as_mut_ptr(), buf.len() as u32);
+        assert!(buf.iter().any(|x| x.abs() > 1e-4), "drums after SR change");
+        clankers_drums_free(d);
+
+        let b = clankers_bass_new(1, 48000.0);
+        let cc = c(r#"{"74":90}"#);
+        clankers_bass_trigger(b, 36, 1.0, 4800, cc.as_ptr());
+        let mut buf = vec![0.0f32; 1024];
+        clankers_bass_process(b, buf.as_mut_ptr(), buf.len() as u32);
+        assert!(buf.iter().any(|x| x.abs() > 1e-4), "bass at 48k");
+        clankers_bass_free(b);
+
+        // Graph: build at 48k, render, change to 96k, render again.
+        let json = c(r#"{
+            "nodes":[
+                {"id":"osc1","type":"oscillator","params":{"freq":440.0,"amp":0.5}},
+                {"id":"out","type":"output"}
+            ],
+            "connections":[{"from":"osc1:0","to":"out:0"}]
+        }"#);
+        let g = clankers_graph_new(json.as_ptr(), 4, 48000.0);
+        assert!(!g.is_null());
+        clankers_graph_trigger(g, 60, 1.0, 4800);
+        let n = 512usize;
+        let mut l = vec![0.0f32; n];
+        let mut r = vec![0.0f32; n];
+        clankers_graph_process(g, l.as_mut_ptr(), r.as_mut_ptr(), n as u32);
+        assert!(l.iter().any(|x| x.abs() > 1e-5), "graph at 48k");
+
+        clankers_graph_set_sample_rate(g, 96000.0);
+        clankers_graph_trigger(g, 60, 1.0, 9600);
+        l.fill(0.0); r.fill(0.0);
+        clankers_graph_process(g, l.as_mut_ptr(), r.as_mut_ptr(), n as u32);
+        assert!(l.iter().any(|x| x.abs() > 1e-5), "graph after SR change to 96k");
+        clankers_graph_free(g);
+    }
+}
+
+#[test]
 fn graphfx_passthrough() {
     unsafe {
         // input → output (pure passthrough)
@@ -124,7 +175,7 @@ fn graphfx_passthrough() {
                 {"from":"in:1","to":"out:1"}
             ]
         }"#);
-        let fx = clankers_graphfx_new(json.as_ptr());
+        let fx = clankers_graphfx_new(json.as_ptr(), 44100.0);
         assert!(!fx.is_null(), "graphfx_new failed: {}",
             CStr::from_ptr(clankers_last_error()).to_string_lossy());
 

@@ -9,7 +9,7 @@
 use crate::envelope::Envelope;
 use crate::tpt_ladder::TptLadder;
 
-const SR: f32 = 44100.0;
+pub const DEFAULT_SR: f32 = 44100.0;
 
 const PARAM_INFO_JSON: &str = concat!(
     "[",
@@ -71,6 +71,7 @@ impl BassParams {
 }
 
 pub struct BassVoice {
+    sr:             f32,
     carrier_phase:  f32,
     mod_phase:      f32,
     filter:         TptLadder,
@@ -83,18 +84,32 @@ pub struct BassVoice {
 }
 
 impl BassVoice {
-    pub fn new(_seed: u32) -> Self {
+    pub fn new(_seed: u32, sr: f32) -> Self {
         BassVoice {
+            sr,
             carrier_phase:  0.0,
             mod_phase:      0.0,
-            filter:         TptLadder::new(SR),
-            amp_env:        Envelope::new(SR),
-            flt_env:        Envelope::new(SR),
+            filter:         TptLadder::new(sr),
+            amp_env:        Envelope::new(sr),
+            flt_env:        Envelope::new(sr),
             freq:           110.0,
             vel:            1.0,
             hold_remaining: 0,
             active:         false,
         }
+    }
+
+    /// Rebuild SR-dependent state. Wipes active voice state — callers should
+    /// invoke this before starting audio (e.g. JUCE prepareToPlay), not mid-note.
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.sr             = sr;
+        self.filter         = TptLadder::new(sr);
+        self.amp_env        = Envelope::new(sr);
+        self.flt_env        = Envelope::new(sr);
+        self.carrier_phase  = 0.0;
+        self.mod_phase      = 0.0;
+        self.hold_remaining = 0;
+        self.active         = false;
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &BassParams) {
@@ -125,8 +140,8 @@ impl BassVoice {
         const FM_RATIO: f32 = 2.0;  // modulator one octave above carrier
         const TAU:      f32 = core::f32::consts::TAU;
 
-        let dt_carrier = self.freq / SR;
-        let dt_mod     = self.freq * FM_RATIO / SR;
+        let dt_carrier = self.freq / self.sr;
+        let dt_mod     = self.freq * FM_RATIO / self.sr;
 
         for s in out.iter_mut() {
             if !self.active { break; }
@@ -176,9 +191,20 @@ pub struct BassEngine {
 }
 
 impl BassEngine {
+    /// Construct with the default 44.1 kHz SR. Use [`BassEngine::new_with_sr`]
+    /// to set SR at construction, or [`BassEngine::set_sample_rate`] to change
+    /// it later (e.g. from a host `prepareToPlay` callback).
     pub fn new(seed: u32) -> Self {
-        let voices = (0..8).map(|i| BassVoice::new(seed.wrapping_add(i * 1234))).collect();
+        Self::new_with_sr(seed, DEFAULT_SR)
+    }
+
+    pub fn new_with_sr(seed: u32, sr: f32) -> Self {
+        let voices = (0..8).map(|i| BassVoice::new(seed.wrapping_add(i * 1234), sr)).collect();
         BassEngine { voices, next_voice: 0 }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        for v in self.voices.iter_mut() { v.set_sample_rate(sr); }
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &BassParams) {

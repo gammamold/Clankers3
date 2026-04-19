@@ -22,14 +22,14 @@ pub struct GraphVoice {
 
 impl GraphVoice {
     /// Create a voice from a list of node types (the graph template).
-    pub fn new(node_types: &[NodeType]) -> Self {
+    pub fn new(node_types: &[NodeType], sr: f32) -> Self {
         let n = node_types.len();
         let envelope_indices: Vec<usize> = node_types.iter().enumerate()
             .filter(|(_, nt)| **nt == NodeType::Envelope)
             .map(|(i, _)| i)
             .collect();
         GraphVoice {
-            nodes: node_types.iter().map(|nt| DspNode::new(*nt)).collect(),
+            nodes: node_types.iter().map(|nt| DspNode::new(*nt, sr)).collect(),
             signals: vec![0.0; n * MAX_SLOTS],
             freq: 440.0,
             velocity: 1.0,
@@ -41,7 +41,7 @@ impl GraphVoice {
     }
 
     /// Trigger a note — resets nodes, sets freq, gates envelopes.
-    pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, params: &[f32], param_offsets: &[usize]) {
+    pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, params: &[f32], param_offsets: &[usize], sr: f32) {
         self.freq = 440.0 * 2.0f32.powf((midi_note as f32 - 69.0) / 12.0);
         self.velocity = velocity;
         self.active = true;
@@ -50,7 +50,7 @@ impl GraphVoice {
 
         // Reset all nodes
         for node in self.nodes.iter_mut() {
-            node.reset();
+            node.reset(sr);
         }
         // Clear signal buffer
         self.signals.fill(0.0);
@@ -87,6 +87,7 @@ impl GraphVoice {
         connections: &[Connection],
         params: &[f32],
         param_offsets: &[usize],
+        sr: f32,
     ) -> (f32, f32) {
         if !self.active { return (0.0, 0.0); }
 
@@ -122,7 +123,7 @@ impl GraphVoice {
             let node_params = &params[p_off..p_end];
 
             // Tick the node
-            let outputs = self.nodes[ni].tick(&inputs, node_params, self.freq, self.velocity);
+            let outputs = self.nodes[ni].tick(&inputs, node_params, self.freq, self.velocity, sr);
 
             // Write outputs to signal buffer
             for s in 0..MAX_SLOTS {

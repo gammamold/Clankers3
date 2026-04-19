@@ -23,7 +23,7 @@ use crate::moog_ladder::MoogLadder;
 use crate::oscillator::{Oscillator, Waveform};
 use crate::reverb::Reverb;
 
-const SR: f32 = 44100.0;
+pub const DEFAULT_SR: f32 = 44100.0;
 
 #[derive(Clone, Copy)]
 pub struct PadsParams {
@@ -129,19 +129,31 @@ pub struct PadsVoice {
 }
 
 impl PadsVoice {
-    pub fn new() -> Self {
+    pub fn new(sr: f32) -> Self {
         PadsVoice {
-            osc_saw:        Oscillator::new(SR),
-            osc_tri:        Oscillator::new(SR),
-            filter:         MoogLadder::new(SR),
-            amp_env:        Envelope::new(SR),
-            chorus:         Chorus::new(SR),
-            reverb:         Reverb::new(SR),
+            osc_saw:        Oscillator::new(sr),
+            osc_tri:        Oscillator::new(sr),
+            filter:         MoogLadder::new(sr),
+            amp_env:        Envelope::new(sr),
+            chorus:         Chorus::new(sr),
+            reverb:         Reverb::new(sr),
             freq:           440.0,
             hold_remaining: 0,
             released:       false,
             active:         false,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.osc_saw        = Oscillator::new(sr);
+        self.osc_tri        = Oscillator::new(sr);
+        self.filter         = MoogLadder::new(sr);
+        self.amp_env        = Envelope::new(sr);
+        self.chorus         = Chorus::new(sr);
+        self.reverb         = Reverb::new(sr);
+        self.hold_remaining = 0;
+        self.released       = false;
+        self.active         = false;
     }
 
     /// hold_samples: render note-on for this many samples then release.
@@ -207,11 +219,17 @@ pub struct PadsEngine {
 }
 
 impl PadsEngine {
-    pub fn new() -> Self {
+    pub fn new() -> Self { Self::new_with_sr(DEFAULT_SR) }
+
+    pub fn new_with_sr(sr: f32) -> Self {
         PadsEngine {
-            voices:     (0..8).map(|_| PadsVoice::new()).collect(),
+            voices:     (0..8).map(|_| PadsVoice::new(sr)).collect(),
             next_voice: 0,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        for v in self.voices.iter_mut() { v.set_sample_rate(sr); }
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &PadsParams) {

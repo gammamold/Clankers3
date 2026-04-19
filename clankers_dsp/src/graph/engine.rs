@@ -3,7 +3,7 @@
 /// Manages polyphonic voices, topological sort, and parameter dispatch.
 /// Constructed once from JSON; topology is immutable after creation.
 
-use super::node::{NodeType, param_descs};
+use super::node::{NodeType, param_descs, DEFAULT_SR};
 use super::voice::GraphVoice;
 use super::parse::parse_graph_json;
 
@@ -42,11 +42,19 @@ pub struct SynthGraph {
     // Voices
     voices: Vec<GraphVoice>,
     next_voice: usize,
+    num_voices: u8,
+
+    sr: f32,
 }
 
 impl SynthGraph {
-    /// Construct a new graph engine from JSON.
+    /// Construct a new graph engine from JSON at the default sample rate.
     pub fn new(graph_json: &str, num_voices: u8) -> Result<Self, String> {
+        Self::new_with_sr(graph_json, num_voices, DEFAULT_SR)
+    }
+
+    /// Construct a new graph engine from JSON at the given sample rate.
+    pub fn new_with_sr(graph_json: &str, num_voices: u8, sr: f32) -> Result<Self, String> {
         let parsed = parse_graph_json(graph_json)?;
 
         let n = parsed.nodes.len();
@@ -125,7 +133,7 @@ impl SynthGraph {
 
         // Create voices
         let nv = (num_voices as usize).max(1).min(16);
-        let voices: Vec<GraphVoice> = (0..nv).map(|_| GraphVoice::new(&node_types)).collect();
+        let voices: Vec<GraphVoice> = (0..nv).map(|_| GraphVoice::new(&node_types, sr)).collect();
 
         Ok(SynthGraph {
             n_nodes: n,
@@ -138,7 +146,17 @@ impl SynthGraph {
             params,
             voices,
             next_voice: 0,
+            num_voices: nv as u8,
+            sr,
         })
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.sr = sr;
+        self.voices = (0..self.num_voices as usize)
+            .map(|_| GraphVoice::new(&self.node_types, sr))
+            .collect();
+        self.next_voice = 0;
     }
 
     /// Set a parameter by flat index.
@@ -161,7 +179,7 @@ impl SynthGraph {
         if free.is_some() {
             self.next_voice = (vi + 1) % self.voices.len();
         }
-        self.voices[vi].trigger(midi_note, velocity, hold_samples as usize, &self.params, &self.param_offsets);
+        self.voices[vi].trigger(midi_note, velocity, hold_samples as usize, &self.params, &self.param_offsets, self.sr);
     }
 
     /// Process n_samples of audio. Returns interleaved stereo [L0, R0, L1, R1, ...].
@@ -179,6 +197,7 @@ impl SynthGraph {
                         &self.connections,
                         &self.params,
                         &self.param_offsets,
+                        self.sr,
                     );
                     sum_l += l;
                     sum_r += r;
@@ -225,6 +244,7 @@ impl SynthGraph {
                         &self.connections,
                         &self.params,
                         &self.param_offsets,
+                        self.sr,
                     );
                     sum_l += l;
                     sum_r += r;
@@ -243,6 +263,7 @@ impl SynthGraph {
 /// External audio enters via an "input" node and exits via the "output" node.
 pub struct GraphFx {
     nodes: Vec<super::node::DspNode>,
+    node_types: Vec<NodeType>,
     signals: Vec<f32>,          // node_i * MAX_SLOTS + slot_j
     exec_order: Vec<usize>,
     connections: Vec<Connection>,
@@ -251,12 +272,18 @@ pub struct GraphFx {
     params: Vec<f32>,
     input_node: Option<usize>,  // index of the Input node
     output_node: usize,         // index of the Output node
+    sr: f32,
 }
 
 impl GraphFx {
-    /// Construct from the same JSON format as SynthGraph.
-    /// The graph MUST contain exactly one "input" node and one "output" node.
+    /// Construct at the default sample rate.
     pub fn new(graph_json: &str) -> Result<Self, String> {
+        Self::new_with_sr(graph_json, DEFAULT_SR)
+    }
+
+    /// Construct at the given sample rate.
+    /// The graph MUST contain exactly one "input" node and one "output" node.
+    pub fn new_with_sr(graph_json: &str, sr: f32) -> Result<Self, String> {
         let parsed = parse_graph_json(graph_json)?;
 
         let n = parsed.nodes.len();
@@ -324,15 +351,26 @@ impl GraphFx {
             }
         }
 
-        let nodes = node_types.iter().map(|nt| super::node::DspNode::new(*nt)).collect();
+        let nodes = node_types.iter().map(|nt| super::node::DspNode::new(*nt, sr)).collect();
         let signals = vec![0.0; n * super::node::MAX_SLOTS];
 
         Ok(GraphFx {
-            nodes, signals, exec_order, connections,
+            nodes,
+            node_types,
+            signals, exec_order, connections,
             param_offsets, param_info, params,
             input_node: input_idx,
             output_node: output_idx,
+            sr,
         })
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.sr = sr;
+        self.nodes = self.node_types.iter()
+            .map(|nt| super::node::DspNode::new(*nt, sr))
+            .collect();
+        self.signals.fill(0.0);
     }
 
     pub fn set_param(&mut self, param_index: usize, value: f32) {
@@ -386,7 +424,7 @@ impl GraphFx {
                     self.params.len()
                 };
 
-                let outputs = self.nodes[ni].tick(&inputs, &self.params[p_off..p_end], 440.0, 1.0);
+                let outputs = self.nodes[ni].tick(&inputs, &self.params[p_off..p_end], 440.0, 1.0, self.sr);
 
                 for s in 0..max_slots {
                     self.signals[ni * max_slots + s] = outputs[s];
@@ -461,7 +499,7 @@ impl GraphFx {
                     self.params.len()
                 };
 
-                let outputs = self.nodes[ni].tick(&inputs, &self.params[p_off..p_end], 440.0, 1.0);
+                let outputs = self.nodes[ni].tick(&inputs, &self.params[p_off..p_end], 440.0, 1.0, self.sr);
                 for s in 0..max_slots {
                     self.signals[ni * max_slots + s] = outputs[s];
                 }

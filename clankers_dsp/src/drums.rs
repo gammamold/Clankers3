@@ -11,7 +11,7 @@
 
 use crate::rng::Rng;
 
-const SR:  f32 = 44100.0;
+pub const DEFAULT_SR: f32 = 44100.0;
 const TAU: f32 = core::f32::consts::TAU;
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ impl Voice {
         }
     }
 
-    fn arm(&mut self, p: &Preset, vel: f32, pitch_mult: f32, decay_mult: f32, seed: u32) {
+    fn arm(&mut self, p: &Preset, vel: f32, pitch_mult: f32, decay_mult: f32, seed: u32, sr: f32) {
         let fs = p.freq_start * pitch_mult;
         let fe = p.freq_end   * pitch_mult;
 
@@ -160,14 +160,14 @@ impl Voice {
         self.freq        = fs;
         self.freq_end    = fe;
         // Pitch envelope: reaches freq_end (−60 dB) in pitch_ms milliseconds
-        self.pitch_k     = amp_coeff(p.pitch_ms * 0.001);
+        self.pitch_k     = amp_coeff(p.pitch_ms * 0.001, sr);
         self.amp         = 1.0;
         self.amp_decay_s = p.amp_decay_s;
         self.decay_scale = p.decay_scale;
-        self.amp_k       = amp_coeff(p.amp_decay_s * decay_mult * p.decay_scale);
+        self.amp_k       = amp_coeff(p.amp_decay_s * decay_mult * p.decay_scale, sr);
         self.noise_seed  = seed | 1;  // ensure non-zero
         self.hp_z        = 0.0;
-        self.hp_k        = lp_coeff((p.noise_hp_hz * pitch_mult).max(20.0));
+        self.hp_k        = lp_coeff((p.noise_hp_hz * pitch_mult).max(20.0), sr);
         self.noise_amt   = p.noise_amt;
         self.tone_amt    = p.tone_amt;
         self.clap_t      = 0;
@@ -176,26 +176,26 @@ impl Voice {
         self.phase3 = 0.0;  self.freq3 = fs * 1.618;
     }
 
-    fn update_amp_k(&mut self, decay_mult: f32) {
+    fn update_amp_k(&mut self, decay_mult: f32, sr: f32) {
         if self.active {
-            self.amp_k = amp_coeff(self.amp_decay_s * decay_mult * self.decay_scale);
+            self.amp_k = amp_coeff(self.amp_decay_s * decay_mult * self.decay_scale, sr);
         }
     }
 
     #[inline]
-    fn tick(&mut self) -> f32 {
+    fn tick(&mut self, sr: f32, clap_bursts: [u32; 3]) -> f32 {
         if !self.active { return 0.0; }
 
         let raw = match self.kind {
             Kind::Tone => {
                 self.freq = self.freq_end + (self.freq - self.freq_end) * self.pitch_k;
-                self.phase += self.freq / SR;
+                self.phase += self.freq / sr;
                 let tone = (self.phase * TAU).sin();
                 let n    = Rng::lcg_f32(&mut self.noise_seed);
                 tone * self.tone_amt + n * self.noise_amt
             }
             Kind::Snare => {
-                self.phase += self.freq / SR;
+                self.phase += self.freq / sr;
                 let tone = (self.phase * TAU).sin();
                 let n    = Rng::lcg_f32(&mut self.noise_seed);
                 let hp   = hp(&mut self.hp_z, self.hp_k, n);
@@ -207,16 +207,15 @@ impl Voice {
             }
             Kind::Clap => {
                 // Re-trigger amp at each burst onset: 8 ms, 16 ms, 24 ms
-                const BURSTS: [u32; 3] = [353, 706, 1058];
-                if BURSTS.contains(&self.clap_t) { self.amp = 1.0; }
+                if clap_bursts.contains(&self.clap_t) { self.amp = 1.0; }
                 self.clap_t += 1;
                 let n  = Rng::lcg_f32(&mut self.noise_seed);
                 hp(&mut self.hp_z, self.hp_k, n)
             }
             Kind::Cymbal => {
-                self.phase  += self.freq  / SR;
-                self.phase2 += self.freq2 / SR;
-                self.phase3 += self.freq3 / SR;
+                self.phase  += self.freq  / sr;
+                self.phase2 += self.freq2 / sr;
+                self.phase3 += self.freq3 / sr;
                 let tone = ((self.phase  * TAU).sin()
                           + (self.phase2 * TAU).sin()
                           + (self.phase3 * TAU).sin()) * (1.0 / 3.0);
@@ -236,10 +235,10 @@ impl Voice {
 // ─── DSP helpers ─────────────────────────────────────────────────────────────
 
 /// One-pole LP coefficient  k = exp(−2π·fc/SR)
-#[inline] fn lp_coeff(fc: f32) -> f32 { (-TAU * fc / SR).exp() }
+#[inline] fn lp_coeff(fc: f32, sr: f32) -> f32 { (-TAU * fc / sr).exp() }
 
 /// Amp −60 dB decay coefficient over `s` seconds
-#[inline] fn amp_coeff(s: f32) -> f32 { (-6.908 / (SR * s.max(1e-4))).exp() }
+#[inline] fn amp_coeff(s: f32, sr: f32) -> f32 { (-6.908 / (sr * s.max(1e-4))).exp() }
 
 /// One-pole highpass:  z tracks lp(x),  output = x − z
 #[inline] fn hp(z: &mut f32, k: f32, x: f32) -> f32 {
@@ -250,18 +249,34 @@ impl Voice {
 // ─── DrumsEngine ─────────────────────────────────────────────────────────────
 
 pub struct DrumsEngine {
+    sr:          f32,
+    filter_hz:   f32,    // cached so set_sample_rate can recompute filter_k
     voices:      [Voice; 7],
     profile:     Profile,
     pitch_mult:  f32,
     decay_mult:  f32,
     filter_z:    f32,    // global output LP state
     filter_k:    f32,    // global output LP coeff
+    clap_bursts: [u32; 3],  // sample offsets for clap re-triggers at current SR
     pub(crate) rng: Rng,
+}
+
+fn clap_bursts_for(sr: f32) -> [u32; 3] {
+    // 8 ms, 16 ms, 24 ms after clap onset
+    let k = sr / 1000.0;
+    [(8.0 * k) as u32, (16.0 * k) as u32, (24.0 * k) as u32]
 }
 
 impl DrumsEngine {
     pub fn new(seed: u32) -> Self {
+        Self::new_with_sr(seed, DEFAULT_SR)
+    }
+
+    pub fn new_with_sr(seed: u32, sr: f32) -> Self {
+        let filter_hz = 18_000.0;
         Self {
+            sr,
+            filter_hz,
             voices:     [
                 Voice::silent(), Voice::silent(), Voice::silent(), Voice::silent(),
                 Voice::silent(), Voice::silent(), Voice::silent(),
@@ -270,9 +285,18 @@ impl DrumsEngine {
             pitch_mult: 1.0,
             decay_mult: 1.0,
             filter_z:   0.0,
-            filter_k:   lp_coeff(18_000.0),
+            filter_k:   lp_coeff(filter_hz, sr),
+            clap_bursts: clap_bursts_for(sr),
             rng:        Rng::new(seed),
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.sr          = sr;
+        self.filter_k    = lp_coeff(self.filter_hz, sr);
+        self.clap_bursts = clap_bursts_for(sr);
+        self.filter_z    = 0.0;
+        for v in &mut self.voices { v.active = false; }
     }
 
     pub fn set_profile(&mut self, id: u8) { self.profile = Profile::from_u8(id); }
@@ -283,11 +307,12 @@ impl DrumsEngine {
 
     pub fn set_decay(&mut self, mult: f32) {
         self.decay_mult = mult.clamp(0.1, 8.0);
-        for v in &mut self.voices { v.update_amp_k(self.decay_mult); }
+        for v in &mut self.voices { v.update_amp_k(self.decay_mult, self.sr); }
     }
 
     pub fn set_filter(&mut self, hz: f32) {
-        self.filter_k = lp_coeff(hz.clamp(80.0, 20_000.0));
+        self.filter_hz = hz.clamp(80.0, 20_000.0);
+        self.filter_k  = lp_coeff(self.filter_hz, self.sr);
     }
 
     pub fn trigger(&mut self, voice_id: u8, velocity: f32) {
@@ -296,14 +321,16 @@ impl DrumsEngine {
         let preset = &PRESETS[self.profile.idx()][id];
         let seed   = self.rng.next_u32();
         self.voices[id].arm(preset, velocity.clamp(0.0, 1.0),
-                            self.pitch_mult, self.decay_mult, seed);
+                            self.pitch_mult, self.decay_mult, seed, self.sr);
     }
 
     pub fn process(&mut self, output: &mut [f32]) {
         let lp_g = 1.0 - self.filter_k;
+        let sr = self.sr;
+        let bursts = self.clap_bursts;
         for s in output.iter_mut() {
             let mut mix = 0.0_f32;
-            for v in &mut self.voices { mix += v.tick(); }
+            for v in &mut self.voices { mix += v.tick(sr, bursts); }
             // Soft-clip bus
             mix = (mix * 0.7).tanh() / 0.7;
             // Global LP filter

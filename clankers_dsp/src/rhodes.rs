@@ -23,7 +23,7 @@
 use crate::chorus::Chorus;
 use crate::rng::Rng;
 
-const SR:     f32 = 44100.0;
+pub const DEFAULT_SR: f32 = 44100.0;
 const TAU:    f32 = std::f32::consts::TAU;
 const THRESH: f32 = 1e-5;
 
@@ -117,10 +117,10 @@ impl RhodesParams {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/// exp(-1 / (decay_s * SR))  — per-sample multiplier for exponential decay
+/// exp(-1 / (decay_s * sr))  — per-sample multiplier for exponential decay
 #[inline]
-fn decay_coef(decay_s: f32) -> f32 {
-    (-1.0 / (decay_s.max(0.001) * SR)).exp()
+fn decay_coef_sr(sr: f32, decay_s: f32) -> f32 {
+    (-1.0 / (decay_s.max(0.001) * sr)).exp()
 }
 
 #[inline]
@@ -131,6 +131,7 @@ fn midi_to_hz(note: u8) -> f32 {
 // ── Voice ────────────────────────────────────────────────────────────────────
 
 pub struct RhodesVoice {
+    sr:           f32,
     freq:         f32,
     car_phase:    f32,  // carrier phase 0..1
     mod_phase:    f32,  // modulator phase 0..1
@@ -155,8 +156,9 @@ pub struct RhodesVoice {
 }
 
 impl RhodesVoice {
-    pub fn new() -> Self {
+    pub fn new(sr: f32) -> Self {
         RhodesVoice {
+            sr,
             freq:           440.0,
             car_phase:      0.0,
             mod_phase:      0.0,
@@ -171,10 +173,21 @@ impl RhodesVoice {
             hold_remaining: 0,
             released:       false,
             release_coef:   0.9995,
-            chorus:         Chorus::new(SR),
+            chorus:         Chorus::new(sr),
             rng:            Rng::new(0x726f6465),
             active:         false,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.sr             = sr;
+        self.chorus         = Chorus::new(sr);
+        self.amp_env        = 0.0;
+        self.mod_env        = 0.0;
+        self.trans_env      = 0.0;
+        self.hold_remaining = 0;
+        self.released       = false;
+        self.active         = false;
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &RhodesParams) {
@@ -190,11 +203,11 @@ impl RhodesVoice {
         // Bark is independent of amp decay — only key_factor scales it
         let mod_decay_s  = p.mod_decay  * key_factor;
 
-        self.amp_coef  = decay_coef(amp_decay_s);
-        self.mod_coef  = decay_coef(mod_decay_s.max(0.02));
+        self.amp_coef  = decay_coef_sr(self.sr,amp_decay_s);
+        self.mod_coef  = decay_coef_sr(self.sr,mod_decay_s.max(0.02));
 
         // Hammer transient: ~8ms click, level scales with velocity
-        self.trans_coef  = decay_coef(0.008);
+        self.trans_coef  = decay_coef_sr(self.sr,0.008);
         self.trans_env   = velocity * 0.08;
         self.trans_phase = 0.0;
 
@@ -204,7 +217,7 @@ impl RhodesVoice {
         self.mod_env = velocity.powf(0.7) * p.brightness;  // FM bark
 
         // Slightly faster decay when key is released during hold
-        self.release_coef = decay_coef(amp_decay_s * 0.12);
+        self.release_coef = decay_coef_sr(self.sr,amp_decay_s * 0.12);
 
         // Reset phases for clean attack
         self.car_phase = 0.0;
@@ -217,7 +230,8 @@ impl RhodesVoice {
 
     pub fn process(&mut self, buf_l: &mut [f32], buf_r: &mut [f32], p: &RhodesParams) {
         // Pre-compute trem inc, pan gains
-        let trem_inc  = p.tremolo_rate / SR;
+        let sr_hz = self.sr;
+        let trem_inc  = p.tremolo_rate / sr_hz;
         let pan_l = (1.0 - p.pan).sqrt();
         let pan_r = p.pan.sqrt();
 
@@ -239,9 +253,9 @@ impl RhodesVoice {
             let car_sig = ((self.car_phase * TAU) + self.mod_env * mod_sig).sin();
 
             // Advance phases
-            self.car_phase += self.freq / SR;
+            self.car_phase += self.freq / sr_hz;
             if self.car_phase >= 1.0 { self.car_phase -= 1.0; }
-            self.mod_phase += self.freq * p.harm_ratio / SR;
+            self.mod_phase += self.freq * p.harm_ratio / sr_hz;
             if self.mod_phase >= 1.0 { self.mod_phase -= 1.0; }
 
             // ── Hammer transient ────────────────────────────────────────────
@@ -249,7 +263,7 @@ impl RhodesVoice {
             let noise    = self.rng.next_f32();
             let click_f  = self.freq * 6.0;  // high harmonic click
             let click_osc = (self.trans_phase * TAU).sin();
-            self.trans_phase += click_f / SR;
+            self.trans_phase += click_f / sr_hz;
             if self.trans_phase >= 1.0 { self.trans_phase -= 1.0; }
             let transient = self.trans_env * (noise * 0.5 + click_osc * 0.5);
             self.trans_env *= self.trans_coef;
@@ -290,11 +304,17 @@ pub struct RhodesEngine {
 }
 
 impl RhodesEngine {
-    pub fn new() -> Self {
+    pub fn new() -> Self { Self::new_with_sr(DEFAULT_SR) }
+
+    pub fn new_with_sr(sr: f32) -> Self {
         RhodesEngine {
-            voices:     (0..8).map(|_| RhodesVoice::new()).collect(),
+            voices:     (0..8).map(|_| RhodesVoice::new(sr)).collect(),
             next_voice: 0,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        for v in self.voices.iter_mut() { v.set_sample_rate(sr); }
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samples: usize, p: &RhodesParams) {

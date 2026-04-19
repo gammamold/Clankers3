@@ -58,11 +58,22 @@ pub struct ClankersDrums {
 
 /// Allocate a new drum engine. Returns an owning pointer the caller must
 /// later pass to [`clankers_drums_free`]. Never returns null.
+///
+/// `sample_rate` is the audio-device sample rate in Hz (e.g. 44100, 48000).
+/// See [`clankers_drums_set_sample_rate`] to reconfigure at runtime.
 #[no_mangle]
-pub extern "C" fn clankers_drums_new(seed: u32) -> *mut ClankersDrums {
+pub extern "C" fn clankers_drums_new(seed: u32, sample_rate: f32) -> *mut ClankersDrums {
     Box::into_raw(Box::new(ClankersDrums {
-        engine: DrumsEngine::new(seed),
+        engine: DrumsEngine::new_with_sr(seed, sample_rate),
     }))
+}
+
+/// Reconfigure the engine for a new sample rate. Intended for the
+/// `prepareToPlay`-style lifecycle: call from a non-audio thread before
+/// the next `_process`. Wipes any in-flight voice state.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_set_sample_rate(ptr: *mut ClankersDrums, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a drum engine previously returned by [`clankers_drums_new`].
@@ -133,11 +144,17 @@ pub struct ClankersBass {
 
 /// Allocate a new bass engine. Never returns null.
 #[no_mangle]
-pub extern "C" fn clankers_bass_new(seed: u32) -> *mut ClankersBass {
+pub extern "C" fn clankers_bass_new(seed: u32, sample_rate: f32) -> *mut ClankersBass {
     Box::into_raw(Box::new(ClankersBass {
-        engine: BassEngine::new(seed),
+        engine: BassEngine::new_with_sr(seed, sample_rate),
         params: BassParams::default(),
     }))
+}
+
+/// Reconfigure the engine for a new sample rate. Wipes voice state.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_bass_set_sample_rate(ptr: *mut ClankersBass, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a bass engine. Passing null is a no-op.
@@ -232,11 +249,17 @@ pub struct ClankersBuchla {
 
 /// Allocate a new Buchla engine. Never returns null.
 #[no_mangle]
-pub extern "C" fn clankers_buchla_new() -> *mut ClankersBuchla {
+pub extern "C" fn clankers_buchla_new(sample_rate: f32) -> *mut ClankersBuchla {
     Box::into_raw(Box::new(ClankersBuchla {
-        engine: BuchlaEngine::new(),
+        engine: BuchlaEngine::new_with_sr(sample_rate),
         params: BuchlaParams::default(),
     }))
+}
+
+/// Reconfigure the engine for a new sample rate. Wipes voice state.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_buchla_set_sample_rate(ptr: *mut ClankersBuchla, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a Buchla engine. Passing null is a no-op.
@@ -312,11 +335,17 @@ pub struct ClankersRhodes {
 
 /// Allocate a new Rhodes engine. Never returns null.
 #[no_mangle]
-pub extern "C" fn clankers_rhodes_new() -> *mut ClankersRhodes {
+pub extern "C" fn clankers_rhodes_new(sample_rate: f32) -> *mut ClankersRhodes {
     Box::into_raw(Box::new(ClankersRhodes {
-        engine: RhodesEngine::new(),
+        engine: RhodesEngine::new_with_sr(sample_rate),
         params: RhodesParams::default(),
     }))
+}
+
+/// Reconfigure the engine for a new sample rate. Wipes voice state.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_rhodes_set_sample_rate(ptr: *mut ClankersRhodes, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a Rhodes engine. Passing null is a no-op.
@@ -395,11 +424,17 @@ pub struct ClankersPads {
 
 /// Allocate a new Pads engine. Never returns null.
 #[no_mangle]
-pub extern "C" fn clankers_pads_new() -> *mut ClankersPads {
+pub extern "C" fn clankers_pads_new(sample_rate: f32) -> *mut ClankersPads {
     Box::into_raw(Box::new(ClankersPads {
-        engine: PadsEngine::new(),
+        engine: PadsEngine::new_with_sr(sample_rate),
         params: PadsParams::default(),
     }))
+}
+
+/// Reconfigure the engine for a new sample rate. Wipes voice state.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_pads_set_sample_rate(ptr: *mut ClankersPads, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a Pads engine. Passing null is a no-op.
@@ -481,11 +516,17 @@ pub struct ClankersVoder {
 
 /// Allocate a new Voder engine. Never returns null.
 #[no_mangle]
-pub extern "C" fn clankers_voder_new(seed: u32) -> *mut ClankersVoder {
+pub extern "C" fn clankers_voder_new(seed: u32, sample_rate: f32) -> *mut ClankersVoder {
     Box::into_raw(Box::new(ClankersVoder {
-        engine: VoderEngine::new(seed),
+        engine: VoderEngine::new_with_sr(seed, sample_rate),
         params: VoderParams::default(),
     }))
+}
+
+/// Reconfigure the engine for a new sample rate. Wipes voice state.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_voder_set_sample_rate(ptr: *mut ClankersVoder, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a Voder engine. Passing null is a no-op.
@@ -670,6 +711,7 @@ pub struct ClankersGraph {
 pub unsafe extern "C" fn clankers_graph_new(
     graph_json: *const c_char,
     num_voices: u8,
+    sample_rate: f32,
 ) -> *mut ClankersGraph {
     if graph_json.is_null() {
         set_last_error("graph_json is null");
@@ -682,7 +724,7 @@ pub unsafe extern "C" fn clankers_graph_new(
             return core::ptr::null_mut();
         }
     };
-    match SynthGraph::new(s, num_voices) {
+    match SynthGraph::new_with_sr(s, num_voices, sample_rate) {
         Ok(engine) => {
             let info = CString::new(engine.param_info_json())
                 .unwrap_or_else(|_| CString::new("[]").unwrap());
@@ -697,6 +739,13 @@ pub unsafe extern "C" fn clankers_graph_new(
             core::ptr::null_mut()
         }
     }
+}
+
+/// Reconfigure the engine for a new sample rate. Rebuilds all voices —
+/// wipes any in-flight voice state. Topology and params are preserved.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graph_set_sample_rate(ptr: *mut ClankersGraph, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a SynthGraph. Passing null is a no-op.
@@ -775,6 +824,7 @@ pub struct ClankersGraphFx {
 #[no_mangle]
 pub unsafe extern "C" fn clankers_graphfx_new(
     graph_json: *const c_char,
+    sample_rate: f32,
 ) -> *mut ClankersGraphFx {
     if graph_json.is_null() {
         set_last_error("graph_json is null");
@@ -787,7 +837,7 @@ pub unsafe extern "C" fn clankers_graphfx_new(
             return core::ptr::null_mut();
         }
     };
-    match GraphFx::new(s) {
+    match GraphFx::new_with_sr(s, sample_rate) {
         Ok(engine) => {
             let info = CString::new(engine.param_info_json())
                 .unwrap_or_else(|_| CString::new("[]").unwrap());
@@ -802,6 +852,13 @@ pub unsafe extern "C" fn clankers_graphfx_new(
             core::ptr::null_mut()
         }
     }
+}
+
+/// Reconfigure the engine for a new sample rate. Rebuilds node state.
+/// Topology and params are preserved.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_graphfx_set_sample_rate(ptr: *mut ClankersGraphFx, sample_rate: f32) {
+    (*ptr).engine.set_sample_rate(sample_rate);
 }
 
 /// Destroy a GraphFx. Passing null is a no-op.

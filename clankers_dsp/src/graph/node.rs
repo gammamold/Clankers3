@@ -14,7 +14,7 @@ use crate::rng::Rng;
 use crate::delay::DelayLine;
 use crate::reverb::Reverb;
 
-const SR: f32 = 44100.0;
+pub const DEFAULT_SR: f32 = 44100.0;
 
 /// Maximum input/output slots per node.
 pub const MAX_SLOTS: usize = 4;
@@ -152,18 +152,18 @@ pub enum DspNode {
 }
 
 impl DspNode {
-    /// Create a new node of the given type.
-    pub fn new(nt: NodeType) -> Self {
+    /// Create a new node of the given type at `sr` Hz.
+    pub fn new(nt: NodeType, sr: f32) -> Self {
         match nt {
-            NodeType::Oscillator  => DspNode::Oscillator(Oscillator::new(SR)),
-            NodeType::Envelope    => DspNode::Envelope(Envelope::new(SR)),
-            NodeType::TptLadder   => DspNode::TptLadder(TptLadder::new(SR)),
-            NodeType::MoogLadder  => DspNode::MoogLadder(MoogLadder::new(SR)),
+            NodeType::Oscillator  => DspNode::Oscillator(Oscillator::new(sr)),
+            NodeType::Envelope    => DspNode::Envelope(Envelope::new(sr)),
+            NodeType::TptLadder   => DspNode::TptLadder(TptLadder::new(sr)),
+            NodeType::MoogLadder  => DspNode::MoogLadder(MoogLadder::new(sr)),
             NodeType::Biquad      => DspNode::Biquad(Biquad::new()),
             NodeType::Noise       => DspNode::Noise(Rng::new(0xbeef_cafe)),
-            NodeType::Delay       => DspNode::Delay(DelayLine::new(SR)),
-            NodeType::Reverb      => DspNode::Reverb(Reverb::new(SR)),
-            NodeType::Chorus      => DspNode::Chorus(Chorus::new(SR)),
+            NodeType::Delay       => DspNode::Delay(DelayLine::new(sr)),
+            NodeType::Reverb      => DspNode::Reverb(Reverb::new(sr)),
+            NodeType::Chorus      => DspNode::Chorus(Chorus::new(sr)),
             NodeType::Wavefolder  => DspNode::Wavefolder,
             NodeType::Multiply    => DspNode::Multiply,
             NodeType::Input       => DspNode::Input,
@@ -174,10 +174,10 @@ impl DspNode {
     }
 
     /// Reset internal state (called on voice trigger).
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self, sr: f32) {
         match self {
             DspNode::Oscillator(o)  => o.reset(),
-            DspNode::Envelope(e)    => { *e = Envelope::new(SR); }
+            DspNode::Envelope(e)    => { *e = Envelope::new(sr); }
             DspNode::TptLadder(f)   => f.reset(),
             DspNode::MoogLadder(f)  => f.reset(),
             DspNode::Biquad(f)      => f.reset(),
@@ -208,6 +208,7 @@ impl DspNode {
         params: &[f32],
         voice_freq: f32,
         _voice_vel: f32,
+        sr: f32,
     ) -> [f32; MAX_SLOTS] {
         let mut out = [0.0f32; MAX_SLOTS];
 
@@ -266,9 +267,9 @@ impl DspNode {
                 let mod_freq = (freq + inputs[1]).clamp(20.0, 20000.0);
 
                 if mode < 0.5 {
-                    filt.set_bpf(mod_freq, bandwidth, SR);
+                    filt.set_bpf(mod_freq, bandwidth, sr);
                 } else {
-                    filt.set_lpf1(mod_freq, SR);
+                    filt.set_lpf1(mod_freq, sr);
                 }
                 out[0] = filt.process(inputs[0]);
             }

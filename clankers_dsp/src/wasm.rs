@@ -121,7 +121,7 @@ impl ClankersBass {
     pub fn trigger_render(&mut self, midi_note: u8, velocity: f32, hold_samples: u32, cc_json: &str) -> Float32Array {
         let p = parse_bass_params(cc_json);
 
-        let mut voice = bass::BassVoice::new(0xba55);
+        let mut voice = bass::BassVoice::new(0xba55, bass::DEFAULT_SR);
         let transposed = midi_note.saturating_add(48);
         voice.trigger(transposed, velocity, hold_samples as usize, &p);
 
@@ -185,7 +185,7 @@ impl ClankersBuchla {
     pub fn trigger_render(&mut self, midi_note: u8, velocity: f32, cc_json: &str) -> Float32Array {
         let p = parse_buchla_params(cc_json);
 
-        let mut voice = buchla::BuchlaVoice::new();
+        let mut voice = buchla::BuchlaVoice::new(buchla::DEFAULT_SR);
         voice.trigger(midi_note, velocity, &p);
 
         let max = 44100 * 3;
@@ -267,7 +267,7 @@ impl ClankersRhodes {
         let mut buf_l = vec![0.0f32; total];
         let mut buf_r = vec![0.0f32; total];
 
-        let mut voice = rhodes::RhodesVoice::new();
+        let mut voice = rhodes::RhodesVoice::new(rhodes::DEFAULT_SR);
         voice.trigger(midi_note, velocity, hold, &p);
         voice.process(&mut buf_l, &mut buf_r, &p);
 
@@ -344,7 +344,7 @@ impl ClankersPads {
         let mut buf_l = vec![0.0f32; total];
         let mut buf_r = vec![0.0f32; total];
 
-        let mut voice = pads::PadsVoice::new();
+        let mut voice = pads::PadsVoice::new(pads::DEFAULT_SR);
         voice.trigger(midi_note, velocity, hold, &p);
         voice.process(&mut buf_l, &mut buf_r, &p);
 

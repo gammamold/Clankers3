@@ -10,7 +10,7 @@ use crate::oscillator::{Oscillator, Waveform};
 use crate::vactrol::Vactrol;
 use crate::wavefolder::Wavefolder;
 
-const SR: f32 = 44100.0;
+pub const DEFAULT_SR: f32 = 44100.0;
 
 // Positional descriptor for host UIs. Stable order:
 //   0 cutoff_norm, 1 fold_amount, 2 release_s, 3 filter_mod, 4 volume.
@@ -82,15 +82,23 @@ pub struct BuchlaVoice {
 }
 
 impl BuchlaVoice {
-    pub fn new() -> Self {
+    pub fn new(sr: f32) -> Self {
         BuchlaVoice {
-            osc:     Oscillator::new(SR),
-            lpg:     Lpg::new(SR),
-            vactrol: Vactrol::new(SR),
+            osc:     Oscillator::new(sr),
+            lpg:     Lpg::new(sr),
+            vactrol: Vactrol::new(sr),
             gate:    0.0,
             freq:    440.0,
             active:  false,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.osc     = Oscillator::new(sr);
+        self.lpg     = Lpg::new(sr);
+        self.vactrol = Vactrol::new(sr);
+        self.gate    = 0.0;
+        self.active  = false;
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, p: &BuchlaParams) {
@@ -137,11 +145,17 @@ pub struct BuchlaEngine {
 }
 
 impl BuchlaEngine {
-    pub fn new() -> Self {
+    pub fn new() -> Self { Self::new_with_sr(DEFAULT_SR) }
+
+    pub fn new_with_sr(sr: f32) -> Self {
         BuchlaEngine {
-            voices:     (0..8).map(|_| BuchlaVoice::new()).collect(),
+            voices:     (0..8).map(|_| BuchlaVoice::new(sr)).collect(),
             next_voice: 0,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        for v in self.voices.iter_mut() { v.set_sample_rate(sr); }
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, p: &BuchlaParams) {

@@ -33,7 +33,7 @@ use crate::envelope::Envelope;
 use crate::oscillator::{Oscillator, Waveform};
 use crate::rng::Rng;
 
-const SR:       f32 = 44100.0;
+pub const DEFAULT_SR: f32 = 44100.0;
 const N_VOICES: usize = 4;
 
 // Fixed upper formants — give "speaker character"
@@ -266,17 +266,18 @@ pub struct VoderVoice {
     active:       bool,
     held:         bool,            // note-on is being held
     midi_note:    u8,
+    sr:           f32,
 }
 
 impl VoderVoice {
-    pub fn new(seed: u32) -> Self {
+    pub fn new(seed: u32, sr: f32) -> Self {
         let mut v = VoderVoice {
-            osc:          Oscillator::new(SR),
+            osc:          Oscillator::new(sr),
             glot_lp:      Biquad::new(),
             rng:          Rng::new(seed),
             noise_hp:     0.0,
             resonators:   core::array::from_fn(|_| Biquad::new()),
-            env:          Envelope::new(SR),
+            env:          Envelope::new(sr),
             vib_phase:    0.0,
             f_cur:        [600., 1200., 2400.],
             bw_cur:       [80., 100., 150.],
@@ -296,12 +297,29 @@ impl VoderVoice {
             active:       false,
             held:         false,
             midi_note:    60,
+            sr,
         };
-        v.glot_lp.set_lpf1(1400.0, SR);
+        v.glot_lp.set_lpf1(1400.0, sr);
         // F4/F5 are fixed speaker-character formants — pre-compute once, never recompute.
-        v.resonators[3].set_bpf(F4_HZ, F4_BW, SR);
-        v.resonators[4].set_bpf(F5_HZ, F5_BW, SR);
+        v.resonators[3].set_bpf(F4_HZ, F4_BW, sr);
+        v.resonators[4].set_bpf(F5_HZ, F5_BW, sr);
         v
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        self.sr      = sr;
+        self.osc     = Oscillator::new(sr);
+        self.env     = Envelope::new(sr);
+        self.glot_lp = Biquad::new();
+        self.glot_lp.set_lpf1(1400.0, sr);
+        self.resonators = core::array::from_fn(|_| Biquad::new());
+        self.resonators[3].set_bpf(F4_HZ, F4_BW, sr);
+        self.resonators[4].set_bpf(F5_HZ, F5_BW, sr);
+        self.last_br     = -1.0;
+        self.active      = false;
+        self.held        = false;
+        self.queue.clear();
+        self.queue_samps = 0;
     }
 
     pub fn trigger(&mut self, midi_note: u8, _velocity: f32, hold_samps: usize, p: &VoderParams) {
@@ -319,9 +337,9 @@ impl VoderVoice {
         // fires on the next block (wrapping_add(1) → 4, 4 % 4 == 0).
         let br = p.brightness.clamp(0.5, 1.5);
         for i in 0..3 {
-            self.resonators[i].set_bpf(self.f_cur[i] * br, self.bw_cur[i], SR);
+            self.resonators[i].set_bpf(self.f_cur[i] * br, self.bw_cur[i], self.sr);
         }
-        self.glot_lp.set_lpf1(800.0 + 800.0 * br, SR);
+        self.glot_lp.set_lpf1(800.0 + 800.0 * br, self.sr);
         self.last_br     = br;
         self.coeff_block = 3;   // next wrapping_add(1) → 4 → triggers first update
 
@@ -367,7 +385,7 @@ impl VoderVoice {
         self.queue.clear();
         if phonemes.is_empty() { return; }
         let per = if hold_samps == 0 {
-            (0.15 * SR) as usize
+            (0.15 * self.sr) as usize
         } else {
             (hold_samps / phonemes.len()).max(1)
         };
@@ -395,7 +413,7 @@ impl VoderVoice {
     ) {
         self.queue.clear();
         if phonemes.is_empty() { return; }
-        let default_dur = (0.15 * SR) as usize;
+        let default_dur = (0.15 * self.sr) as usize;
         for (i, &ph) in phonemes.iter().enumerate() {
             self.queue.push(QueueEntry {
                 phoneme:    ph.min(N_PHONEMES - 1),
@@ -461,7 +479,7 @@ impl VoderVoice {
         //   y[k] = α·y[k-1] + (1-α)·target  →  after n steps:
         //   y_new = target + (y_old - target) · α^n
         //
-        let tau_samps = (p.coartic_ms * 0.001 * SR).max(1.0);
+        let tau_samps = (p.coartic_ms * 0.001 * self.sr).max(1.0);
         let alpha_n   = (-(n as f32) / tau_samps).exp();   // α^n
         for i in 0..3 {
             self.f_cur[i]  = self.f_tgt[i]  + (self.f_cur[i]  - self.f_tgt[i])  * alpha_n;
@@ -472,7 +490,7 @@ impl VoderVoice {
         // Amp tracks phoneme changes with a faster time constant (~8ms) so stops
         // get a crisp attack/closure rather than a slow fade.  Pitch follows the
         // user's coarticulation setting (prosody glide).
-        let amp_tau_samps = (0.008 * SR).max(1.0);
+        let amp_tau_samps = (0.008 * self.sr).max(1.0);
         let amp_alpha_n   = (-(n as f32) / amp_tau_samps).exp();
         self.amp_cur   = self.amp_tgt   + (self.amp_cur   - self.amp_tgt)   * amp_alpha_n;
         self.pitch_cur = self.pitch_tgt + (self.pitch_cur - self.pitch_tgt) * alpha_n;
@@ -490,21 +508,21 @@ impl VoderVoice {
             let f_eff  = [self.f_cur[0] * br, self.f_cur[1] * br, self.f_cur[2] * br];
             let bw_eff = [self.bw_cur[0],      self.bw_cur[1],      self.bw_cur[2]];
             for i in 0..3 {
-                self.resonators[i].set_bpf(f_eff[i], bw_eff[i], SR);
+                self.resonators[i].set_bpf(f_eff[i], bw_eff[i], self.sr);
             }
         }
 
         // glot_lp: only call set_lpf1 when brightness actually changed
         if (br - self.last_br).abs() > 0.001 {
             self.last_br = br;
-            self.glot_lp.set_lpf1(800.0 + 800.0 * br, SR);
+            self.glot_lp.set_lpf1(800.0 + 800.0 * br, self.sr);
         }
 
         // Effective voicing: phoneme's or manual override
         let voicing = if p.voicing_manual > 0.001 { p.voicing_manual } else { self.v_cur };
 
         // ── Sample loop ───────────────────────────────────────────────────────
-        let vib_dt    = p.vibrato_rate / SR;
+        let vib_dt    = p.vibrato_rate / self.sr;
         let vib_cents = p.vibrato_depth;
 
         for s in out.iter_mut() {
@@ -559,14 +577,20 @@ pub struct VoderEngine {
 }
 
 impl VoderEngine {
-    pub fn new(seed: u32) -> Self {
+    pub fn new(seed: u32) -> Self { Self::new_with_sr(seed, DEFAULT_SR) }
+
+    pub fn new_with_sr(seed: u32, sr: f32) -> Self {
         let mut rng = Rng::new(seed);
         VoderEngine {
-            voices:     (0..N_VOICES).map(|_| VoderVoice::new(rng.next_u32())).collect(),
+            voices:     (0..N_VOICES).map(|_| VoderVoice::new(rng.next_u32(), sr)).collect(),
             next_voice: 0,
             last_voice: 0,
             rng,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sr: f32) {
+        for v in self.voices.iter_mut() { v.set_sample_rate(sr); }
     }
 
     pub fn trigger(&mut self, midi_note: u8, velocity: f32, hold_samps: usize, p: &VoderParams) {
