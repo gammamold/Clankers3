@@ -110,6 +110,13 @@ pub unsafe extern "C" fn clankers_drums_set_filter(ptr: *mut ClankersDrums, hz: 
     (*ptr).engine.set_filter(hz);
 }
 
+/// Attack-click transient multiplier (0..2). Scales kick/tom click level.
+/// 0 = no click, 1 = preset default. Affects new notes only.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_set_click(ptr: *mut ClankersDrums, mult: f32) {
+    (*ptr).engine.set_click(mult);
+}
+
 /// Trigger a voice. `voice_id`: 0-6. `velocity`: 0.0..1.0.
 #[no_mangle]
 pub unsafe extern "C" fn clankers_drums_trigger(

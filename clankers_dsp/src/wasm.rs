@@ -56,6 +56,10 @@ impl ClankersDrums {
     /// Global output lowpass cutoff in Hz (80..20000). Live.
     pub fn set_filter(&mut self, hz: f32) { self.engine.set_filter(hz); }
 
+    /// Attack-click transient multiplier (0..2). Scales kick/tom click level.
+    /// 0 = no click, 1 = preset default. Affects new notes only.
+    pub fn set_click(&mut self, mult: f32) { self.engine.set_click(mult); }
+
     /// Trigger a voice.  voice_id: 0-6.
     pub fn trigger(&mut self, voice_id: u8, velocity: f32) {
         self.engine.trigger(voice_id, velocity);

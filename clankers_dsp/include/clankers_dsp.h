@@ -82,6 +82,10 @@ void clankers_drums_set_decay(ClankersDrums* drums, float mult);
 /* Global output lowpass cutoff in Hz (80..20000). Live. */
 void clankers_drums_set_filter(ClankersDrums* drums, float hz);
 
+/* Attack-click transient multiplier (0..2). Scales kick/tom click level.
+ * 0 = no click, 1 = preset default. Affects new notes only. */
+void clankers_drums_set_click(ClankersDrums* drums, float mult);
+
 /* Trigger a voice. voice_id: 0-6. velocity: 0.0..1.0. */
 void clankers_drums_trigger(ClankersDrums* drums, uint8_t voice_id, float velocity);
 
