@@ -187,3 +187,26 @@ pub unsafe extern "C" fn clankers_bass_process(
     let slice = core::slice::from_raw_parts_mut(output, n_samples as usize);
     this.engine.process(slice, &this.params);
 }
+
+/// Return a pointer to a NUL-terminated JSON descriptor array for bass
+/// params. The pointer references a static string baked into the library —
+/// the caller must NOT free it, and it remains valid for the program's
+/// lifetime. The handle argument is unused (params are engine-type-static)
+/// but kept for API uniformity with engines whose params differ per-instance.
+#[no_mangle]
+pub extern "C" fn clankers_bass_param_info(_ptr: *const ClankersBass) -> *const c_char {
+    BassParams::PARAM_INFO_C.as_ptr() as *const c_char
+}
+
+/// Set one param by positional index (see `clankers_bass_param_info`).
+/// Out-of-range indices are ignored; values are clamped to each param's
+/// declared range. Thread-safety is the caller's responsibility (same
+/// rules as `set_params`).
+#[no_mangle]
+pub unsafe extern "C" fn clankers_bass_set_param(
+    ptr: *mut ClankersBass,
+    idx: u32,
+    value: f32,
+) {
+    (*ptr).params.set_param(idx, value);
+}

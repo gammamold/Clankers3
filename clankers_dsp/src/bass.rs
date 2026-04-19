@@ -11,6 +11,23 @@ use crate::tpt_ladder::TptLadder;
 
 const SR: f32 = 44100.0;
 
+const PARAM_INFO_JSON: &str = concat!(
+    "[",
+    r#"{"idx":0,"name":"FM Index","unit":"","min":0.0,"max":8.0,"default":2.0,"cc":71},"#,
+    r#"{"idx":1,"name":"Cutoff","unit":"norm","min":0.0,"max":1.0,"default":0.45,"cc":74},"#,
+    r#"{"idx":2,"name":"Flt Decay","unit":"s","min":0.01,"max":1.0,"default":0.18,"skew":"log","cc":23},"#,
+    r#"{"idx":3,"name":"Amp Decay","unit":"s","min":0.01,"max":2.0,"default":0.35,"skew":"log","cc":75}"#,
+    "]",
+);
+const PARAM_INFO_C_BYTES: &[u8] = concat!(
+    "[",
+    r#"{"idx":0,"name":"FM Index","unit":"","min":0.0,"max":8.0,"default":2.0,"cc":71},"#,
+    r#"{"idx":1,"name":"Cutoff","unit":"norm","min":0.0,"max":1.0,"default":0.45,"cc":74},"#,
+    r#"{"idx":2,"name":"Flt Decay","unit":"s","min":0.01,"max":1.0,"default":0.18,"skew":"log","cc":23},"#,
+    r#"{"idx":3,"name":"Amp Decay","unit":"s","min":0.01,"max":2.0,"default":0.35,"skew":"log","cc":75}"#,
+    "]\0",
+).as_bytes();
+
 #[derive(Clone, Copy)]
 pub struct BassParams {
     pub fm_index:    f32,  // 0..8    (CC71/127 * 8)
@@ -26,6 +43,29 @@ impl Default for BassParams {
             cutoff_norm: 0.45,
             flt_decay:   0.18,
             amp_decay:   0.35,
+        }
+    }
+}
+
+impl BassParams {
+    /// Descriptor for UI auto-generation. Stable positional indices:
+    ///   0 fm_index, 1 cutoff_norm, 2 flt_decay, 3 amp_decay.
+    /// Values in real units so the host can build sliders with proper skew.
+    ///
+    /// Exposed with a trailing NUL (`PARAM_INFO_C`) for the C ABI, and
+    /// without (`PARAM_INFO`) for anything else.
+    pub const PARAM_INFO: &'static str = PARAM_INFO_JSON;
+    pub const PARAM_INFO_C: &'static [u8] = PARAM_INFO_C_BYTES;
+
+    /// Set one param by positional index (see `PARAM_INFO`). Out-of-range
+    /// indices are ignored. Values are clamped to the declared range.
+    pub fn set_param(&mut self, idx: u32, value: f32) {
+        match idx {
+            0 => self.fm_index    = value.clamp(0.0, 8.0),
+            1 => self.cutoff_norm = value.clamp(0.0, 1.0),
+            2 => self.flt_decay   = value.clamp(0.01, 1.0),
+            3 => self.amp_decay   = value.clamp(0.01, 2.0),
+            _ => {}
         }
     }
 }

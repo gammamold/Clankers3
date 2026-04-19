@@ -121,6 +121,20 @@ void clankers_bass_trigger(
 /* Render n_samples mono samples (overwrites output; no alloc). */
 void clankers_bass_process(ClankersBass* bass, float* output, uint32_t n_samples);
 
+/* Return a pointer to a static NUL-terminated JSON array describing the
+ * bass params for UI auto-generation. Caller must NOT free it.
+ *   [{"idx":0,"name":"FM Index","unit":"","min":0,"max":8,"default":2,"cc":71}, ...]
+ * Fields: idx (uint), name (str), unit (str), min/max/default (float),
+ *   skew (optional, "log"|"linear"), cc (optional, 0-127 MIDI CC#).
+ * Handle arg is unused for bass (params are type-static) but kept for
+ * API uniformity with engines whose descriptor varies per instance. */
+const char* clankers_bass_param_info(const ClankersBass* bass);
+
+/* Set one param by positional index (see clankers_bass_param_info).
+ * Out-of-range indices are ignored; values are clamped to each param's
+ * declared range. Intended for live slider drags. */
+void clankers_bass_set_param(ClankersBass* bass, uint32_t idx, float value);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
