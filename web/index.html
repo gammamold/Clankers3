@@ -6340,6 +6340,15 @@ if (typeof TextEncoder === 'undefined') {
       btnModeLoop.classList.toggle('mode-active', !songMode);
       btnModeSong.classList.toggle('mode-active', songMode);
       arrSection.style.display = songMode ? '' : 'none';
+      if (songMode && songArrangement.length === 0) {
+        for (let i = 0; i < patternBank.length && songArrangement.length < ARR_COUNT; i++) {
+          if (patternBank[i]) songArrangement.push(i);
+        }
+        if (songArrangement.length) {
+          updateArrGrid();
+          log(`[seq] arrangement auto-filled with ${songArrangement.length} pattern(s)`);
+        }
+      }
     }
     btnModeLoop.addEventListener('click', () => setMode('loop'));
     btnModeSong.addEventListener('click', () => setMode('song'));
