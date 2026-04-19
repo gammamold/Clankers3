@@ -60,6 +60,61 @@ impl Default for RhodesParams {
     }
 }
 
+// Positional descriptor for host UIs. Stable order:
+//   0 brightness, 1 amp_decay, 2 mod_decay, 3 harm_ratio, 4 key_scale,
+//   5 tremolo_rate, 6 tremolo_depth, 7 chorus_rate, 8 chorus_mix, 9 pan.
+const PARAM_INFO_JSON: &str = concat!(
+    "[",
+    r#"{"idx":0,"name":"Brightness","unit":"","min":0.5,"max":8.0,"default":3.0,"cc":74},"#,
+    r#"{"idx":1,"name":"Amp Decay","unit":"s","min":0.5,"max":6.0,"default":2.5,"skew":"log","cc":72},"#,
+    r#"{"idx":2,"name":"Mod Decay","unit":"s","min":0.02,"max":0.6,"default":0.18,"skew":"log","cc":73},"#,
+    r#"{"idx":3,"name":"Harm Ratio","unit":"","min":1.0,"max":2.0,"default":1.0,"cc":20},"#,
+    r#"{"idx":4,"name":"Key Scale","unit":"","min":0.0,"max":1.0,"default":0.55,"cc":55},"#,
+    r#"{"idx":5,"name":"Tremolo Rate","unit":"Hz","min":0.0,"max":9.0,"default":2.2,"cc":26},"#,
+    r#"{"idx":6,"name":"Tremolo Depth","unit":"","min":0.0,"max":0.8,"default":0.08,"cc":27},"#,
+    r#"{"idx":7,"name":"Chorus Rate","unit":"Hz","min":0.1,"max":5.0,"default":0.7,"cc":29},"#,
+    r#"{"idx":8,"name":"Chorus Mix","unit":"","min":0.0,"max":0.85,"default":0.12,"cc":30},"#,
+    r#"{"idx":9,"name":"Pan","unit":"","min":0.0,"max":1.0,"default":0.5,"cc":10}"#,
+    "]",
+);
+const PARAM_INFO_C_BYTES: &[u8] = concat!(
+    "[",
+    r#"{"idx":0,"name":"Brightness","unit":"","min":0.5,"max":8.0,"default":3.0,"cc":74},"#,
+    r#"{"idx":1,"name":"Amp Decay","unit":"s","min":0.5,"max":6.0,"default":2.5,"skew":"log","cc":72},"#,
+    r#"{"idx":2,"name":"Mod Decay","unit":"s","min":0.02,"max":0.6,"default":0.18,"skew":"log","cc":73},"#,
+    r#"{"idx":3,"name":"Harm Ratio","unit":"","min":1.0,"max":2.0,"default":1.0,"cc":20},"#,
+    r#"{"idx":4,"name":"Key Scale","unit":"","min":0.0,"max":1.0,"default":0.55,"cc":55},"#,
+    r#"{"idx":5,"name":"Tremolo Rate","unit":"Hz","min":0.0,"max":9.0,"default":2.2,"cc":26},"#,
+    r#"{"idx":6,"name":"Tremolo Depth","unit":"","min":0.0,"max":0.8,"default":0.08,"cc":27},"#,
+    r#"{"idx":7,"name":"Chorus Rate","unit":"Hz","min":0.1,"max":5.0,"default":0.7,"cc":29},"#,
+    r#"{"idx":8,"name":"Chorus Mix","unit":"","min":0.0,"max":0.85,"default":0.12,"cc":30},"#,
+    r#"{"idx":9,"name":"Pan","unit":"","min":0.0,"max":1.0,"default":0.5,"cc":10}"#,
+    "]\0",
+).as_bytes();
+
+impl RhodesParams {
+    pub const PARAM_INFO:   &'static str  = PARAM_INFO_JSON;
+    pub const PARAM_INFO_C: &'static [u8] = PARAM_INFO_C_BYTES;
+
+    /// Set one param by positional index (see `PARAM_INFO`). Out-of-range
+    /// indices are ignored. Values are clamped to the declared range.
+    pub fn set_param(&mut self, idx: u32, value: f32) {
+        match idx {
+            0 => self.brightness    = value.clamp(0.5, 8.0),
+            1 => self.amp_decay     = value.clamp(0.5, 6.0),
+            2 => self.mod_decay     = value.clamp(0.02, 0.6),
+            3 => self.harm_ratio    = value.clamp(1.0, 2.0),
+            4 => self.key_scale     = value.clamp(0.0, 1.0),
+            5 => self.tremolo_rate  = value.clamp(0.0, 9.0),
+            6 => self.tremolo_depth = value.clamp(0.0, 0.8),
+            7 => self.chorus_rate   = value.clamp(0.1, 5.0),
+            8 => self.chorus_mix    = value.clamp(0.0, 0.85),
+            9 => self.pan           = value.clamp(0.0, 1.0),
+            _ => {}
+        }
+    }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /// exp(-1 / (decay_s * SR))  — per-sample multiplier for exponential decay

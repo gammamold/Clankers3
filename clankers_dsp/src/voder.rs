@@ -169,6 +169,55 @@ impl Default for VoderParams {
     }
 }
 
+// Positional descriptor for host UIs. Stable order:
+//   0 brightness, 1 voicing_manual, 2 attack_s, 3 release_s,
+//   4 vibrato_depth, 5 vibrato_rate, 6 coartic_ms, 7 volume.
+const PARAM_INFO_JSON: &str = concat!(
+    "[",
+    r#"{"idx":0,"name":"Brightness","unit":"","min":0.5,"max":1.5,"default":1.0,"cc":74},"#,
+    r#"{"idx":1,"name":"Voicing","unit":"","min":0.0,"max":1.0,"default":0.0,"cc":20},"#,
+    r#"{"idx":2,"name":"Attack","unit":"s","min":0.001,"max":0.1,"default":0.015,"skew":"log","cc":73},"#,
+    r#"{"idx":3,"name":"Release","unit":"s","min":0.01,"max":0.5,"default":0.08,"skew":"log","cc":72},"#,
+    r#"{"idx":4,"name":"Vibrato Depth","unit":"semitones","min":0.0,"max":0.667,"default":0.0,"cc":75},"#,
+    r#"{"idx":5,"name":"Vibrato Rate","unit":"Hz","min":3.0,"max":8.0,"default":5.5,"cc":76},"#,
+    r#"{"idx":6,"name":"Coartic","unit":"ms","min":5.0,"max":80.0,"default":20.0,"cc":77},"#,
+    r#"{"idx":7,"name":"Volume","unit":"","min":0.0,"max":1.0,"default":0.9,"cc":16}"#,
+    "]",
+);
+const PARAM_INFO_C_BYTES: &[u8] = concat!(
+    "[",
+    r#"{"idx":0,"name":"Brightness","unit":"","min":0.5,"max":1.5,"default":1.0,"cc":74},"#,
+    r#"{"idx":1,"name":"Voicing","unit":"","min":0.0,"max":1.0,"default":0.0,"cc":20},"#,
+    r#"{"idx":2,"name":"Attack","unit":"s","min":0.001,"max":0.1,"default":0.015,"skew":"log","cc":73},"#,
+    r#"{"idx":3,"name":"Release","unit":"s","min":0.01,"max":0.5,"default":0.08,"skew":"log","cc":72},"#,
+    r#"{"idx":4,"name":"Vibrato Depth","unit":"semitones","min":0.0,"max":0.667,"default":0.0,"cc":75},"#,
+    r#"{"idx":5,"name":"Vibrato Rate","unit":"Hz","min":3.0,"max":8.0,"default":5.5,"cc":76},"#,
+    r#"{"idx":6,"name":"Coartic","unit":"ms","min":5.0,"max":80.0,"default":20.0,"cc":77},"#,
+    r#"{"idx":7,"name":"Volume","unit":"","min":0.0,"max":1.0,"default":0.9,"cc":16}"#,
+    "]\0",
+).as_bytes();
+
+impl VoderParams {
+    pub const PARAM_INFO:   &'static str  = PARAM_INFO_JSON;
+    pub const PARAM_INFO_C: &'static [u8] = PARAM_INFO_C_BYTES;
+
+    /// Set one param by positional index (see `PARAM_INFO`). Out-of-range
+    /// indices are ignored. Values are clamped to the declared range.
+    pub fn set_param(&mut self, idx: u32, value: f32) {
+        match idx {
+            0 => self.brightness     = value.clamp(0.5, 1.5),
+            1 => self.voicing_manual = value.clamp(0.0, 1.0),
+            2 => self.attack_s       = value.clamp(0.001, 0.1),
+            3 => self.release_s      = value.clamp(0.01, 0.5),
+            4 => self.vibrato_depth  = value.clamp(0.0, 0.667),
+            5 => self.vibrato_rate   = value.clamp(3.0, 8.0),
+            6 => self.coartic_ms     = value.clamp(5.0, 80.0),
+            7 => self.volume         = value.clamp(0.0, 1.0),
+            _ => {}
+        }
+    }
+}
+
 // ── VoderVoice ────────────────────────────────────────────────────────────────
 
 /// One entry in a timed phoneme sequence.

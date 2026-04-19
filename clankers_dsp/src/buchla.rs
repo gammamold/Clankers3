@@ -12,6 +12,27 @@ use crate::wavefolder::Wavefolder;
 
 const SR: f32 = 44100.0;
 
+// Positional descriptor for host UIs. Stable order:
+//   0 cutoff_norm, 1 fold_amount, 2 release_s, 3 filter_mod, 4 volume.
+const PARAM_INFO_JSON: &str = concat!(
+    "[",
+    r#"{"idx":0,"name":"Cutoff","unit":"norm","min":0.0,"max":1.0,"default":0.44,"cc":74},"#,
+    r#"{"idx":1,"name":"Wavefold","unit":"","min":0.0,"max":1.0,"default":0.29,"cc":20},"#,
+    r#"{"idx":2,"name":"Release","unit":"s","min":0.005,"max":3.0,"default":0.18,"skew":"log","cc":19},"#,
+    r#"{"idx":3,"name":"Filter Mod","unit":"","min":0.0,"max":1.0,"default":0.0,"cc":21},"#,
+    r#"{"idx":4,"name":"Volume","unit":"","min":0.0,"max":1.0,"default":1.0,"cc":16}"#,
+    "]",
+);
+const PARAM_INFO_C_BYTES: &[u8] = concat!(
+    "[",
+    r#"{"idx":0,"name":"Cutoff","unit":"norm","min":0.0,"max":1.0,"default":0.44,"cc":74},"#,
+    r#"{"idx":1,"name":"Wavefold","unit":"","min":0.0,"max":1.0,"default":0.29,"cc":20},"#,
+    r#"{"idx":2,"name":"Release","unit":"s","min":0.005,"max":3.0,"default":0.18,"skew":"log","cc":19},"#,
+    r#"{"idx":3,"name":"Filter Mod","unit":"","min":0.0,"max":1.0,"default":0.0,"cc":21},"#,
+    r#"{"idx":4,"name":"Volume","unit":"","min":0.0,"max":1.0,"default":1.0,"cc":16}"#,
+    "]\0",
+).as_bytes();
+
 #[derive(Clone, Copy)]
 pub struct BuchlaParams {
     pub cutoff_norm: f32,   // CC74 / 127  — base LPF ceiling
@@ -29,6 +50,24 @@ impl Default for BuchlaParams {
             release_s:   0.18,
             filter_mod:  0.0,
             volume:      1.0,
+        }
+    }
+}
+
+impl BuchlaParams {
+    pub const PARAM_INFO:   &'static str   = PARAM_INFO_JSON;
+    pub const PARAM_INFO_C: &'static [u8]  = PARAM_INFO_C_BYTES;
+
+    /// Set one param by positional index (see `PARAM_INFO`). Out-of-range
+    /// indices are ignored. Values are clamped to the declared range.
+    pub fn set_param(&mut self, idx: u32, value: f32) {
+        match idx {
+            0 => self.cutoff_norm = value.clamp(0.0, 1.0),
+            1 => self.fold_amount = value.clamp(0.0, 1.0),
+            2 => self.release_s   = value.clamp(0.005, 3.0),
+            3 => self.filter_mod  = value.clamp(0.0, 1.0),
+            4 => self.volume      = value.clamp(0.0, 1.0),
+            _ => {}
         }
     }
 }

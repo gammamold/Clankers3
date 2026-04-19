@@ -58,6 +58,63 @@ impl Default for PadsParams {
     }
 }
 
+// Positional descriptor for host UIs. Stable order:
+//   0 cutoff_hz, 1 resonance, 2 amp_attack, 3 amp_decay, 4 amp_sustain,
+//   5 amp_release, 6 reverb_size, 7 reverb_mix, 8 chorus_rate,
+//   9 chorus_depth, 10 chorus_mix.
+const PARAM_INFO_JSON: &str = concat!(
+    "[",
+    r#"{"idx":0,"name":"Cutoff","unit":"Hz","min":20.0,"max":8000.0,"default":800.0,"skew":"log","cc":74},"#,
+    r#"{"idx":1,"name":"Resonance","unit":"","min":0.0,"max":0.9,"default":0.15,"cc":71},"#,
+    r#"{"idx":2,"name":"Attack","unit":"s","min":0.05,"max":4.0,"default":0.4,"skew":"log","cc":73},"#,
+    r#"{"idx":3,"name":"Decay","unit":"s","min":0.05,"max":2.0,"default":0.5,"skew":"log","cc":75},"#,
+    r#"{"idx":4,"name":"Sustain","unit":"","min":0.0,"max":1.0,"default":0.8,"cc":79},"#,
+    r#"{"idx":5,"name":"Release","unit":"s","min":0.1,"max":4.0,"default":1.2,"skew":"log","cc":72},"#,
+    r#"{"idx":6,"name":"Reverb Size","unit":"","min":0.0,"max":1.0,"default":0.65,"cc":88},"#,
+    r#"{"idx":7,"name":"Reverb Mix","unit":"","min":0.0,"max":1.0,"default":0.45,"cc":91},"#,
+    r#"{"idx":8,"name":"Chorus Rate","unit":"Hz","min":0.1,"max":5.0,"default":0.5,"cc":29},"#,
+    r#"{"idx":9,"name":"Chorus Depth","unit":"","min":0.0,"max":1.0,"default":0.4,"cc":30},"#,
+    r#"{"idx":10,"name":"Chorus Mix","unit":"","min":0.0,"max":1.0,"default":0.35,"cc":31}"#,
+    "]",
+);
+const PARAM_INFO_C_BYTES: &[u8] = concat!(
+    "[",
+    r#"{"idx":0,"name":"Cutoff","unit":"Hz","min":20.0,"max":8000.0,"default":800.0,"skew":"log","cc":74},"#,
+    r#"{"idx":1,"name":"Resonance","unit":"","min":0.0,"max":0.9,"default":0.15,"cc":71},"#,
+    r#"{"idx":2,"name":"Attack","unit":"s","min":0.05,"max":4.0,"default":0.4,"skew":"log","cc":73},"#,
+    r#"{"idx":3,"name":"Decay","unit":"s","min":0.05,"max":2.0,"default":0.5,"skew":"log","cc":75},"#,
+    r#"{"idx":4,"name":"Sustain","unit":"","min":0.0,"max":1.0,"default":0.8,"cc":79},"#,
+    r#"{"idx":5,"name":"Release","unit":"s","min":0.1,"max":4.0,"default":1.2,"skew":"log","cc":72},"#,
+    r#"{"idx":6,"name":"Reverb Size","unit":"","min":0.0,"max":1.0,"default":0.65,"cc":88},"#,
+    r#"{"idx":7,"name":"Reverb Mix","unit":"","min":0.0,"max":1.0,"default":0.45,"cc":91},"#,
+    r#"{"idx":8,"name":"Chorus Rate","unit":"Hz","min":0.1,"max":5.0,"default":0.5,"cc":29},"#,
+    r#"{"idx":9,"name":"Chorus Depth","unit":"","min":0.0,"max":1.0,"default":0.4,"cc":30},"#,
+    r#"{"idx":10,"name":"Chorus Mix","unit":"","min":0.0,"max":1.0,"default":0.35,"cc":31}"#,
+    "]\0",
+).as_bytes();
+
+impl PadsParams {
+    pub const PARAM_INFO:   &'static str  = PARAM_INFO_JSON;
+    pub const PARAM_INFO_C: &'static [u8] = PARAM_INFO_C_BYTES;
+
+    pub fn set_param(&mut self, idx: u32, value: f32) {
+        match idx {
+             0 => self.cutoff_hz    = value.clamp(20.0, 8000.0),
+             1 => self.resonance    = value.clamp(0.0, 0.9),
+             2 => self.amp_attack   = value.clamp(0.05, 4.0),
+             3 => self.amp_decay    = value.clamp(0.05, 2.0),
+             4 => self.amp_sustain  = value.clamp(0.0, 1.0),
+             5 => self.amp_release  = value.clamp(0.1, 4.0),
+             6 => self.reverb_size  = value.clamp(0.0, 1.0),
+             7 => self.reverb_mix   = value.clamp(0.0, 1.0),
+             8 => self.chorus_rate  = value.clamp(0.1, 5.0),
+             9 => self.chorus_depth = value.clamp(0.0, 1.0),
+            10 => self.chorus_mix   = value.clamp(0.0, 1.0),
+            _  => {}
+        }
+    }
+}
+
 pub struct PadsVoice {
     osc_saw:        Oscillator,
     osc_tri:        Oscillator,
