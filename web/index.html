@@ -6072,7 +6072,7 @@ if (typeof TextEncoder === 'undefined') {
         const bpm = +document.getElementById('seq-bpm').value;
         const s = getSeq();
         let sheet;
-        if (songMode && songArrangement.length > 0) {
+        if (songMode && _songHasPatterns()) {
           sheet = buildSongSheet();
           sheet.bpm = bpm;
           s.loop = songRepeat;
@@ -6326,8 +6326,11 @@ if (typeof TextEncoder === 'undefined') {
         patBtns.splice(last, 1);
         patternBank.splice(last, 1);
         // remove any arrangement references to this slot
-        for (let j = songArrangement.length - 1; j >= 0; j--) {
-          if (songArrangement[j] === last) songArrangement.splice(j, 1);
+        for (let j = 0; j < songArrangement.length; j++) {
+          if (songArrangement[j] === last) songArrangement[j] = null;
+        }
+        while (songArrangement.length && songArrangement[songArrangement.length - 1] == null) {
+          songArrangement.pop();
         }
         removed++;
       }
@@ -6400,7 +6403,8 @@ if (typeof TextEncoder === 'undefined') {
       btnModeLoop.classList.toggle('mode-active', !songMode);
       btnModeSong.classList.toggle('mode-active', songMode);
       arrSection.style.display = songMode ? '' : 'none';
-      if (songMode && songArrangement.length === 0) {
+      if (songMode && !_songHasPatterns()) {
+        songArrangement = [];
         for (let i = 0; i < patternBank.length && songArrangement.length < ARR_COUNT; i++) {
           if (patternBank[i]) songArrangement.push(i);
         }
@@ -6429,10 +6433,18 @@ if (typeof TextEncoder === 'undefined') {
       slot.className = 'arr-slot';
       slot.dataset.pos = i;
       slot.addEventListener('click', () => {
-        if (i < songArrangement.length) {
-          songArrangement.splice(i, 1);       // remove slot
-        } else if (i === songArrangement.length && patternBank[activeSlot]) {
-          songArrangement.push(activeSlot);   // append active pattern
+        // Sparse arrangement: each arr slot owns its own index. Clicking a
+        // filled slot clears just that position (null); clicking an empty
+        // slot inserts the active pattern there. Trailing nulls are trimmed
+        // so length stays tight.
+        if (songArrangement[i] != null) {
+          songArrangement[i] = null;
+        } else if (patternBank[activeSlot]) {
+          while (songArrangement.length <= i) songArrangement.push(null);
+          songArrangement[i] = activeSlot;
+        }
+        while (songArrangement.length && songArrangement[songArrangement.length - 1] == null) {
+          songArrangement.pop();
         }
         updateArrGrid();
       });
@@ -6493,18 +6505,20 @@ if (typeof TextEncoder === 'undefined') {
     function updateArrGrid() {
       for (let i = 0; i < arrSlots.length; i++) {
         const slot = arrSlots[i];
-        if (i < songArrangement.length) {
-          const si = songArrangement[i];
+        const si = songArrangement[i];
+        if (si != null && patternBank[si]) {
           slot.textContent = `P${si + 1}`;
           slot.title = patternBank[si]?.label ?? '';
           slot.classList.add('has-pat');
         } else {
-          const canAdd = i === songArrangement.length && patternBank[activeSlot];
-          slot.textContent = canAdd ? '+' : '—';
+          slot.textContent = patternBank[activeSlot] ? '+' : '—';
           slot.classList.remove('has-pat', 'arr-playing');
         }
       }
     }
+
+    const _songHasPatterns = () =>
+      songArrangement.some(si => si != null && patternBank[si]);
 
     document.getElementById('btn-arr-clear').addEventListener('click', () => {
       songArrangement = [];
@@ -6523,9 +6537,10 @@ if (typeof TextEncoder === 'undefined') {
       arrBeatOffsets = [];
       let totalBeats = 0;
       let bpm = null;
-      for (const si of songArrangement) {
-        const pat = patternBank[si];
-        if (!pat) continue;
+      for (let idx = 0; idx < songArrangement.length; idx++) {
+        const si = songArrangement[idx];
+        const pat = si != null ? patternBank[si] : null;
+        if (!pat) { arrBeatOffsets.push(null); continue; }
         arrBeatOffsets.push(totalBeats);
         bpm = bpm ?? pat.sheet.bpm;
         const patSteps = pat.sheet.steps || [];
@@ -6547,11 +6562,12 @@ if (typeof TextEncoder === 'undefined') {
       arrPlayTimer = setInterval(() => {
         if (!seq?.isPlaying || !songMode) return;
         const currentBeat = seq.getCurrentBeat();
-        let playing = arrBeatOffsets.length - 1;
-        for (let i = 0; i < arrBeatOffsets.length - 1; i++) {
-          if (currentBeat < arrBeatOffsets[i + 1]) { playing = i; break; }
+        let playing = -1;
+        for (let i = 0; i < arrBeatOffsets.length; i++) {
+          if (arrBeatOffsets[i] == null) continue;
+          if (currentBeat >= arrBeatOffsets[i]) playing = i;
         }
-        arrSlots.forEach((s, i) => s.classList.toggle('arr-playing', i === playing && i < songArrangement.length));
+        arrSlots.forEach((s, i) => s.classList.toggle('arr-playing', i === playing));
       }, 80);
     }
     function stopArrIndicator() {
@@ -7301,13 +7317,16 @@ if (typeof TextEncoder === 'undefined') {
 
     // ── AI AUTO recording: bake LLM improvisation into pattern automation ─────
     function _activePatternForBeat(beat) {
-      if (songMode && songArrangement.length > 0 && arrBeatOffsets.length) {
-        let idx = arrBeatOffsets.length - 1;
-        for (let i = 0; i < arrBeatOffsets.length - 1; i++) {
-          if (beat < arrBeatOffsets[i + 1]) { idx = i; break; }
+      if (songMode && _songHasPatterns() && arrBeatOffsets.length) {
+        let idx = -1;
+        for (let i = 0; i < arrBeatOffsets.length; i++) {
+          if (arrBeatOffsets[i] == null) continue;
+          if (beat >= arrBeatOffsets[i]) idx = i;
         }
-        const slot = songArrangement[idx];
-        return { slot, localBeat: beat - arrBeatOffsets[idx] };
+        if (idx >= 0) {
+          const slot = songArrangement[idx];
+          return { slot, localBeat: beat - arrBeatOffsets[idx] };
+        }
       }
       return { slot: activeSlot, localBeat: beat };
     }
@@ -7723,7 +7742,7 @@ if (typeof TextEncoder === 'undefined') {
 
       let sheet;
       try {
-        if (songMode && songArrangement.length > 0) {
+        if (songMode && _songHasPatterns()) {
           sheet = buildSongSheet();
           sheet.bpm = +document.getElementById('seq-bpm').value;
         } else {
@@ -8755,17 +8774,19 @@ if (typeof TextEncoder === 'undefined') {
       _roll = new PianoRoll(document.getElementById('room-roll'));
       try {
         let sheet = null;
-        if (songMode && songArrangement.length > 0) {
+        if (songMode && _songHasPatterns()) {
           let slotIdx = -1;
           if (seq?.isPlaying) {
             const beat = seq.getCurrentBeat();
             if (beat >= 0) slotIdx = _activePatternForBeat(beat).slot;
           }
-          if (slotIdx < 0 && _songSelectedArrIdx >= 0 && _songSelectedArrIdx < songArrangement.length) {
+          if ((slotIdx == null || slotIdx < 0) && _songSelectedArrIdx >= 0 && _songSelectedArrIdx < songArrangement.length) {
             slotIdx = songArrangement[_songSelectedArrIdx];
           }
-          if (slotIdx < 0) slotIdx = songArrangement[0];
-          if (patternBank[slotIdx]?.sheet) {
+          if (slotIdx == null || slotIdx < 0) {
+            slotIdx = songArrangement.find(si => si != null && patternBank[si]);
+          }
+          if (slotIdx != null && patternBank[slotIdx]?.sheet) {
             sheet = patternBank[slotIdx].sheet;
             activeSlot = slotIdx;
             document.getElementById('sheet-json').value = JSON.stringify(sheet, null, 2);
@@ -9053,17 +9074,12 @@ if (typeof TextEncoder === 'undefined') {
         [...songArr.children].forEach((slot, i) => {
           const orig = legArr.children[i];
           if (!orig) return;
-          slot.title = i < songArrangement.length
+          const isFilled = songArrangement[i] != null && patternBank[songArrangement[i]];
+          slot.title = isFilled
             ? 'Click to remove this slot'
             : 'Click to add the active pattern';
           slot.addEventListener('click', () => {
-            // Click a filled slot to remove it; click an empty slot to append
-            // the active pattern. Delegates to the legacy arr-grid, which
-            // already implements both halves of this toggle.
-            if (i < songArrangement.length) {
-              if (_songSelectedArrIdx === i) _songSelectedArrIdx = -1;
-              else if (_songSelectedArrIdx > i) _songSelectedArrIdx--;
-            }
+            if (isFilled && _songSelectedArrIdx === i) _songSelectedArrIdx = -1;
             orig.click();
           });
         });
