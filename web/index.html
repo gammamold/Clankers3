@@ -9111,9 +9111,11 @@ if (typeof TextEncoder === 'undefined') {
     });
     document.getElementById('btn-song-back').addEventListener('click', () => showScreen('main'));
 
-    // PREVIEW — play the selected pattern in loop mode, restore mode on stop
+    // PREVIEW — play the active pat-bank pattern (P1/P2/...) in loop mode,
+    // restore song mode on stop. The user picks which pattern to preview by
+    // clicking a P# button in the song screen's pattern bank.
     document.getElementById('song-preview-btn').addEventListener('click', () => {
-      if (_songSelectedArrIdx < 0 || !patternBank[activeSlot]) return;
+      if (!patternBank[activeSlot]) return;
       _songPreviewWasSongMode = songMode;
       if (songMode) {
         // switch to loop mode without hiding the arrangement section
