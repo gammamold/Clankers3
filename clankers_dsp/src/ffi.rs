@@ -1,0 +1,92 @@
+//! C ABI for native consumers (JUCE, VST, CLI tools).
+//!
+//! Excluded from WASM builds — `wasm-bindgen` provides the JS surface there.
+//! Matches the hand-written header `clankers_dsp.h` shipped at the crate root.
+//!
+//! Conventions:
+//!   - Constructors return an owning `*mut T`; caller must pair with `_free`.
+//!   - All pointers are assumed non-null and well-aligned unless noted.
+//!   - `process` functions write exactly `n_samples` floats (mono) or
+//!     `n_samples * 2` interleaved floats (stereo).
+//!   - No allocation in the audio path — buffers are caller-owned.
+//!
+//! Thread safety: each engine instance is single-threaded. Call audio-rate
+//! methods (`trigger`, `process`) from the audio thread; control-rate methods
+//! (`set_*`) can be called from another thread only if the consumer provides
+//! its own synchronisation. No internal locking.
+
+use crate::drums::DrumsEngine;
+
+// ── Drums ────────────────────────────────────────────────────────────────────
+
+/// Opaque handle to a `DrumsEngine`. Construct with
+/// [`clankers_drums_new`], destroy with [`clankers_drums_free`].
+pub struct ClankersDrums {
+    engine: DrumsEngine,
+}
+
+/// Allocate a new drum engine. Returns an owning pointer the caller must
+/// later pass to [`clankers_drums_free`]. Never returns null.
+#[no_mangle]
+pub extern "C" fn clankers_drums_new(seed: u32) -> *mut ClankersDrums {
+    Box::into_raw(Box::new(ClankersDrums {
+        engine: DrumsEngine::new(seed),
+    }))
+}
+
+/// Destroy a drum engine previously returned by [`clankers_drums_new`].
+/// Passing null is a no-op. Passing any other pointer not produced by
+/// `clankers_drums_new` is undefined behaviour.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_free(ptr: *mut ClankersDrums) {
+    if !ptr.is_null() {
+        drop(Box::from_raw(ptr));
+    }
+}
+
+/// Select drum machine profile. `id`: 0=808, 1=909, 2=606.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_set_profile(ptr: *mut ClankersDrums, id: u8) {
+    (*ptr).engine.set_profile(id);
+}
+
+/// Global pitch shift in semitones (−12..+12).
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_set_pitch(ptr: *mut ClankersDrums, semitones: f32) {
+    (*ptr).engine.set_pitch(semitones);
+}
+
+/// Global decay multiplier (0.1..8.0). Updates active voices immediately.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_set_decay(ptr: *mut ClankersDrums, mult: f32) {
+    (*ptr).engine.set_decay(mult);
+}
+
+/// Global output lowpass cutoff in Hz (80..20000). Live.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_set_filter(ptr: *mut ClankersDrums, hz: f32) {
+    (*ptr).engine.set_filter(hz);
+}
+
+/// Trigger a voice. `voice_id`: 0-6. `velocity`: 0.0..1.0.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_trigger(
+    ptr: *mut ClankersDrums,
+    voice_id: u8,
+    velocity: f32,
+) {
+    (*ptr).engine.trigger(voice_id, velocity);
+}
+
+/// Render `n_samples` mono samples into the caller-supplied buffer.
+/// The buffer is overwritten (not mixed). It must have capacity for
+/// at least `n_samples` `f32` values.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_drums_process(
+    ptr: *mut ClankersDrums,
+    output: *mut f32,
+    n_samples: u32,
+) {
+    let slice = core::slice::from_raw_parts_mut(output, n_samples as usize);
+    (*ptr).engine.process(slice);
+}

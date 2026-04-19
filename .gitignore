@@ -23,6 +23,10 @@ node_modules/
 clankers_dsp/target/
 clankers_dsp/pkg/
 
+# JUCE desktop scaffold — belongs in the gammamold/ClankersDesktop repo,
+# kept here as a staging area for easy copy-out. Not part of Clankers3.
+ClankersDesktop_scaffold/
+
 # OS
 .DS_Store
 Thumbs.db
