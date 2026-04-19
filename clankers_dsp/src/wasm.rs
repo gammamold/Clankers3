@@ -6,6 +6,10 @@
 
 use crate::bass::{self, BassEngine, BassParams};
 use crate::buchla::{self, BuchlaEngine, BuchlaParams};
+use crate::cc::{
+    parse_bass_params, parse_buchla_params, parse_float_array, parse_pads_params,
+    parse_rhodes_params, parse_usize_array, parse_voder_params,
+};
 use crate::drums::DrumsEngine;
 use crate::graph::engine::{SynthGraph, GraphFx};
 use crate::pads::{self, PadsEngine, PadsParams};
@@ -132,24 +136,6 @@ impl ClankersBass {
 
         Float32Array::from(&buf[..end])
     }
-}
-
-// ── CC JSON → BassParams ──────────────────────────────────────────────────────
-
-fn parse_bass_params(cc_json: &str) -> BassParams {
-    let mut p = BassParams::default();
-
-    for (key, val) in parse_cc_map(cc_json) {
-        let n = val / 127.0;
-        match key {
-            71 => p.fm_index    = n * 8.0,
-            74 => p.cutoff_norm = n,
-            23 => p.flt_decay   = 0.01 + n * 0.99,
-            75 => p.amp_decay   = 0.01 + n * 1.99,
-            _  => {}
-        }
-    }
-    p
 }
 
 // ── Buchla ────────────────────────────────────────────────────────────────────
@@ -300,27 +286,6 @@ impl ClankersRhodes {
     }
 }
 
-fn parse_rhodes_params(cc_json: &str) -> RhodesParams {
-    let mut p = RhodesParams::default();
-    for (key, val) in parse_cc_map(cc_json) {
-        let n = val / 127.0;
-        match key {
-            74 => p.brightness    = 0.5 + n.sqrt() * 4.35,
-            72 => p.amp_decay     = 0.5 + n * 5.5,
-            20 => p.harm_ratio    = if val < 43.0 { 1.0 } else if val < 85.0 { 1.5 } else { 2.0 },
-            73 => p.mod_decay     = 0.02 + n * 0.58,
-            55 => p.key_scale     = n,
-            26 => p.tremolo_rate  = n * 9.0,
-            27 => p.tremolo_depth = n * 0.8,
-            29 => p.chorus_rate   = 0.1 + n * 4.9,
-            30 => p.chorus_mix    = n * 0.85,
-            10 => p.pan           = n,
-            _  => {}
-        }
-    }
-    p
-}
-
 // ── Pads ──────────────────────────────────────────────────────────────────────
 
 /// HybridSynth pads — Moog ladder + ADSR + chorus + reverb (8 polyphonic voices).
@@ -398,59 +363,6 @@ impl ClankersPads {
     }
 }
 
-fn parse_pads_params(cc_json: &str) -> PadsParams {
-    let mut p = PadsParams::default();
-    for (key, val) in parse_cc_map(cc_json) {
-        let n = val / 127.0;
-        match key {
-            74 => p.cutoff_hz    = 20.0 + n * 7980.0,
-            71 => p.resonance    = n * 0.9,
-            73 => p.amp_attack   = 0.05 + n * 3.95,
-            75 => p.amp_decay    = 0.05 + n * 1.95,
-            79 => p.amp_sustain  = n,
-            72 => p.amp_release  = 0.1  + n * 3.9,
-            88 => p.reverb_size  = n,
-            91 => p.reverb_mix   = n,
-            29 => p.chorus_rate  = 0.1  + n * 4.9,
-            30 => p.chorus_depth = n,
-            31 => p.chorus_mix   = n,
-            _  => {}
-        }
-    }
-    p
-}
-
-fn parse_buchla_params(cc_json: &str) -> BuchlaParams {
-    let mut p = BuchlaParams::default();
-    for (key, val) in parse_cc_map(cc_json) {
-        let n = val / 127.0;
-        match key {
-            74 => p.cutoff_norm = n,
-            20 => p.fold_amount = n,
-            19 => p.release_s   = 0.005 + n * 2.995,
-            21 => p.filter_mod  = n,
-            16 => p.volume      = n,
-            _  => {}
-        }
-    }
-    p
-}
-
-/// Parse a flat JSON CC object: {"74": 80, "71": 60} → [(74, 80.0), (71, 60.0)]
-fn parse_cc_map(s: &str) -> Vec<(u8, f32)> {
-    let mut out = Vec::new();
-    let s = s.trim().trim_start_matches('{').trim_end_matches('}');
-    for pair in s.split(',') {
-        let mut parts = pair.splitn(2, ':');
-        let k = parts.next().unwrap_or("").trim().trim_matches('"').trim();
-        let v = parts.next().unwrap_or("").trim().trim_matches('"').trim();
-        if let (Ok(kn), Ok(vf)) = (k.parse::<u8>(), v.parse::<f32>()) {
-            out.push((kn, vf));
-        }
-    }
-    out
-}
-
 // ── Voder ─────────────────────────────────────────────────────────────────────
 
 /// Parallel-formant Voder — 4-voice polyphonic formant synthesizer.
@@ -510,7 +422,7 @@ impl ClankersVoder {
     /// Set a phoneme sequence from a JSON integer array, e.g. "[0,8,2,11]".
     /// The last triggered voice will step through the sequence over its hold duration.
     pub fn set_phonemes(&mut self, json: &str, hold_samps: u32) {
-        let phonemes = parse_phoneme_array(json);
+        let phonemes = parse_usize_array(json);
         self.engine.set_queue_for_last(&phonemes, hold_samps as usize);
     }
 
@@ -531,8 +443,8 @@ impl ClankersVoder {
         pitches_json:   &str,
         amps_json:      &str,
     ) {
-        let phonemes  = parse_phoneme_array(phonemes_json);
-        let durations = parse_phoneme_array(durations_json);
+        let phonemes  = parse_usize_array(phonemes_json);
+        let durations = parse_usize_array(durations_json);
         let pitches   = parse_float_array(pitches_json);
         let amps      = parse_float_array(amps_json);
         self.engine.set_queue_detailed_for_last(&phonemes, &durations, &pitches, &amps);
@@ -587,51 +499,6 @@ impl ClankersVoder {
         s.push('}');
         s
     }
-}
-
-fn parse_voder_params(cc_json: &str) -> VoderParams {
-    let mut p = VoderParams::default();
-    for (key, val) in parse_cc_map(cc_json) {
-        let n = val / 127.0;
-        match key {
-            74 => p.brightness     = 0.5 + n,                      // 0.5..1.5
-            20 => p.voicing_manual = n,                             // 0..1
-            73 => p.attack_s       = 0.001 + n * 0.099,            // 1..100 ms
-            72 => p.release_s      = 0.01  + n * 0.49,             // 10..500 ms
-            75 => p.vibrato_depth  = n * 0.667,                     // 0..0.667 semitones (~80 cents)
-            76 => p.vibrato_rate   = 3.0   + n * 5.0,              // 3..8 Hz
-            77 => p.coartic_ms     = 5.0   + n * 75.0,             // 5..80 ms
-            16 => p.volume         = n,
-            _  => {}
-        }
-    }
-    p
-}
-
-/// Parse a JSON integer array like "[0,8,2,11]" into a Vec<usize>.
-fn parse_phoneme_array(s: &str) -> Vec<usize> {
-    let mut out = Vec::new();
-    let s = s.trim().trim_start_matches('[').trim_end_matches(']');
-    for tok in s.split(',') {
-        let tok = tok.trim();
-        if let Ok(n) = tok.parse::<usize>() {
-            out.push(n);
-        }
-    }
-    out
-}
-
-/// Parse a JSON float array like "[1.0, 1.06, 1.12]" into a Vec<f32>.
-fn parse_float_array(s: &str) -> Vec<f32> {
-    let mut out = Vec::new();
-    let s = s.trim().trim_start_matches('[').trim_end_matches(']');
-    for tok in s.split(',') {
-        let tok = tok.trim();
-        if let Ok(f) = tok.parse::<f32>() {
-            out.push(f);
-        }
-    }
-    out
 }
 
 // ── SynthGraph ───────────────────────────────────────────────────────────────

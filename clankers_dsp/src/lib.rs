@@ -11,6 +11,7 @@
 
 pub mod bass;
 pub mod biquad;
+pub(crate) mod cc;
 pub mod buchla;
 pub mod chorus;
 pub mod delay;

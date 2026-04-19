@@ -81,6 +81,44 @@ void clankers_drums_trigger(ClankersDrums* drums, uint8_t voice_id, float veloci
  * be at least n_samples floats). */
 void clankers_drums_process(ClankersDrums* drums, float* output, uint32_t n_samples);
 
+/* ── Bass ──────────────────────────────────────────────────────────────────
+ *
+ * FM bass (sine carrier + sine modulator) through a TPT ladder LPF, with
+ * pluck-style filter + amp envelopes. 8 voices.
+ *
+ * CC-JSON param map:
+ *   CC71 fm_index     CC74 cutoff     CC23 flt_decay     CC75 amp_decay
+ *
+ * Typical use:
+ *   ClankersBass* b = clankers_bass_new(0xba55);
+ *   clankers_bass_trigger(b, 36, 1.0f, 11025, "{\"71\":80,\"74\":90}");
+ *   clankers_bass_process(b, buf, 512);
+ *   ...
+ *   clankers_bass_free(b);
+ */
+
+typedef struct ClankersBass ClankersBass;
+
+ClankersBass* clankers_bass_new(uint32_t seed);
+void          clankers_bass_free(ClankersBass* bass);
+
+/* Update stored params from a CC-JSON object like {"71":80,"74":60}.
+ * Affects currently playing voices on the next _process call.
+ * Passing NULL or invalid JSON is safe (defaults remain). */
+void clankers_bass_set_params(ClankersBass* bass, const char* cc_json);
+
+/* Trigger a note. Also updates stored params from cc_json.
+ * hold_samples: note-on duration (0 = use amp envelope only). */
+void clankers_bass_trigger(
+    ClankersBass* bass,
+    uint8_t       midi_note,
+    float         velocity,
+    uint32_t      hold_samples,
+    const char*   cc_json);
+
+/* Render n_samples mono samples (overwrites output; no alloc). */
+void clankers_bass_process(ClankersBass* bass, float* output, uint32_t n_samples);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

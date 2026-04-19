@@ -15,7 +15,21 @@
 //! (`set_*`) can be called from another thread only if the consumer provides
 //! its own synchronisation. No internal locking.
 
+use crate::bass::{BassEngine, BassParams};
+use crate::cc::parse_bass_params;
 use crate::drums::DrumsEngine;
+use core::ffi::c_char;
+use core::ffi::CStr;
+
+/// Safely convert a `const char*` from C into `&str`. Returns `""` if the
+/// pointer is null or the string isn't valid UTF-8. Callers use this for
+/// CC-JSON param bundles where a bad string should just leave defaults.
+unsafe fn c_str_or_empty<'a>(ptr: *const c_char) -> &'a str {
+    if ptr.is_null() {
+        return "";
+    }
+    CStr::from_ptr(ptr).to_str().unwrap_or("")
+}
 
 // ── Drums ────────────────────────────────────────────────────────────────────
 
@@ -89,4 +103,70 @@ pub unsafe extern "C" fn clankers_drums_process(
 ) {
     let slice = core::slice::from_raw_parts_mut(output, n_samples as usize);
     (*ptr).engine.process(slice);
+}
+
+// ── Bass ─────────────────────────────────────────────────────────────────────
+
+/// Opaque handle to a `BassEngine` plus its currently-stored `BassParams`.
+/// Construct with [`clankers_bass_new`], destroy with [`clankers_bass_free`].
+pub struct ClankersBass {
+    engine: BassEngine,
+    params: BassParams,
+}
+
+/// Allocate a new bass engine. Never returns null.
+#[no_mangle]
+pub extern "C" fn clankers_bass_new(seed: u32) -> *mut ClankersBass {
+    Box::into_raw(Box::new(ClankersBass {
+        engine: BassEngine::new(seed),
+        params: BassParams::default(),
+    }))
+}
+
+/// Destroy a bass engine. Passing null is a no-op.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_bass_free(ptr: *mut ClankersBass) {
+    if !ptr.is_null() {
+        drop(Box::from_raw(ptr));
+    }
+}
+
+/// Update stored params from a CC-JSON object like `{"71":80,"74":60}`.
+/// Affects currently playing voices on the next `_process` call.
+/// Null or invalid JSON resets params to defaults for any unset keys.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_bass_set_params(
+    ptr: *mut ClankersBass,
+    cc_json: *const c_char,
+) {
+    (*ptr).params = parse_bass_params(c_str_or_empty(cc_json));
+}
+
+/// Trigger a note. Also updates stored params from `cc_json`.
+/// `hold_samples`: note-on duration in samples (0 = use amp envelope only).
+#[no_mangle]
+pub unsafe extern "C" fn clankers_bass_trigger(
+    ptr: *mut ClankersBass,
+    midi_note: u8,
+    velocity: f32,
+    hold_samples: u32,
+    cc_json: *const c_char,
+) {
+    let this = &mut *ptr;
+    this.params = parse_bass_params(c_str_or_empty(cc_json));
+    this.engine
+        .trigger(midi_note, velocity, hold_samples as usize, &this.params);
+}
+
+/// Render `n_samples` mono samples using the currently stored params.
+/// Buffer is overwritten, not mixed. Capacity must be >= `n_samples`.
+#[no_mangle]
+pub unsafe extern "C" fn clankers_bass_process(
+    ptr: *mut ClankersBass,
+    output: *mut f32,
+    n_samples: u32,
+) {
+    let this = &mut *ptr;
+    let slice = core::slice::from_raw_parts_mut(output, n_samples as usize);
+    this.engine.process(slice, &this.params);
 }
