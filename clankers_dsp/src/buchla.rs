@@ -170,6 +170,7 @@ impl BuchlaEngine {
     }
 
     pub fn process(&mut self, buf: &mut [f32], p: &BuchlaParams) {
+        buf.fill(0.0);
         for v in self.voices.iter_mut() {
             if v.is_active() { v.process(buf, p); }
         }

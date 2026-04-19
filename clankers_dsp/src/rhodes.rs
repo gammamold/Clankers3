@@ -329,6 +329,8 @@ impl RhodesEngine {
     }
 
     pub fn process(&mut self, buf_l: &mut [f32], buf_r: &mut [f32], p: &RhodesParams) {
+        buf_l.fill(0.0);
+        buf_r.fill(0.0);
         for v in self.voices.iter_mut() {
             if v.active { v.process(buf_l, buf_r, p); }
         }
