@@ -104,10 +104,12 @@ void          clankers_bass_free(ClankersBass* bass);
 
 /* Update stored params from a CC-JSON object like {"71":80,"74":60}.
  * Affects currently playing voices on the next _process call.
- * Passing NULL or invalid JSON is safe (defaults remain). */
+ * NULL, "", or "{}" is a no-op — stored params are preserved. */
 void clankers_bass_set_params(ClankersBass* bass, const char* cc_json);
 
-/* Trigger a note. Also updates stored params from cc_json.
+/* Trigger a note. cc_json follows the same rules as _set_params above:
+ * non-empty JSON updates stored params first; NULL/""/"{}" reuses them,
+ * so a plain note-on doesn't wipe the patch.
  * hold_samples: note-on duration (0 = use amp envelope only). */
 void clankers_bass_trigger(
     ClankersBass* bass,

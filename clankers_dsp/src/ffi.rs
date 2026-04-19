@@ -21,14 +21,21 @@ use crate::drums::DrumsEngine;
 use core::ffi::c_char;
 use core::ffi::CStr;
 
-/// Safely convert a `const char*` from C into `&str`. Returns `""` if the
-/// pointer is null or the string isn't valid UTF-8. Callers use this for
-/// CC-JSON param bundles where a bad string should just leave defaults.
-unsafe fn c_str_or_empty<'a>(ptr: *const c_char) -> &'a str {
+/// Safely convert a `const char*` from C into `Option<&str>`.
+/// `None` if the pointer is null, the string isn't valid UTF-8, or after
+/// trimming it's empty or the literal "{}" — callers treat `None` as
+/// "keep existing stored params" so a plain note-on doesn't reset the patch.
+unsafe fn c_str_or_none<'a>(ptr: *const c_char) -> Option<&'a str> {
     if ptr.is_null() {
-        return "";
+        return None;
     }
-    CStr::from_ptr(ptr).to_str().unwrap_or("")
+    let s = CStr::from_ptr(ptr).to_str().ok()?;
+    let t = s.trim();
+    if t.is_empty() || t == "{}" {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 // ── Drums ────────────────────────────────────────────────────────────────────
@@ -133,16 +140,24 @@ pub unsafe extern "C" fn clankers_bass_free(ptr: *mut ClankersBass) {
 
 /// Update stored params from a CC-JSON object like `{"71":80,"74":60}`.
 /// Affects currently playing voices on the next `_process` call.
-/// Null or invalid JSON resets params to defaults for any unset keys.
+///
+/// A null, empty, or `"{}"` string is a no-op (stored params are preserved).
+/// Any other string is parsed; missing CC keys reset to `BassParams::default()`.
 #[no_mangle]
 pub unsafe extern "C" fn clankers_bass_set_params(
     ptr: *mut ClankersBass,
     cc_json: *const c_char,
 ) {
-    (*ptr).params = parse_bass_params(c_str_or_empty(cc_json));
+    if let Some(s) = c_str_or_none(cc_json) {
+        (*ptr).params = parse_bass_params(s);
+    }
 }
 
-/// Trigger a note. Also updates stored params from `cc_json`.
+/// Trigger a note. If `cc_json` is non-null/non-empty/non-`"{}"`, stored
+/// params are updated first (same semantics as `_set_params`); otherwise
+/// the existing stored params are reused so a plain note-on doesn't wipe
+/// the patch.
+///
 /// `hold_samples`: note-on duration in samples (0 = use amp envelope only).
 #[no_mangle]
 pub unsafe extern "C" fn clankers_bass_trigger(
@@ -153,7 +168,9 @@ pub unsafe extern "C" fn clankers_bass_trigger(
     cc_json: *const c_char,
 ) {
     let this = &mut *ptr;
-    this.params = parse_bass_params(c_str_or_empty(cc_json));
+    if let Some(s) = c_str_or_none(cc_json) {
+        this.params = parse_bass_params(s);
+    }
     this.engine
         .trigger(midi_note, velocity, hold_samples as usize, &this.params);
 }
