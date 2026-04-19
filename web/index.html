@@ -4385,6 +4385,8 @@
           <span style="font-family:monospace;font-size:.72rem;color:#555;letter-spacing:.1em;">ARRANGEMENT</span>
           <button id="song-btn-arr-clear"
             style="font-size:.62rem;padding:.15rem .4rem;background:#1a1a1a;border:1px solid #2e2e2e;color:#666;cursor:pointer;border-radius:2px;font-family:monospace;">CLEAR</button>
+          <button id="song-btn-arr-add-slots" class="mode-btn" title="Add two arrangement slots">+2 (16/64)</button>
+          <button id="song-btn-arr-rem-slots" class="mode-btn" title="Remove last two arrangement slots">-2</button>
           <button id="song-btn-arr-repeat" class="mode-btn" title="Loop whole song">↺</button>
         </div>
         <div id="song-arr-grid" class="arr-grid"></div>
@@ -6222,7 +6224,9 @@ if (typeof TextEncoder === 'undefined') {
     // ─── Pattern Bank + Song Mode ──────────────────────────────────────────────
     const PAT_MAX = 48;
     let   PAT_COUNT = 8;
-    const ARR_COUNT = 16;
+    const ARR_MIN = 2;
+    const ARR_MAX = 64;
+    let   ARR_COUNT = 16;
     const patternBank = []; // { sheet, label }
     let activeSlot = 0;
     let songArrangement = [];   // ordered list of bank indices
@@ -6370,7 +6374,8 @@ if (typeof TextEncoder === 'undefined') {
     // Arrangement grid
     const arrGrid = document.getElementById('arr-grid');
     const arrSlots = [];
-    for (let i = 0; i < ARR_COUNT; i++) {
+    function _addArrSlot() {
+      const i = arrSlots.length;
       const slot = document.createElement('div');
       slot.className = 'arr-slot';
       slot.dataset.pos = i;
@@ -6385,9 +6390,59 @@ if (typeof TextEncoder === 'undefined') {
       arrGrid.appendChild(slot);
       arrSlots.push(slot);
     }
+    for (let i = 0; i < ARR_COUNT; i++) _addArrSlot();
+
+    function addTwoArrSlots() {
+      let added = 0;
+      for (let k = 0; k < 2; k++) {
+        if (arrSlots.length >= ARR_MAX) break;
+        _addArrSlot();
+        added++;
+      }
+      ARR_COUNT = arrSlots.length;
+      if (added > 0) {
+        updateArrGrid();
+        log(`+${added} arrangement slot${added > 1 ? 's' : ''} (${ARR_COUNT}/${ARR_MAX})`);
+      }
+      _updateArrSlotsBtn();
+    }
+
+    function removeTwoArrSlots() {
+      let removed = 0;
+      for (let k = 0; k < 2; k++) {
+        if (arrSlots.length <= ARR_MIN) break;
+        const last = arrSlots.length - 1;
+        arrGrid.removeChild(arrSlots[last]);
+        arrSlots.splice(last, 1);
+        // drop any arrangement entries beyond the new length
+        if (songArrangement.length > arrSlots.length) {
+          songArrangement.length = arrSlots.length;
+        }
+        removed++;
+      }
+      ARR_COUNT = arrSlots.length;
+      if (removed > 0) {
+        updateArrGrid();
+        log(`-${removed} arrangement slot${removed > 1 ? 's' : ''} (${ARR_COUNT}/${ARR_MAX})`);
+      }
+      _updateArrSlotsBtn();
+    }
+
+    function _updateArrSlotsBtn() {
+      const b = document.getElementById('song-btn-arr-add-slots');
+      if (b) {
+        b.disabled = arrSlots.length >= ARR_MAX;
+        b.textContent = `+2 (${arrSlots.length}/${ARR_MAX})`;
+      }
+      const r = document.getElementById('song-btn-arr-rem-slots');
+      if (r) {
+        r.disabled = arrSlots.length <= ARR_MIN;
+        r.textContent = `-2`;
+      }
+    }
 
     function updateArrGrid() {
-      for (let i = 0; i < ARR_COUNT; i++) {
+      for (let i = 0; i < arrSlots.length; i++) {
         const slot = arrSlots[i];
         if (i < songArrangement.length) {
           const si = songArrangement[i];
@@ -8570,12 +8625,34 @@ if (typeof TextEncoder === 'undefined') {
       roomBpm.value = legacyBpm.value;
       roomBpmVal.textContent = legacyBpm.value;
 
-      // piano roll
+      // piano roll — in song mode, prefer the pattern that's actually playing
+      // (or the one selected in the song builder), so the roll tracks what the
+      // user hears instead of whatever sheet-json happens to hold.
       if (_roll) _roll.stopLoop();
       _roll = new PianoRoll(document.getElementById('room-roll'));
       try {
-        const sheet = JSON.parse(document.getElementById('sheet-json').value);
+        let sheet = null;
+        if (songMode && songArrangement.length > 0) {
+          let slotIdx = -1;
+          if (seq?.isPlaying) {
+            const beat = seq.getCurrentBeat();
+            if (beat >= 0) slotIdx = _activePatternForBeat(beat).slot;
+          }
+          if (slotIdx < 0 && _songSelectedArrIdx >= 0 && _songSelectedArrIdx < songArrangement.length) {
+            slotIdx = songArrangement[_songSelectedArrIdx];
+          }
+          if (slotIdx < 0) slotIdx = songArrangement[0];
+          if (patternBank[slotIdx]?.sheet) {
+            sheet = patternBank[slotIdx].sheet;
+            activeSlot = slotIdx;
+            document.getElementById('sheet-json').value = JSON.stringify(sheet, null, 2);
+            document.getElementById('pat-slot-label').textContent = `P${slotIdx + 1}`;
+            patBtns.forEach((b, idx) => b.classList.toggle('active-pat', idx === slotIdx));
+          }
+        }
+        if (!sheet) sheet = JSON.parse(document.getElementById('sheet-json').value);
         _roll.load(sheet, faceObj.id, faceObj.t);
+        if (sheet.loopBeats) _roll.loopBeats = sheet.loopBeats;
       } catch (_) { }
       _roll.startLoop(() => seq?.isPlaying ? seq.getCurrentBeat() : -1);
 
@@ -8824,6 +8901,9 @@ if (typeof TextEncoder === 'undefined') {
     });
     document.getElementById('song-btn-arr-clear').addEventListener('click', () =>
       document.getElementById('btn-arr-clear').click());
+    document.getElementById('song-btn-arr-add-slots').addEventListener('click', addTwoArrSlots);
+    document.getElementById('song-btn-arr-rem-slots').addEventListener('click', removeTwoArrSlots);
+    _updateArrSlotsBtn();
     document.getElementById('song-btn-arr-repeat').addEventListener('click', function () {
       document.getElementById('btn-arr-repeat').click();
       this.classList.toggle('mode-active');
