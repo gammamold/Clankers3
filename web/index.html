@@ -4990,6 +4990,8 @@
         <span id="ai-auto-indicator"
           style="display:none;font-family:monospace;font-size:.65rem;color:#66f;align-self:center;margin-left:.4rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">
         </span>
+        <span id="ai-auto-instr-toggles"
+          style="display:inline-flex;gap:.2rem;margin-left:.5rem;align-self:center;flex-wrap:wrap;"></span>
       </div>
       <div class="input-row">
         <input id="chat-input" type="text" placeholder="Describe your track or ask the band for changes…" />
@@ -5964,6 +5966,53 @@ if (typeof TextEncoder === 'undefined') {
     let _autoRecording = false;
     let _autoTimeout = null;
 
+    // Per-instrument AI AUTO enable flags. Drum defaults OFF (it drives the
+    // drum XY pad which can have strong audible effects the user may not want).
+    const _autoInstrOn = { drum: false, bass: true, buchla: true, pads: true, rhodes: true, voder: true };
+
+    // Drum XY AI AUTO interpolation state. Holds normalized 0-127 x/y values
+    // that the LLM targets; we lerp from the current pad position toward them.
+    let _llmDrumSrc = null;   // {x, y} at last poll — where we started lerping from
+    let _llmDrumDst = null;   // {x, y} from most recent poll — target
+    let _llmDrumUpdatedAt = 0;
+    let _llmDrumRaf = null;
+
+    // ── Drum XY AI AUTO helpers ───────────────────────────────────────────────
+    // Read current drum pad position as normalized 0-127 x/y for the active profile.
+    function _readDrumPadNorm() {
+      if (typeof drumsXY === 'undefined' || !drumsXY._profile) return null;
+      const p = drumsXY._profile;
+      const nx = (p.x.get() - p.x.min) / (p.x.max - p.x.min);
+      const ny = (p.y.get() - p.y.min) / (p.y.max - p.y.min);
+      return { x: Math.round(nx * 127), y: Math.round(ny * 127) };
+    }
+
+    // Write a normalized 0-127 x/y target to the active drum profile (smoothly
+    // applied via its set() callback, which already calls sendDrumsParams).
+    function _writeDrumPadNorm(nx, ny) {
+      if (typeof drumsXY === 'undefined' || !drumsXY._profile) return;
+      const p = drumsXY._profile;
+      const fx = p.x.min + (p.x.max - p.x.min) * Math.max(0, Math.min(1, nx / 127));
+      const fy = p.y.min + (p.y.max - p.y.min) * Math.max(0, Math.min(1, ny / 127));
+      p.x.set(fx);
+      p.y.set(fy);
+      drumsXY.syncDot();
+    }
+
+    // Animation loop that lerps the drum pad from _llmDrumSrc → _llmDrumDst
+    // over one _autoBarMs() window. Stops when target reached or AI AUTO is off.
+    function _drumAutoTick() {
+      _llmDrumRaf = null;
+      if (!_autoEnabled || !_autoInstrOn.drum || !_llmDrumDst) return;
+      const windowMs = _autoBarMs();
+      const t = windowMs > 0 ? Math.min(1, Math.max(0, (performance.now() - _llmDrumUpdatedAt) / windowMs)) : 1;
+      const src = _llmDrumSrc || _llmDrumDst;
+      const nx = src.x + (_llmDrumDst.x - src.x) * t;
+      const ny = src.y + (_llmDrumDst.y - src.y) * t;
+      _writeDrumPadNorm(nx, ny);
+      if (t < 1) _llmDrumRaf = requestAnimationFrame(_drumAutoTick);
+    }
+
     function _interpLlmCC() {
       const windowMs = _autoBarMs();
       const now = performance.now();
@@ -6400,7 +6449,23 @@ if (typeof TextEncoder === 'undefined') {
         added++;
       }
       ARR_COUNT = arrSlots.length;
+      // Auto-populate newly-added slots so SONG mode plays them. We cycle
+      // through filled pattern-bank slots so the song actually extends instead
+      // of silently ending on empty slots.
       if (added > 0) {
+        const filled = patternBank
+          .map((p, idx) => (p ? idx : -1))
+          .filter(i => i >= 0);
+        if (filled.length) {
+          const startFrom = songArrangement.length
+            ? filled.indexOf(songArrangement[songArrangement.length - 1])
+            : -1;
+          let fi = (startFrom + 1) % filled.length;
+          while (songArrangement.length < arrSlots.length) {
+            songArrangement.push(filled[fi]);
+            fi = (fi + 1) % filled.length;
+          }
+        }
         updateArrGrid();
         log(`+${added} arrangement slot${added > 1 ? 's' : ''} (${ARR_COUNT}/${ARR_MAX})`);
       }
@@ -7136,13 +7201,37 @@ if (typeof TextEncoder === 'undefined') {
             _interpLlmCC();  // crystallise current in-flight value as the new source
             for (const instr of ['bass', 'buchla', 'pads', 'rhodes', 'voder']) {
               _llmSrc[instr] = { ..._llmCC[instr] };
-              if (data.cc[instr]) _llmDst[instr] = data.cc[instr];
+              if (data.cc[instr] && _autoInstrOn[instr]) _llmDst[instr] = data.cc[instr];
             }
             _llmUpdatedAt = performance.now();
 
-            if (_autoRecording) _recordAutoPoint(data.cc);
+            // Drum: route XY target to the currently-selected drum profile
+            if (data.cc.drum && _autoInstrOn.drum && typeof drumsXY !== 'undefined') {
+              const cur = _readDrumPadNorm();
+              _llmDrumSrc = cur ? { ...cur } : { x: 64, y: 64 };
+              const d = data.cc.drum;
+              _llmDrumDst = {
+                x: Math.max(0, Math.min(127, +d.x ?? 64)),
+                y: Math.max(0, Math.min(127, +d.y ?? 64)),
+              };
+              _llmDrumUpdatedAt = performance.now();
+              if (!_llmDrumRaf) _drumAutoTick();
+            }
 
-            const active = Object.keys(data.cc).filter(k => Object.keys(data.cc[k] ?? {}).length);
+            // Filter recording to enabled instruments
+            if (_autoRecording) {
+              const rec = {};
+              for (const k of Object.keys(data.cc)) {
+                if (k === 'drum') continue; // drum has no CC recording path
+                if (_autoInstrOn[k]) rec[k] = data.cc[k];
+              }
+              _recordAutoPoint(rec);
+            }
+
+            const active = Object.keys(data.cc).filter(k => _autoInstrOn[k] && (
+              k === 'drum' ? (data.cc[k]?.x !== undefined || data.cc[k]?.y !== undefined)
+                           : Object.keys(data.cc[k] ?? {}).length
+            ));
             const ind = document.getElementById('ai-auto-indicator');
             if (ind) ind.textContent = `${_autoRecording ? '● REC ' : 'AI: '}${active.join(' · ')}${data.note ? ' · ' + data.note : ''}`;
           }
@@ -7175,6 +7264,56 @@ if (typeof TextEncoder === 'undefined') {
     document.getElementById('btn-ai-auto').addEventListener('click', () => {
       if (_autoEnabled) _autoDisable(); else _autoEnable();
     });
+
+    // ── Per-instrument AI AUTO enable chips ───────────────────────────────────
+    (function _buildAutoInstrToggles() {
+      const wrap = document.getElementById('ai-auto-instr-toggles');
+      if (!wrap) return;
+      const ORDER = [
+        { id: 'drum',   label: 'DRUM',  color: '#ff6428' },
+        { id: 'bass',   label: 'BASS',  color: '#ff4444' },
+        { id: 'buchla', label: 'POLY',  color: '#ffaa00' },
+        { id: 'pads',   label: 'PADS',  color: '#aa55ff' },
+        { id: 'rhodes', label: 'RHOD',  color: '#00d4ff' },
+        { id: 'voder',  label: 'VOD',   color: '#77dd77' },
+      ];
+      for (const inst of ORDER) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.instr = inst.id;
+        b.textContent = inst.label;
+        b.title = `AI AUTO: toggle LLM modulation on ${inst.label}`;
+        b.style.cssText =
+          `font-family:monospace;font-size:.58rem;padding:.15rem .35rem;` +
+          `background:transparent;border:1px solid #333;color:#555;cursor:pointer;` +
+          `border-radius:2px;letter-spacing:.08em;`;
+        function paint() {
+          const on = _autoInstrOn[inst.id];
+          b.style.color = on ? inst.color : '#555';
+          b.style.borderColor = on ? inst.color : '#333';
+          b.style.background = on ? (inst.color + '22') : 'transparent';
+        }
+        b.addEventListener('click', () => {
+          _autoInstrOn[inst.id] = !_autoInstrOn[inst.id];
+          paint();
+          // When turning off, ramp existing override back to zero so the
+          // instrument returns to its manual knob values on the next frame.
+          if (!_autoInstrOn[inst.id]) {
+            if (inst.id === 'drum') {
+              _llmDrumDst = null;
+              _llmDrumSrc = null;
+              if (_llmDrumRaf) { cancelAnimationFrame(_llmDrumRaf); _llmDrumRaf = null; }
+            } else {
+              _llmSrc[inst.id] = { ..._llmCC[inst.id] };
+              _llmDst[inst.id] = {};
+              _llmUpdatedAt = performance.now();
+            }
+          }
+        });
+        paint();
+        wrap.appendChild(b);
+      }
+    })();
 
     // ── AI AUTO recording: bake LLM improvisation into pattern automation ─────
     function _activePatternForBeat(beat) {

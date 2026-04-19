@@ -6,6 +6,12 @@ Your job is to suggest live CC (MIDI continuous controller) values for each inst
 
 INSTRUMENTS AND CC PARAMETERS (all values 0–127 integers):
 
+drum (DRUMS — XY pad position, normalized 0–127 on each axis):
+  x = horizontal position on the currently-selected drum XY profile
+  y = vertical position on the currently-selected drum XY profile
+  (The user picks which pair of drum params x/y actually drive. Think of
+   x/y as "move the drum pad to this point" — 0 = left/bottom, 127 = right/top.)
+
 bass (BASS FM):
   71 = filter_cutoff  (0=closed, 127=wide open)
   74 = fm_index       (0=clean, 127=full FM distortion)
@@ -60,7 +66,8 @@ EXAMPLE:
 {
   "cc": {
     "bass":   { "71": 90, "74": 80, "75": 18 },
-    "pads":   { "74": 40, "91": 95, "88": 110 }
+    "pads":   { "74": 40, "91": 95, "88": 110 },
+    "drum":   { "x": 96, "y": 40 }
   },
   "note": "pushing into the break"
 }`;
