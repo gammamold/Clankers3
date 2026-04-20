@@ -146,6 +146,16 @@ export class Sequencer {
     // buchla: 0 by default; override as needed.
     this.bassOctaveOffset   = 48;
     this.buchlaOctaveOffset = 0;
+
+    // ── MIDI Recording ─────────────────────────────────────────────────────
+    // When true + sequencer playing, MIDI-input notes dispatched through
+    // `recordNote()` are quantized to 16ths and merged into this.sheet.
+    this.recordEnabled = false;
+    this.onRecord = null;
+
+    // Build the persistent audio graph immediately so live (MIDI-input, etc.)
+    // triggers produce audible output even when the scheduler isn't running.
+    this._ensureGraph();
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -158,28 +168,23 @@ export class Sequencer {
     this._compile(sheet);
   }
 
-  start() {
-    if (!this.sheet) throw new Error('No sheet loaded');
-    if (this._timer) return;
+  /**
+   * Lazily build the persistent audio graph: master gain, per-instrument gains,
+   * voder LPF. Adapters stay connected across start/stop so MIDI-input
+   * triggers (and any other live preview path) remain audible when the
+   * sequencer is idle.
+   */
+  _ensureGraph() {
+    if (this._masterGain) return;
 
-    // Fresh master gain
-    if (this._masterGain) this._masterGain.disconnect();
     this._masterGain = this.ctx.createGain();
     this._masterGain.gain.value = 0.22;
     this._masterGain.connect(this.ctx.destination);
 
-    // Per-instrument gain nodes — reconnect via adapters each start()
-    if (this._instrGains) {
-      for (const g of Object.values(this._instrGains)) {
-        try { g.disconnect(); } catch (_) {}
-      }
-    }
-    if (this._voderLpf) { try { this._voderLpf.disconnect(); } catch (_) {} }
     this._instrGains = {};
     for (const type of ['drum', 'bass', 'buchla', 'pads', 'rhodes', 'voder']) {
       const g = this.ctx.createGain();
       if (type === 'voder') {
-        // Insert per-channel LPF between voder gain and master (cuts harshness, ~6 kHz default)
         this._voderLpf = this.ctx.createBiquadFilter();
         this._voderLpf.type = 'lowpass';
         this._voderLpf.frequency.value = this._voderLpfHz ?? 6000;
@@ -193,10 +198,16 @@ export class Sequencer {
       this._adapters[type]?.connect(g);
     }
 
-    // Route synth Lab slots through its own gain management
-    this.synthLab?.connectToMaster(this._masterGain);
-
     this._updateGains();
+  }
+
+  start() {
+    if (!this.sheet) throw new Error('No sheet loaded');
+    if (this._timer) return;
+
+    this._ensureGraph();
+    // synthLab is assigned after construct — (re)connect each start so slots get routed.
+    this.synthLab?.connectToMaster(this._masterGain);
 
     this._startTime = this.ctx.currentTime + 0.05;
     this._nextBeat  = 0;
@@ -211,12 +222,11 @@ export class Sequencer {
     this.midiOut?.stopClock();
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
 
-    // Silence all adapters
+    // Silence all adapters — clears queued notes but keeps the audio graph wired
+    // so live MIDI-input triggers stay audible when the sequencer is idle.
     for (const adapter of Object.values(this._adapters)) {
       adapter?.stop();
     }
-
-    if (this._masterGain) this._masterGain.disconnect();
   }
 
   get isPlaying() { return this._timer !== null; }
@@ -328,6 +338,52 @@ export class Sequencer {
    * @returns {InstrumentAdapter|null}
    */
   getDefaultAdapter(type) { return this._defaultAdapters[type] ?? null; }
+
+  // ── MIDI Recording ─────────────────────────────────────────────────────────
+
+  /**
+   * Record a note-on event into the current sheet at the quantized current
+   * playback position (16th-note grid, overdub semantics). Requires the
+   * sequencer to be playing and `recordEnabled` to be true.
+   *
+   * Fires `onRecord(sheet)` after mutation so the host can persist the sheet
+   * back into its pattern bank / textarea.
+   *
+   * @param {'drum'|'bass'|'buchla'|'pads'|'rhodes'|'voder'} type
+   * @param {{midiNote?:number, voiceId?:number, velocity:number, ccJson?:string, durBeats?:number}} ev
+   * @returns {boolean} true if the note was recorded
+   */
+  recordNote(type, ev) {
+    if (!this.recordEnabled || !this._timer || !this.sheet) return false;
+    const t = TYPE_TO_T[type];
+    if (t == null) return false;
+
+    const elapsed = this.ctx.currentTime - this._startTime;
+    const absBeat = Math.max(0, elapsed * (this._bpm / 60));
+    const loopN = Math.floor(absBeat / this._loopBeats);
+    const beatInLoop = absBeat - loopN * this._loopBeats;
+    let qBeat = Math.round(beatInLoop * 4) / 4;              // snap to 16ths
+    if (qBeat >= this._loopBeats - 1e-6) qBeat = 0;          // wrap end → start
+
+    const note = type === 'drum' ? DRUM_VOICE_TO_NOTE[ev.voiceId ?? 0] : ev.midiNote;
+    if (note == null) return false;
+
+    _insertNote(this.sheet, qBeat, this._loopBeats, {
+      t, note,
+      velocity: Math.round((ev.velocity ?? 0.8) * 127),
+      ccJson: ev.ccJson,
+      durBeats: ev.durBeats ?? 0.25,
+    });
+
+    // Recompile and re-anchor _stepIdx just past the current playhead so
+    // already-passed events in this loop iteration don't re-fire.
+    this._compile(this.sheet);
+    const idx = this._steps.findIndex(s => s.beatTime > beatInLoop);
+    this._stepIdx = idx === -1 ? this._steps.length : idx;
+
+    this.onRecord?.(this.sheet);
+    return true;
+  }
 
   // ── Internal ───────────────────────────────────────────────────────────────
 
@@ -600,6 +656,69 @@ export class Sequencer {
 
     this.modularSync?.sendGate(ev.type, audioTime);
     this.onTrigger?.(ev.type);
+  }
+}
+
+// ── MIDI-record sheet helpers ─────────────────────────────────────────────────
+
+// Instrument-type → sheet track id (`t:` value).
+const TYPE_TO_T = { buchla: 1, bass: 2, rhodes: 3, voder: 5, pads: 6, drum: 10 };
+
+/**
+ * Merge a recorded note into an existing step's tracks (overdub): appends to
+ * an existing track of the same type if present, otherwise adds a new track.
+ */
+function _mergeTrackNote(step, { t, note, velocity, ccJson, durBeats }) {
+  step.tracks ??= [];
+  let tr = step.tracks.find(x => x.t === t);
+  if (!tr) {
+    tr = { t, n: [], v: velocity };
+    if (durBeats != null && t !== 10) tr.dur = durBeats;
+    if (ccJson) { try { const cc = JSON.parse(ccJson); if (cc && Object.keys(cc).length) tr.cc = cc; } catch (_) {} }
+    step.tracks.push(tr);
+  }
+  if (!tr.n.includes(note)) tr.n.push(note);
+}
+
+/**
+ * Insert a note at `targetBeat` within the sheet's step list. If the beat
+ * already coincides with a step boundary, overdub into that step; otherwise
+ * split the containing step in two. Never extends past `loopBeats`.
+ */
+function _insertNote(sheet, targetBeat, loopBeats, noteData) {
+  const steps = sheet.steps ?? (sheet.steps = []);
+  const EPS = 1e-4;
+  let beat = 0;
+
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const d = s.d ?? 0.5;
+    const endBeat = beat + d;
+
+    if (Math.abs(targetBeat - beat) < EPS) {
+      _mergeTrackNote(s, noteData);
+      return;
+    }
+    if (targetBeat < endBeat - EPS) {
+      const first  = Object.assign({}, s, { d: targetBeat - beat });
+      const second = { d: endBeat - targetBeat, tracks: (s.tracks ?? []).map(t => Object.assign({}, t, { n: [...(t.n ?? [])] })) };
+      // Keep the existing tracks on the *first* (pre-split) half only; second half is empty until we add the new note.
+      second.tracks = [];
+      _mergeTrackNote(second, noteData);
+      steps.splice(i, 1, first, second);
+      return;
+    }
+    beat = endBeat;
+  }
+
+  // Past the last step but still within loopBeats: pad a rest, then insert.
+  if (targetBeat < loopBeats - EPS) {
+    const gap = targetBeat - beat;
+    if (gap > EPS) steps.push({ d: gap, tracks: [] });
+    const rest = Math.max(0.25, loopBeats - targetBeat);
+    const newStep = { d: rest, tracks: [] };
+    _mergeTrackNote(newStep, noteData);
+    steps.push(newStep);
   }
 }
 

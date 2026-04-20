@@ -4106,6 +4106,11 @@
           <option value="rhodes">ORGAN [t:3]</option>
         </select>
       </div>
+      <div style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem;">
+        <label style="font-family:monospace;font-size:.72rem;color:#888;">RECORD</label>
+        <button id="rto-input-rec" style="background:#111;border:1px solid #2a2a2a;color:#ccc;font-family:monospace;font-size:.72rem;padding:.25rem .7rem;cursor:pointer;border-radius:3px;letter-spacing:.08em;">● REC</button>
+        <span style="font-family:monospace;font-size:.62rem;color:#444;">overdub · 16ths · play required</span>
+      </div>
       <div id="rto-input-status" style="font-family:monospace;font-size:.65rem;color:#444;margin-top:.3rem;"></div>
     </div>
 
@@ -6718,6 +6723,43 @@ if (typeof TextEncoder === 'undefined') {
         inputStatus.textContent = inputPortSel.value ? 'listening' : '';
       });
 
+      // REC arm: toggles seq.recordEnabled. Recording requires seq to be playing.
+      const recBtn = document.getElementById('rto-input-rec');
+      recBtn.addEventListener('click', () => {
+        const s = getSeq();
+        s.recordEnabled = !s.recordEnabled;
+        recBtn.style.background = s.recordEnabled ? '#3a0b0b' : '#111';
+        recBtn.style.color = s.recordEnabled ? '#ff5555' : '#ccc';
+        recBtn.style.borderColor = s.recordEnabled ? '#aa2222' : '#2a2a2a';
+        if (s.recordEnabled && !s.isPlaying) {
+          inputStatus.textContent = 'armed — press PLAY to record';
+        } else {
+          inputStatus.textContent = inputPortSel.value ? (s.recordEnabled ? 'recording' : 'listening') : '';
+        }
+      });
+      // When a recorded note lands, push the mutated sheet back into the active slot.
+      if (typeof getSeq === 'function') {
+        // onRecord is assigned inside getSeq(), but that's lazy — hook it once seq exists.
+        const _armOnRecord = () => {
+          if (!seq) return;
+          seq.onRecord = (sheet) => {
+            try {
+              document.getElementById('sheet-json').value = JSON.stringify(sheet, null, 2);
+              if (patternBank[activeSlot]) {
+                patternBank[activeSlot].sheet = sheet;
+              } else {
+                const label = sheet.explanation?.section ?? `P${activeSlot + 1}`;
+                patternBank[activeSlot] = { sheet, label };
+                patBtns[activeSlot].textContent = `P${activeSlot + 1} ${label}`.slice(0, 11);
+                patBtns[activeSlot].classList.add('has-pat');
+              }
+            } catch (_) {}
+          };
+        };
+        // Re-arm after each play-click (seq is constructed lazily in getSeq).
+        document.getElementById('btn-play')?.addEventListener('click', _armOnRecord);
+      }
+
       // Determine target instrument for MIDI input routing
       function _getTargetInst() {
         const route = inputRoute.value;
@@ -6793,6 +6835,27 @@ if (typeof TextEncoder === 'undefined') {
               midiNote: note, velocity, holdSamples
             });
             midiOut.scheduleNote('rhodes', note, velocity, ctx.currentTime, ctx, holdSamples / ctx.sampleRate * 1000);
+          }
+
+          // Overdub-record into the active pattern slot, if armed + playing.
+          if (seq?.recordEnabled && seq.isPlaying) {
+            const durBeats = 0.25; // one 16th by default
+            if (inst === 'drum') {
+              seq.recordNote('drum', { voiceId: _drumNoteToVoice(note), velocity });
+            } else if (inst === 'bass') {
+              const ccJson = JSON.stringify(bassCC());
+              const actualNote = note + (bassOctKnob?.val ?? 0) * 12;
+              seq.recordNote('bass', { midiNote: actualNote, velocity, ccJson, durBeats });
+            } else if (inst === 'buchla') {
+              const ccJson = JSON.stringify(buchlaCC());
+              const buchlaNote = Math.max(0, Math.min(127, note + (buchlaOctSend?.val ?? buchlaOctave) * 12));
+              seq.recordNote('buchla', { midiNote: buchlaNote, velocity, ccJson, durBeats });
+            } else if (inst === 'pads') {
+              const padsNote = Math.max(0, Math.min(127, note + (padsOctSend?.val ?? padsOctave) * 12));
+              seq.recordNote('pads', { midiNote: padsNote, velocity, durBeats });
+            } else if (inst === 'rhodes') {
+              seq.recordNote('rhodes', { midiNote: note, velocity, durBeats });
+            }
           }
         });
       };
