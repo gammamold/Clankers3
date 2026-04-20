@@ -920,6 +920,34 @@
       justify-content: center;
     }
 
+    /* Compact faces strip in the Song Builder upper-right: one-click access
+       back into each instrument room from the song page. */
+    #song-faces-row {
+      position: absolute;
+      top: 1rem;
+      right: 1.2rem;
+      display: flex;
+      gap: .6rem;
+      align-items: center;
+      z-index: 120;
+    }
+    #song-faces-row .song-face {
+      font-family: monospace;
+      font-size: .9rem;
+      color: #777;
+      cursor: pointer;
+      padding: .15rem .35rem;
+      border-radius: 3px;
+      transition: color .15s ease, background .15s ease, text-shadow .15s ease;
+      user-select: none;
+      line-height: 1;
+    }
+    #song-faces-row .song-face:hover {
+      color: #00d4ff;
+      background: #00121a;
+      text-shadow: 0 0 6px #00d4ff88;
+    }
+
     .face-card {
       display: flex;
       flex-direction: column;
@@ -4320,6 +4348,7 @@
   <!-- ─── Screen: Song (pattern bank + arranger) ─────────────────── -->
   <div id="screen-song" class="screen">
     <button id="btn-song-back" class="back-btn">← BACK</button>
+    <div id="song-faces-row" title="Open instrument room"></div>
     <div id="song-outer-wrap">
 
       <!-- Cards panel -->
@@ -8673,6 +8702,22 @@ if (typeof TextEncoder === 'undefined') {
         _faceAsciiMap[f.id] = ascii;
         row.appendChild(card);
       });
+
+      // Mirror compact faces into the Song Builder upper-right strip.
+      const songRow = document.getElementById('song-faces-row');
+      if (songRow) {
+        songRow.innerHTML = '';
+        FACES.forEach(f => {
+          const btn = document.createElement('span');
+          btn.className = 'song-face';
+          btn.dataset.inst = f.id;
+          btn.textContent = f.face;
+          btn.title = f.label;
+          btn.addEventListener('click', () => openRoom(f));
+          songRow.appendChild(btn);
+        });
+      }
+
       _initFaceGlow();
     }
 
