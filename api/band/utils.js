@@ -4,7 +4,7 @@ const https = require('https');
 function callLLM(provider, apiKey, model, system, messages, maxTokens) {
   const m = model || '';
   let p = provider || 'anthropic';
-  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3')) p = 'openai';
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) p = 'openai';
   else if (m.startsWith('gemini')) p = 'google';
   else if (m.toLowerCase().startsWith('minimax')) p = 'minimax';
   if (p === 'openai') return callOpenAI(apiKey, model, system, messages, maxTokens);
@@ -48,8 +48,8 @@ function callAnthropic(apiKey, model, system, messages, maxTokens) {
 
 function callOpenAI(apiKey, model, system, messages, maxTokens) {
   const m = model || '';
-  // o1/o3 reasoning models: no system role, use max_completion_tokens
-  const isReasoning = m.startsWith('o1') || m.startsWith('o3');
+  // o-series reasoning models (o1/o3/o4): no system role, use max_completion_tokens
+  const isReasoning = m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
 
   let openaiMsgs;
   if (isReasoning) {
@@ -67,8 +67,9 @@ function callOpenAI(apiKey, model, system, messages, maxTokens) {
   else body.max_tokens = maxTokens;
 
   // Enable JSON mode when supported — guarantees valid JSON output
-  // Supported on gpt-4o*, gpt-4-turbo*, gpt-3.5-turbo, o1 (2024-12+), o3-mini
-  if (m.startsWith('gpt-4') || m.startsWith('gpt-3.5') || m === 'o1' || m.startsWith('o3')) {
+  // Supported on gpt-5*, gpt-4*, gpt-3.5-turbo, o1 (2024-12+), o3*, o4*
+  if (m.startsWith('gpt-5') || m.startsWith('gpt-4') || m.startsWith('gpt-3.5') ||
+      m === 'o1' || m.startsWith('o3') || m.startsWith('o4')) {
     body.response_format = { type: 'json_object' };
   }
 

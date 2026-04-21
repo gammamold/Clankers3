@@ -31,7 +31,7 @@ function proxyAnthropic(apiKey, payload) {
 
 function proxyOpenAI(apiKey, payload) {
   const m = payload.model || '';
-  const isReasoning = m.startsWith('o1') || m.startsWith('o3');
+  const isReasoning = m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
 
   // Convert Anthropic-style body to OpenAI chat completions format
   const inputMsgs = payload.messages || [];
@@ -184,7 +184,7 @@ function proxyMinimax(apiKey, payload) {
 function detectProvider(payload) {
   if (payload.provider) return payload.provider;
   const m = payload.model || '';
-  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3')) return 'openai';
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 'openai';
   if (m.startsWith('gemini')) return 'google';
   if (m.toLowerCase().startsWith('minimax')) return 'minimax';
   return 'anthropic';
