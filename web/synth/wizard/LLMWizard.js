@@ -45,7 +45,7 @@ const PROVIDERS = {
 // Mirror of detectProvider() in api/llm.js, for client-side UI decisions.
 function providerOf(model) {
   const m = (model || '').toLowerCase();
-  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3')) return 'openai';
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 'openai';
   if (m.startsWith('gemini')) return 'google';
   if (m.startsWith('minimax')) return 'minimax';
   return 'anthropic';
