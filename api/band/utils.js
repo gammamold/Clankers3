@@ -48,12 +48,13 @@ function callAnthropic(apiKey, model, system, messages, maxTokens) {
 
 function callOpenAI(apiKey, model, system, messages, maxTokens) {
   const m = model || '';
-  // o-series reasoning models (o1/o3/o4): no system role, use max_completion_tokens
-  const isReasoning = m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
+  // o-series reasoning models (o1/o3/o4) reject the system role.
+  const foldsSystem = m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
+  // gpt-5* and o-series require max_completion_tokens instead of max_tokens.
+  const useCompletionTokens = foldsSystem || m.startsWith('gpt-5');
 
   let openaiMsgs;
-  if (isReasoning) {
-    // Fold system prompt into the first user message (reasoning models reject system role)
+  if (foldsSystem) {
     const [first, ...rest] = messages;
     openaiMsgs = system && first
       ? [{ role: first.role || 'user', content: `${system}\n\n${first.content}` }, ...rest]
@@ -63,7 +64,7 @@ function callOpenAI(apiKey, model, system, messages, maxTokens) {
   }
 
   const body = { model, messages: openaiMsgs };
-  if (isReasoning) body.max_completion_tokens = maxTokens;
+  if (useCompletionTokens) body.max_completion_tokens = maxTokens;
   else body.max_tokens = maxTokens;
 
   // Enable JSON mode when supported — guarantees valid JSON output

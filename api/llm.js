@@ -31,13 +31,15 @@ function proxyAnthropic(apiKey, payload) {
 
 function proxyOpenAI(apiKey, payload) {
   const m = payload.model || '';
-  const isReasoning = m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
+  // o-series reasoning models reject the system role.
+  const foldsSystem = m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
+  // gpt-5* and o-series require max_completion_tokens instead of max_tokens.
+  const useCompletionTokens = foldsSystem || m.startsWith('gpt-5');
 
   // Convert Anthropic-style body to OpenAI chat completions format
   const inputMsgs = payload.messages || [];
   let messages;
-  if (isReasoning) {
-    // Reasoning models reject the system role — fold it into the first user message
+  if (foldsSystem) {
     const [first, ...rest] = inputMsgs;
     messages = payload.system && first
       ? [{ role: first.role || 'user', content: `${payload.system}\n\n${first.content}` }, ...rest]
@@ -49,8 +51,7 @@ function proxyOpenAI(apiKey, payload) {
   }
 
   const body = { model: m, messages };
-  // Reasoning models use max_completion_tokens; older models use max_tokens
-  if (isReasoning) body.max_completion_tokens = payload.max_tokens;
+  if (useCompletionTokens) body.max_completion_tokens = payload.max_tokens;
   else body.max_tokens = payload.max_tokens;
   const postData = JSON.stringify(body);
   return new Promise((resolve, reject) => {
